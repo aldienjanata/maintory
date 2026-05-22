@@ -7,7 +7,7 @@ import toast from 'react-hot-toast'
 import { Search, Plus, Trash2, Edit2, X, Package, TrendingDown, TrendingUp, FileDown, Upload, Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
-const UNITS = ['unit', 'buah', 'pcs', 'meter', 'roll', 'set', 'dus', 'kg']
+const UNITS = ['unit', 'buah', 'pcs', 'meter', 'roll', 'set', 'dus', 'kg', 'haspel']
 const ITEM_TYPES = [
   { value: 'ont', label: 'ONT / Modem' },
   { value: 'dropcore_1c', label: 'Dropcore 1C' },
@@ -32,11 +32,68 @@ export default function StokGudang() {
 
   const fetchItems = async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('warehouses')
-      .select('*')
-      .order('item_name')
-    if (!error) setItems(data || [])
+    const [whRes, snRes, dcRes, expItemRes] = await Promise.all([
+      supabase.from('warehouses').select('*').order('item_name'),
+      supabase.from('serial_numbers').select('status'),
+      supabase.from('dropcore_haspels').select('type, initial_meters, used_meters, remaining_meters'),
+      supabase.from('expense_items').select('warehouse_item_id, quantity').eq('item_type', 'other')
+    ])
+    
+    if (!whRes.error) {
+      const whItems = whRes.data || []
+      const sns = snRes.data || []
+      const haspels = dcRes.data || []
+      const expItems = expItemRes.data || []
+      
+      const totalSnCount = sns.length
+      const usedSnCount = sns.filter(s => s.status === 'terpakai').length
+      const availSnCount = totalSnCount - usedSnCount
+      
+      const dc1cList = haspels.filter(h => h.type === '1c')
+      const dc1cTotalMeters = dc1cList.reduce((acc, h) => acc + Number(h.initial_meters || 0), 0)
+      const dc1cUsedMeters = dc1cList.reduce((acc, h) => acc + Number(h.used_meters || 0), 0)
+      const dc1cRemainingMeters = dc1cTotalMeters - dc1cUsedMeters
+      
+      const dc4cList = haspels.filter(h => h.type === '4c')
+      const dc4cTotalMeters = dc4cList.reduce((acc, h) => acc + Number(h.initial_meters || 0), 0)
+      const dc4cUsedMeters = dc4cList.reduce((acc, h) => acc + Number(h.used_meters || 0), 0)
+      const dc4cRemainingMeters = dc4cTotalMeters - dc4cUsedMeters
+      
+      const processed = whItems.map(item => {
+        let initial = Number(item.initial_stock) || 0
+        let out = 0
+        let current = initial
+        
+        if (item.item_type === 'ont') {
+          initial = totalSnCount
+          out = usedSnCount
+          current = availSnCount
+        } else if (item.item_type === 'dropcore_1c') {
+          initial = dc1cTotalMeters / 1000
+          out = dc1cUsedMeters / 1000
+          current = dc1cRemainingMeters / 1000
+        } else if (item.item_type === 'dropcore_4c') {
+          initial = dc4cTotalMeters / 1000
+          out = dc4cUsedMeters / 1000
+          current = dc4cRemainingMeters / 1000
+        } else {
+          const totalOut = expItems
+            .filter(ei => ei.warehouse_item_id === item.id)
+            .reduce((acc, ei) => acc + Number(ei.quantity || 0), 0)
+          out = totalOut
+          current = initial - out
+        }
+        
+        return {
+          ...item,
+          display_initial: initial,
+          display_out: out,
+          display_current: current
+        }
+      })
+      
+      setItems(processed)
+    }
     setLoading(false)
   }
 
@@ -53,19 +110,20 @@ export default function StokGudang() {
   }
 
   const handleSave = async () => {
-    if (!form.item_name || form.initial_stock === '') {
+    if (!form.item_name || (form.item_type === 'other' && form.initial_stock === '')) {
       toast.error('Nama dan stok awal wajib diisi')
       return
     }
+    const finalForm = { ...form, initial_stock: form.item_type !== 'other' ? 0 : form.initial_stock }
     setSaving(true)
     try {
       if (editItem) {
-        const { error } = await supabase.from('warehouses').update({ ...form, updated_at: new Date().toISOString() }).eq('id', editItem.id)
+        const { error } = await supabase.from('warehouses').update({ ...finalForm, updated_at: new Date().toISOString() }).eq('id', editItem.id)
         if (error) throw error
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Edit Stok', detail: `Edit item: ${form.item_name}` })
         toast.success('Data stok berhasil diperbarui')
       } else {
-        const { error } = await supabase.from('warehouses').insert({ ...form, created_by: profile.id })
+        const { error } = await supabase.from('warehouses').insert({ ...finalForm, created_by: profile.id })
         if (error) throw error
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Tambah Stok', detail: `Tambah item: ${form.item_name}` })
         toast.success('Item stok berhasil ditambahkan')
@@ -100,13 +158,15 @@ export default function StokGudang() {
     (typeFilter === 'all' || i.item_type === typeFilter)
   )
 
-  const totalStok = filtered.reduce((s, i) => s + (Number(i.initial_stock) || 0), 0)
+  const totalStok = filtered.reduce((s, i) => s + (Number(i.display_current) || 0), 0)
 
   const handleExportExcel = () => {
     const ws = XLSX.utils.json_to_sheet(filtered.map(i => ({
       'Nama Item': i.item_name,
       'Tipe': ITEM_TYPES.find(t => t.value === i.item_type)?.label || i.item_type,
-      'Stok Awal': i.initial_stock,
+      'Stok Awal': i.display_initial,
+      'Stok Keluar': i.display_out,
+      'Stok Saat Ini': i.display_current,
       'Satuan': i.unit,
     })))
     const wb = XLSX.utils.book_new()
@@ -116,7 +176,7 @@ export default function StokGudang() {
   }
 
   const handleDownloadTemplate = () => {
-    const ws = XLSX.utils.aoa_to_sheet([['Nama Item', 'Tipe (ont/dropcore_1c/dropcore_4c/other)', 'Stok Awal', 'Satuan (unit/buah/pcs/meter/roll/set/dus/kg)']])
+    const ws = XLSX.utils.aoa_to_sheet([['Nama Item', 'Tipe (ont/dropcore_1c/dropcore_4c/other)', 'Stok Awal', 'Satuan (unit/buah/pcs/meter/roll/set/dus/kg/haspel)']])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Template')
     XLSX.writeFile(wb, 'template_stok_gudang.xlsx')
@@ -132,13 +192,22 @@ export default function StokGudang() {
         const ws = wb.Sheets[wb.SheetNames[0]]
         const data = XLSX.utils.sheet_to_json(ws)
         if (!data.length) { toast.error('File kosong atau format tidak sesuai'); return }
-        const toInsert = data.map(row => ({
-          item_name: row['Nama Item'] || '',
-          item_type: row['Tipe (ont/dropcore_1c/dropcore_4c/other)'] || row['Tipe'] || 'other',
-          initial_stock: Number(row['Stok Awal']) || 0,
-          unit: row['Satuan (unit/buah/pcs/meter/roll/set/dus/kg)'] || row['Satuan'] || 'unit',
-          created_by: profile.id,
-        })).filter(r => r.item_name)
+        const toInsert = data.map(row => {
+          const type = row['Tipe (ont/dropcore_1c/dropcore_4c/other)'] || row['Tipe'] || 'other'
+          let unit = row['Satuan (unit/buah/pcs/meter/roll/set/dus/kg/haspel)'] || row['Satuan (unit/buah/pcs/meter/roll/set/dus/kg)'] || row['Satuan'] || ''
+          if (!unit) {
+            if (type === 'ont') unit = 'unit'
+            else if (type.startsWith('dropcore')) unit = 'haspel'
+            else unit = 'pcs'
+          }
+          return {
+            item_name: row['Nama Item'] || '',
+            item_type: type,
+            initial_stock: type !== 'other' ? 0 : (Number(row['Stok Awal']) || 0),
+            unit: unit.toLowerCase(),
+            created_by: profile.id,
+          }
+        }).filter(r => r.item_name)
         if (!toInsert.length) { toast.error('Tidak ada data valid'); return }
         const { error } = await supabase.from('warehouses').insert(toInsert)
         if (error) throw error
@@ -150,6 +219,15 @@ export default function StokGudang() {
     }
     reader.readAsBinaryString(file)
     e.target.value = ''
+  }
+
+  const handleTypeChange = (type) => {
+    setForm(f => {
+      let unit = f.unit
+      if (type === 'ont') unit = 'unit'
+      else if (type.startsWith('dropcore')) unit = 'haspel'
+      return { ...f, item_type: type, unit, initial_stock: type !== 'other' ? 0 : f.initial_stock }
+    })
   }
 
   return (
@@ -231,6 +309,8 @@ export default function StokGudang() {
                   <th>Nama Item</th>
                   <th>Tipe</th>
                   <th>Stok Awal</th>
+                  <th>Stok Keluar</th>
+                  <th>Stok Saat Ini</th>
                   <th>Satuan</th>
                   {can(role, 'inventory.edit') && <th style={{ textAlign: 'right' }}>Aksi</th>}
                 </tr>
@@ -240,8 +320,15 @@ export default function StokGudang() {
                   <tr key={item.id}>
                     <td className="font-semibold">{item.item_name}</td>
                     <td>{getTypeBadge(item.item_type)}</td>
+                    <td>{item.item_type?.startsWith('dropcore') ? `${item.display_initial} Haspel` : item.display_initial}</td>
+                    <td>{item.item_type?.startsWith('dropcore') ? `${item.display_out} Haspel` : item.display_out}</td>
                     <td>
-                      <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent)' }}>{item.initial_stock}</span>
+                      <span style={{ fontSize: '16px', fontWeight: 700, color: item.display_current <= 0 ? 'var(--danger)' : 'var(--accent)' }}>
+                        {item.item_type?.startsWith('dropcore') 
+                          ? `${item.display_current} Haspel (${Math.round(item.display_current * 1000)} m)` 
+                          : item.display_current
+                        }
+                      </span>
                     </td>
                     <td className="text-secondary">{item.unit}</td>
                     {can(role, 'inventory.edit') && (
@@ -280,7 +367,12 @@ export default function StokGudang() {
               <div className="grid-2">
                 <div className="form-group">
                   <label className="form-label">Stok Awal <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input className="form-input" type="number" min="0" placeholder="0" value={form.initial_stock} onChange={e => setForm(f => ({ ...f, initial_stock: e.target.value }))} />
+                  <input className="form-input" type="number" min="0" placeholder="0" value={form.item_type !== 'other' ? '0' : form.initial_stock} onChange={e => setForm(f => ({ ...f, initial_stock: e.target.value }))} disabled={form.item_type !== 'other'} />
+                  {form.item_type !== 'other' && (
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block', lineHeight: '1.4' }}>
+                      Stok {form.item_type === 'ont' ? 'ONT' : 'Dropcore'} dihitung otomatis dari sub-menu {form.item_type === 'ont' ? 'Serial Number' : 'Dropcore Haspel'}.
+                    </span>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Satuan</label>
@@ -291,7 +383,7 @@ export default function StokGudang() {
               </div>
               <div className="form-group">
                 <label className="form-label">Tipe Item</label>
-                <select className="form-input filter-select" style={{ height: 'auto', padding: '9px 12px' }} value={form.item_type} onChange={e => setForm(f => ({ ...f, item_type: e.target.value }))}>
+                <select className="form-input filter-select" style={{ height: 'auto', padding: '9px 12px' }} value={form.item_type} onChange={e => handleTypeChange(e.target.value)}>
                   {ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
