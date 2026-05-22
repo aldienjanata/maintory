@@ -35,7 +35,7 @@ export default function StokGudang() {
     const [whRes, snRes, dcRes, expItemRes] = await Promise.all([
       supabase.from('warehouses').select('*').order('item_name'),
       supabase.from('serial_numbers').select('status'),
-      supabase.from('dropcore_haspels').select('type, initial_meters, used_meters, remaining_meters'),
+      supabase.from('dropcore_haspels').select('type, status, initial_meters, used_meters, remaining_meters'),
       supabase.from('expense_items').select('warehouse_item_id, quantity').eq('item_type', 'other')
     ])
     
@@ -50,32 +50,37 @@ export default function StokGudang() {
       const availSnCount = totalSnCount - usedSnCount
       
       const dc1cList = haspels.filter(h => h.type === '1c')
-      const dc1cTotalMeters = dc1cList.reduce((acc, h) => acc + Number(h.initial_meters || 0), 0)
-      const dc1cUsedMeters = dc1cList.reduce((acc, h) => acc + Number(h.used_meters || 0), 0)
-      const dc1cRemainingMeters = dc1cTotalMeters - dc1cUsedMeters
+      const dc1cHaspelsTotal = dc1cList.length
+      const dc1cHaspelsOut = dc1cList.filter(h => h.status === 'habis').length
+      const dc1cHaspelsCurrent = dc1cList.filter(h => h.status === 'tersedia').length
+      const dc1cRemainingMeters = dc1cList.reduce((acc, h) => acc + Number(h.remaining_meters || 0), 0)
       
       const dc4cList = haspels.filter(h => h.type === '4c')
-      const dc4cTotalMeters = dc4cList.reduce((acc, h) => acc + Number(h.initial_meters || 0), 0)
-      const dc4cUsedMeters = dc4cList.reduce((acc, h) => acc + Number(h.used_meters || 0), 0)
-      const dc4cRemainingMeters = dc4cTotalMeters - dc4cUsedMeters
+      const dc4cHaspelsTotal = dc4cList.length
+      const dc4cHaspelsOut = dc4cList.filter(h => h.status === 'habis').length
+      const dc4cHaspelsCurrent = dc4cList.filter(h => h.status === 'tersedia').length
+      const dc4cRemainingMeters = dc4cList.reduce((acc, h) => acc + Number(h.remaining_meters || 0), 0)
       
       const processed = whItems.map(item => {
         let initial = Number(item.initial_stock) || 0
         let out = 0
         let current = initial
-        
+        let remaining_meters = 0
+
         if (item.item_type === 'ont') {
           initial = totalSnCount
           out = usedSnCount
           current = availSnCount
         } else if (item.item_type === 'dropcore_1c') {
-          initial = dc1cTotalMeters / 1000
-          out = dc1cUsedMeters / 1000
-          current = dc1cRemainingMeters / 1000
+          initial = dc1cHaspelsTotal
+          out = dc1cHaspelsOut
+          current = dc1cHaspelsCurrent
+          remaining_meters = dc1cRemainingMeters
         } else if (item.item_type === 'dropcore_4c') {
-          initial = dc4cTotalMeters / 1000
-          out = dc4cUsedMeters / 1000
-          current = dc4cRemainingMeters / 1000
+          initial = dc4cHaspelsTotal
+          out = dc4cHaspelsOut
+          current = dc4cHaspelsCurrent
+          remaining_meters = dc4cRemainingMeters
         } else {
           const totalOut = expItems
             .filter(ei => ei.warehouse_item_id === item.id)
@@ -88,7 +93,8 @@ export default function StokGudang() {
           ...item,
           display_initial: initial,
           display_out: out,
-          display_current: current
+          display_current: current,
+          remaining_meters
         }
       })
       
@@ -347,7 +353,7 @@ export default function StokGudang() {
                     <td>
                       <span style={{ fontSize: '16px', fontWeight: 700, color: item.display_current <= 0 ? 'var(--danger)' : 'var(--accent)' }}>
                         {item.item_type?.startsWith('dropcore') 
-                          ? `${item.display_current} Haspel (${Math.round(item.display_current * 1000)} m)` 
+                          ? `${item.display_current} Haspel (${Math.round(item.remaining_meters || 0)} m)` 
                           : item.display_current
                         }
                       </span>
