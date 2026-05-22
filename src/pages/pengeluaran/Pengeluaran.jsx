@@ -4,7 +4,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, Edit2, X, Truck, CalendarDays, Users, Download } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { Search, Plus, Trash2, Edit2, X, Truck, CalendarDays, Users, Download, AlertCircle, Unlock, Lock } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
@@ -35,7 +36,12 @@ export default function Pengeluaran() {
   const [saving, setSaving] = useState(false)
   
   const [activeTab, setActiveTab] = useState('pengeluaran')
-  const [scheduleTickets, setScheduleTickets] = useState([])
+  const [schedules, setSchedules] = useState([])
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
+  const [scheduleForm, setScheduleForm] = useState({ schedule_date: format(new Date(), 'yyyy-MM-dd'), site: 'banyumas', work_type: 'ikr_psb', technicians: [], note: '' })
+  const [myPendingSchedules, setMyPendingSchedules] = useState([])
+  const [myTodaySchedule, setMyTodaySchedule] = useState(null)
+  const [selectedScheduleId, setSelectedScheduleId] = useState('')
 
   const [form, setForm] = useState({
     expense_date: format(new Date(), 'yyyy-MM-dd'),
@@ -57,15 +63,68 @@ export default function Pengeluaran() {
       supabase.from('users').select('id, full_name, username').in('role', ['admin', 'teknisi']).eq('is_active', true),
       supabase.from('serial_numbers').select('id, serial_number, brand:ont_brands(brand_name), type:ont_types(type_name)').eq('status', 'tersedia'),
       supabase.from('dropcore_haspels').select('id, haspel_code, type, remaining_meters').eq('status', 'tersedia'),
-      supabase.from('maintenance_tickets').select('*').eq('status', 'aktif').order('date_input', { ascending: true }),
+      supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }),
     ])
     if (!expRes.error) setExpenses(expRes.data || [])
     if (!techRes.error) setTechnicians(techRes.data || [])
     if (!snRes.error) setSnList(snRes.data || [])
     if (!haspelRes.error) setHaspelList(haspelRes.data || [])
-    if (!schedRes.error) setScheduleTickets(schedRes.data || [])
+    if (!schedRes.error) {
+      const allScheds = schedRes.data || []
+      setSchedules(allScheds)
+      const today = format(new Date(), 'yyyy-MM-dd')
+      setMyPendingSchedules(allScheds.filter(s => s.status === 'pending' && s.technicians?.includes(profile.id) && s.schedule_date < today))
+      setMyTodaySchedule(allScheds.find(s => s.schedule_date === today && s.technicians?.includes(profile.id)) || null)
+    }
     setLoading(false)
   }
+
+  const handleSaveSchedule = async () => {
+    if (!scheduleForm.schedule_date || !scheduleForm.site) { toast.error('Tanggal dan lokasi wajib diisi'); return }
+    if (scheduleForm.technicians.length === 0) { toast.error('Pilih minimal 1 teknisi'); return }
+    setSaving(true)
+    try {
+      const { error } = await supabase.from('technician_schedules').insert({ ...scheduleForm, created_by: profile.id })
+      if (error) throw error
+      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Jadwal Teknisi', action: 'Tambah Jadwal', detail: `${scheduleForm.schedule_date} - ${scheduleForm.site}` })
+      toast.success('Jadwal berhasil ditambahkan')
+      setIsScheduleModalOpen(false)
+      fetchAll()
+    } catch (err) {
+      toast.error('Gagal menyimpan jadwal: ' + err.message)
+    } finally { setSaving(false) }
+  }
+
+  const toggleScheduleExtraAccess = async (sched) => {
+    const newVal = !sched.allow_extra_expense
+    const { error } = await supabase.from('technician_schedules').update({ allow_extra_expense: newVal }).eq('id', sched.id)
+    if (!error) {
+      toast.success(newVal ? 'Akses pengeluaran tambahan dibuka' : 'Akses ditutup')
+      fetchAll()
+    }
+  }
+
+  const handleOpenAddExpense = (sched = null) => {
+    resetForm()
+    if (sched) {
+      setSelectedScheduleId(sched.id)
+      setForm(f => ({ ...f, expense_date: sched.schedule_date, site: sched.site, work_type: sched.work_type, technicians: sched.technicians }))
+      setIsModalOpen(true)
+    } else if (myTodaySchedule) {
+      if (myTodaySchedule.status === 'completed' && !myTodaySchedule.allow_extra_expense) {
+        toast.error('Tim Anda sudah mengisi pengeluaran hari ini. Hubungi admin untuk menambah pengeluaran.')
+        return
+      }
+      setSelectedScheduleId(myTodaySchedule.id)
+      setForm(f => ({ ...f, expense_date: myTodaySchedule.schedule_date, site: myTodaySchedule.site, work_type: myTodaySchedule.work_type, technicians: myTodaySchedule.technicians }))
+      setIsModalOpen(true)
+    } else {
+      setSelectedScheduleId('')
+      setIsModalOpen(true)
+    }
+  }
+
+  const toggleScheduleTech = (techId) => setScheduleForm(f => ({ ...f, technicians: f.technicians.includes(techId) ? f.technicians.filter(t => t !== techId) : [...f.technicians, techId] }))
 
   const toggleTech = (techId) => {
     setForm(f => ({
@@ -105,6 +164,7 @@ export default function Pengeluaran() {
         work_type: form.work_type,
         technicians: form.technicians,
         note: form.note,
+        schedule_id: selectedScheduleId || null,
         created_by: profile.id,
       }).select().single()
       if (expError) throw expError
@@ -143,6 +203,10 @@ export default function Pengeluaran() {
         }
       }
 
+      if (selectedScheduleId) {
+        await supabase.from('technician_schedules').update({ status: 'completed' }).eq('id', selectedScheduleId)
+      }
+
       await logActivity({
         userId: profile.id, username: profile.username, role,
         module: 'Pengeluaran', action: 'Tambah Pengeluaran',
@@ -160,6 +224,7 @@ export default function Pengeluaran() {
 
   const resetForm = () => {
     setForm({ expense_date: format(new Date(), 'yyyy-MM-dd'), site: 'banyumas', work_type: 'ikr_psb', technicians: [], note: '', items: [] })
+    setSelectedScheduleId('')
   }
 
   const handleDelete = async (exp) => {
@@ -209,12 +274,29 @@ export default function Pengeluaran() {
             <Download size={16} /> Export
           </button>
           {can(role, 'pengeluaran.input') && (
-            <button className="btn btn-primary" onClick={() => { resetForm(); setIsModalOpen(true) }}>
+            <button className="btn btn-primary" onClick={() => handleOpenAddExpense()}>
               <Plus size={16} /> Tambah Pengeluaran
             </button>
           )}
         </div>
       </div>
+
+      {myPendingSchedules.length > 0 && (
+        <div style={{ padding: '16px', background: 'var(--danger-dim)', border: '1px solid var(--danger)', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <AlertCircle size={24} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <h4 style={{ color: 'var(--danger)', margin: '0 0 4px 0', fontSize: '15px' }}>Tunggakan Laporan Pengeluaran</h4>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>Anda memiliki {myPendingSchedules.length} jadwal tugas yang belum diisi laporan pengeluarannya.</p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+            {myPendingSchedules.map(sched => (
+              <button key={sched.id} className="btn btn-sm" style={{ background: 'var(--danger)', color: 'white', border: 'none' }} onClick={() => handleOpenAddExpense(sched)}>
+                Isi Pengeluaran {format(new Date(sched.schedule_date), 'dd MMM')}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="tabs">
         <button className={`tab-item ${activeTab === 'pengeluaran' ? 'active' : ''}`} onClick={() => setActiveTab('pengeluaran')}>
@@ -282,36 +364,49 @@ export default function Pengeluaran() {
       {activeTab === 'jadwal' && (role === 'admin' || role === 'superadmin') && (
         <div className="card">
           <div className="flex justify-between items-center mb-3">
-            <h3 style={{ fontSize: '15px', fontWeight: 700 }}>Jadwal Teknisi — Tiket Aktif</h3>
-            <span className="badge badge-warning">{scheduleTickets.length} Tiket</span>
+            <h3 style={{ fontSize: '15px', fontWeight: 700 }}>Jadwal Tim Teknisi</h3>
+            <button className="btn btn-primary btn-sm" onClick={() => { setScheduleForm({ schedule_date: format(new Date(), 'yyyy-MM-dd'), site: 'banyumas', work_type: 'ikr_psb', technicians: [], note: '' }); setIsScheduleModalOpen(true); }}>
+              <Plus size={14} /> Tambah Jadwal
+            </button>
           </div>
           <div className="table-container">
             <table>
               <thead>
                 <tr>
                   <th>Tanggal</th>
-                  <th>No Tiket</th>
-                  <th>Pelanggan</th>
-                  <th>Desa</th>
-                  <th>Keluhan</th>
-                  <th>Teknisi</th>
+                  <th>Lokasi</th>
+                  <th>Pekerjaan</th>
+                  <th>Tim Teknisi</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'right' }}>Akses Ekstra</th>
                 </tr>
               </thead>
               <tbody>
-                {scheduleTickets.length > 0 ? scheduleTickets.map(t => (
+                {schedules.length > 0 ? schedules.map(t => (
                   <tr key={t.id}>
-                    <td className="text-secondary">{t.date_input}</td>
-                    <td><span className="font-semibold">#{t.ticket_number}</span></td>
+                    <td className="text-secondary">{format(new Date(t.schedule_date), 'dd MMM yyyy', { locale: id })}</td>
+                    <td><span className="badge badge-info">{SITES.find(s => s.value === t.site)?.label || t.site}</span></td>
+                    <td>{WORK_TYPES.find(w => w.value === t.work_type)?.label || t.work_type}</td>
+                    <td>{t.technicians?.length ? getTechNames(t.technicians) : <span className="badge badge-danger">Kosong</span>}</td>
                     <td>
-                      <div className="font-semibold">{t.customer_name}</div>
-                      <div className="text-secondary" style={{ fontSize: '11px' }}>{t.customer_id}</div>
+                      {t.status === 'completed' 
+                        ? <span className="badge badge-success">Selesai</span> 
+                        : <span className="badge badge-warning">Belum Isi</span>}
                     </td>
-                    <td>{t.village}</td>
-                    <td style={{ maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.complaint}</td>
-                    <td>{t.technicians?.length ? getTechNames(t.technicians) : <span className="badge badge-danger">Belum Ditugaskan</span>}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      {t.status === 'completed' && (
+                        <button 
+                          className={`btn-icon ${t.allow_extra_expense ? 'text-success' : 'text-secondary'}`} 
+                          title={t.allow_extra_expense ? 'Tutup Akses Ekstra' : 'Buka Akses Pengeluaran Tambahan'}
+                          onClick={() => toggleScheduleExtraAccess(t)}
+                        >
+                          {t.allow_extra_expense ? <Unlock size={16} /> : <Lock size={16} />}
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-secondary)' }}>Tidak ada tiket aktif</td></tr>
+                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-secondary)' }}>Tidak ada jadwal teknisi</td></tr>
                 )}
               </tbody>
             </table>
@@ -327,21 +422,26 @@ export default function Pengeluaran() {
               <button className="btn-icon" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {selectedScheduleId && (
+                <div style={{ background: 'var(--accent-dim)', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', color: 'var(--accent)' }}>
+                  Mengisi pengeluaran untuk Jadwal Tim tanggal {format(new Date(form.expense_date), 'dd MMM yyyy')}
+                </div>
+              )}
               <div className="grid-2">
                 <div className="form-group">
                   <label className="form-label">Tanggal <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input type="date" className="form-input" value={form.expense_date} onChange={e => setForm(f => ({ ...f, expense_date: e.target.value }))} />
+                  <input type="date" className="form-input" value={form.expense_date} onChange={e => setForm(f => ({ ...f, expense_date: e.target.value }))} disabled={!!selectedScheduleId} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Lokasi <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <select className="form-input" style={{ height: 'auto' }} value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}>
+                  <select className="form-input" style={{ height: 'auto' }} value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} disabled={!!selectedScheduleId}>
                     {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>
               </div>
               <div className="form-group">
                 <label className="form-label">Jenis Pekerjaan</label>
-                <select className="form-input" style={{ height: 'auto' }} value={form.work_type} onChange={e => setForm(f => ({ ...f, work_type: e.target.value }))}>
+                <select className="form-input" style={{ height: 'auto' }} value={form.work_type} onChange={e => setForm(f => ({ ...f, work_type: e.target.value }))} disabled={!!selectedScheduleId}>
                   {WORK_TYPES.map(w => <option key={w.value} value={w.value}>{w.label}</option>)}
                 </select>
               </div>
@@ -350,9 +450,9 @@ export default function Pengeluaran() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
                   {technicians.map(t => (
                     <button key={t.id} type="button"
-                      onClick={() => toggleTech(t.id)}
+                      onClick={() => !selectedScheduleId && toggleTech(t.id)}
                       className={`badge ${form.technicians.includes(t.id) ? 'badge-accent' : 'badge-muted'}`}
-                      style={{ border: 'none', cursor: 'pointer', padding: '5px 10px' }}
+                      style={{ border: 'none', cursor: selectedScheduleId ? 'default' : 'pointer', padding: '5px 10px', opacity: selectedScheduleId && !form.technicians.includes(t.id) ? 0.5 : 1 }}
                     >
                       {t.full_name}
                     </button>
@@ -420,6 +520,60 @@ export default function Pengeluaran() {
               <button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : 'Simpan Pengeluaran'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isScheduleModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal modal-lg">
+            <div className="modal-header">
+              <h3>Tambah Jadwal Tim Teknisi</h3>
+              <button className="btn-icon" onClick={() => setIsScheduleModalOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="grid-2">
+                <div className="form-group">
+                  <label className="form-label">Tanggal <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <input type="date" className="form-input" value={scheduleForm.schedule_date} onChange={e => setScheduleForm(f => ({ ...f, schedule_date: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Lokasi <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <select className="form-input" style={{ height: 'auto' }} value={scheduleForm.site} onChange={e => setScheduleForm(f => ({ ...f, site: e.target.value }))}>
+                    {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Jenis Pekerjaan</label>
+                <select className="form-input" style={{ height: 'auto' }} value={scheduleForm.work_type} onChange={e => setScheduleForm(f => ({ ...f, work_type: e.target.value }))}>
+                  {WORK_TYPES.map(w => <option key={w.value} value={w.value}>{w.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Anggota Tim Teknisi <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                  {technicians.map(t => (
+                    <button key={t.id} type="button"
+                      onClick={() => toggleScheduleTech(t.id)}
+                      className={`badge ${scheduleForm.technicians.includes(t.id) ? 'badge-accent' : 'badge-muted'}`}
+                      style={{ border: 'none', cursor: 'pointer', padding: '5px 10px' }}
+                    >
+                      {t.full_name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Note</label>
+                <textarea className="form-input" rows={2} placeholder="Keterangan jadwal" value={scheduleForm.note} onChange={e => setScheduleForm(f => ({ ...f, note: e.target.value }))} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setIsScheduleModalOpen(false)}>Batal</button>
+              <button className="btn btn-primary" onClick={handleSaveSchedule} disabled={saving}>
+                {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : 'Simpan Jadwal'}
               </button>
             </div>
           </div>

@@ -33,6 +33,7 @@ export default function Dashboard() {
   const [logs, setLogs] = useState([])
   const [overdueTickets, setOverdueTickets] = useState([])
   const [showAllAlerts, setShowAllAlerts] = useState(false)
+  const [pendingSchedules, setPendingSchedules] = useState([])
   const [maintenanceChartData, setMaintenanceChartData] = useState([])
   const [maintenanceByStatus, setMaintenanceByStatus] = useState([])
   const [stats, setStats] = useState({
@@ -113,6 +114,19 @@ export default function Dashboard() {
         .eq('status', 'tersedia')
       if (snCount !== null) {
         setStats(prev => ({ ...prev, stockOnt: snCount }))
+      }
+
+      // Fetch pending schedules for current user
+      const todayStr = format(new Date(), 'yyyy-MM-dd')
+      const { data: scheds } = await supabase
+        .from('technician_schedules')
+        .select('*')
+        .eq('status', 'pending')
+        .lt('schedule_date', todayStr)
+      
+      if (scheds) {
+        const myPending = scheds.filter(s => s.technicians?.includes(profile.id)).sort((a, b) => new Date(a.schedule_date) - new Date(b.schedule_date))
+        setPendingSchedules(myPending)
       }
 
       // Fetch recent logs
@@ -241,20 +255,25 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ===== ALERT: Pemakaian Material Belum Diisi (Dummy untuk sementara) ===== */}
-      <div className="card mb-4" style={{ borderColor: 'rgba(248, 81, 73, 0.4)', background: 'rgba(248, 81, 73, 0.04)', padding: '12px 14px' }}>
-        <div className="flex justify-between items-center mb-2">
-          <div className="flex items-center gap-2">
-            <XCircle size={18} style={{ color: 'var(--danger)' }} />
-            <span className="font-semibold" style={{ color: 'var(--danger)', fontSize: '13.5px' }}>
-              0 Pemakaian Material Belum Diisi
-            </span>
+      {/* ===== ALERT: Tunggakan Pengeluaran ===== */}
+      {pendingSchedules.length > 0 && (
+        <div className="card mb-4" style={{ borderColor: 'rgba(248, 81, 73, 0.4)', background: 'rgba(248, 81, 73, 0.04)', padding: '12px 14px' }}>
+          <div className="flex justify-between items-center mb-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={18} style={{ color: 'var(--danger)' }} />
+              <span className="font-semibold" style={{ color: 'var(--danger)', fontSize: '13.5px' }}>
+                {pendingSchedules.length} Tunggakan Laporan Pengeluaran
+              </span>
+            </div>
+            <Link to="/pengeluaran" className="btn btn-danger btn-sm" style={{ padding: '4px 10px', fontSize: '11px' }}>
+              Isi Sekarang
+            </Link>
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', paddingLeft: '26px' }}>
+            Anda memiliki jadwal tugas yang <strong>belum diisi</strong> laporan pengeluarannya. Harap segera diselesaikan.
           </div>
         </div>
-        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', paddingLeft: '26px' }}>
-          Teknisi wajib mengisi material pada tiket yang sudah <strong>Close</strong>.
-        </div>
-      </div>
+      )}
 
       {/* ===== STATS GRID ===== */}
       <div className="stats-grid mb-4">
