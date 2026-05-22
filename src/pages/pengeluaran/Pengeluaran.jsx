@@ -8,6 +8,7 @@ import { Search, Plus, Trash2, Edit2, X, Truck, CalendarDays, Users, Download, A
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
+import Select from 'react-select'
 
 const SITES = [
   { value: 'banyumas', label: 'Banyumas' },
@@ -28,6 +29,7 @@ export default function Pengeluaran() {
   const [technicians, setTechnicians] = useState([])
   const [snList, setSnList] = useState([])
   const [haspelList, setHaspelList] = useState([])
+  const [otherItems, setOtherItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [dateFilter, setDateFilter] = useState('')
@@ -57,17 +59,19 @@ export default function Pengeluaran() {
 
   const fetchAll = async () => {
     setLoading(true)
-    const [expRes, techRes, snRes, haspelRes, schedRes] = await Promise.all([
+    const [expRes, techRes, snRes, haspelRes, schedRes, whRes] = await Promise.all([
       supabase.from('daily_expenses').select('*, items:expense_items(*)').order('expense_date', { ascending: false }),
       supabase.from('users').select('id, full_name, username').in('role', ['admin', 'teknisi']).eq('is_active', true),
       supabase.from('serial_numbers').select('id, serial_number, brand:ont_brands(brand_name), type:ont_types(type_name)').eq('status', 'tersedia'),
       supabase.from('dropcore_haspels').select('id, haspel_code, type, remaining_meters').eq('status', 'tersedia'),
       supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }),
+      supabase.from('warehouses').select('id, item_name, initial_stock').eq('item_type', 'other')
     ])
     if (!expRes.error) setExpenses(expRes.data || [])
     if (!techRes.error) setTechnicians(techRes.data || [])
     if (!snRes.error) setSnList(snRes.data || [])
     if (!haspelRes.error) setHaspelList(haspelRes.data || [])
+    if (!whRes.error) setOtherItems(whRes.data || [])
     if (!schedRes.error) {
       const allScheds = schedRes.data || []
       setSchedules(allScheds)
@@ -77,6 +81,11 @@ export default function Pengeluaran() {
     }
     setLoading(false)
   }
+
+  // React Select Options
+  const ontOptions = snList.map(s => ({ value: s.id, label: `${s.serial_number} (${s.brand?.brand_name || ''} ${s.type?.type_name || ''})` }))
+  const haspelOptions = haspelList.map(h => ({ value: h.id, label: `${h.haspel_code} (${h.type?.toUpperCase() || ''}, sisa: ${h.remaining_meters}m)` }))
+  const otherOptions = otherItems.map(w => ({ value: w.id, label: w.item_name }))
 
   const handleSaveSchedule = async () => {
     if (!scheduleForm.schedule_date || !scheduleForm.site) { toast.error('Tanggal dan lokasi wajib diisi'); return }
@@ -137,7 +146,7 @@ export default function Pengeluaran() {
   const addItem = () => {
     setForm(f => ({
       ...f,
-      items: [...f.items, { id: Math.random().toString(36).substr(2, 9), item_type: 'ont', serial_number_id: '', haspel_id: '', meters_used: '', warehouse_item_id: '', quantity: 1, item_name: '' }]
+      items: [...f.items, { id: Math.random().toString(36).substr(2, 9), item_type: 'ont', selected_onts: [], selected_haspels: [], haspel_meters: {}, selected_other: null, quantity: 1, item_name: '' }]
     }))
   }
 
@@ -170,33 +179,45 @@ export default function Pengeluaran() {
 
       // Insert items
       if (form.items.length > 0) {
-        const itemsToInsert = form.items.map(({ id, ...rest }) => ({
-          expense_id: expData.id,
-          item_type: rest.item_type,
-          serial_number_id: rest.serial_number_id || null,
-          haspel_id: rest.haspel_id || null,
-          meters_used: rest.meters_used || null,
-          warehouse_item_id: rest.warehouse_item_id || null,
-          quantity: rest.quantity,
-          item_name: rest.item_name || null,
-        }))
-        const { error: itemsError } = await supabase.from('expense_items').insert(itemsToInsert)
-        if (itemsError) throw itemsError
-
-        // Update SN status if used
+        const itemsToInsert = []
         for (const item of form.items) {
-          if (item.item_type === 'ont' && item.serial_number_id) {
-            await supabase.from('serial_numbers').update({ status: 'terpakai' }).eq('id', item.serial_number_id)
+          if (item.item_type === 'ont') {
+            (item.selected_onts || []).forEach(opt => {
+              itemsToInsert.push({ expense_id: expData.id, item_type: 'ont', serial_number_id: opt.value, quantity: 1 })
+            })
+          } else if (item.item_type === 'dropcore') {
+            (item.selected_haspels || []).forEach(opt => {
+              const meters = item.haspel_meters?.[opt.value] || 0
+              if (meters > 0) {
+                 itemsToInsert.push({ expense_id: expData.id, item_type: 'dropcore', haspel_id: opt.value, meters_used: meters, quantity: 1 })
+              }
+            })
+          } else if (item.item_type === 'other') {
+            if (item.selected_other) {
+               itemsToInsert.push({ expense_id: expData.id, item_type: 'other', warehouse_item_id: item.selected_other.value, quantity: item.quantity })
+            }
           }
-          if (item.item_type === 'dropcore' && item.haspel_id && item.meters_used) {
-            const haspel = haspelList.find(h => h.id === item.haspel_id)
+        }
+        
+        if (itemsToInsert.length > 0) {
+          const { error: itemsError } = await supabase.from('expense_items').insert(itemsToInsert)
+          if (itemsError) throw itemsError
+
+          // Update SN status if used
+          const ontIds = itemsToInsert.filter(i => i.item_type === 'ont').map(i => i.serial_number_id)
+          if (ontIds.length > 0) {
+            await supabase.from('serial_numbers').update({ status: 'terpakai' }).in('id', ontIds)
+          }
+
+          // Update dropcore haspels
+          const dcItems = itemsToInsert.filter(i => i.item_type === 'dropcore')
+          for (const dc of dcItems) {
+            const haspel = haspelList.find(h => h.id === dc.haspel_id)
             if (haspel) {
-              const newUsed = Number(haspel.remaining_meters === undefined
-                ? (haspel.initial_meters - haspel.used_meters)
-                : haspel.remaining_meters) - Number(item.meters_used)
+              const newUsed = Number(haspel.used_meters || 0) + Number(dc.meters_used)
               await supabase.from('dropcore_haspels')
-                .update({ used_meters: supabase.rpc('increment_used_meters', { haspel_id: item.haspel_id, meters: Number(item.meters_used) }) })
-                .eq('id', item.haspel_id)
+                .update({ used_meters: newUsed })
+                .eq('id', dc.haspel_id)
             }
           }
         }
@@ -483,25 +504,123 @@ export default function Pengeluaran() {
                         <option value="other">Barang Lainnya</option>
                       </select>
                       {item.item_type === 'ont' && (
-                        <select className="form-input" style={{ height: 'auto' }} value={item.serial_number_id} onChange={e => updateItem(item.id, 'serial_number_id', e.target.value)}>
-                          <option value="">-- Pilih SN --</option>
-                          {snList.map(s => <option key={s.id} value={s.id}>{s.serial_number} ({s.brand?.brand_name} {s.type?.type_name})</option>)}
-                        </select>
+                        <Select 
+                          isMulti 
+                          options={ontOptions} 
+                          placeholder="Pilih beberapa ONT/Modem..."
+                          value={item.selected_onts || []}
+                          onChange={val => updateItem(item.id, 'selected_onts', val)}
+                          styles={{
+                            control: (base) => ({
+                              ...base,
+                              background: 'var(--bg-input)',
+                              borderColor: 'var(--border)',
+                              color: 'var(--text-primary)',
+                            }),
+                            menu: (base) => ({
+                              ...base,
+                              background: 'var(--bg-input)',
+                              color: 'var(--text-primary)',
+                            }),
+                            option: (base, state) => ({
+                              ...base,
+                              backgroundColor: state.isFocused ? 'var(--accent-dim)' : 'transparent',
+                              color: state.isFocused ? 'var(--accent)' : 'var(--text-primary)',
+                              cursor: 'pointer'
+                            }),
+                            multiValue: (base) => ({
+                              ...base,
+                              backgroundColor: 'var(--accent-dim)',
+                            }),
+                            multiValueLabel: (base) => ({
+                              ...base,
+                              color: 'var(--accent)',
+                            })
+                          }}
+                        />
                       )}
                       {item.item_type === 'dropcore' && (
-                        <div className="grid-2">
-                          <select className="form-input" style={{ height: 'auto' }} value={item.haspel_id} onChange={e => updateItem(item.id, 'haspel_id', e.target.value)}>
-                            <option value="">-- Pilih Haspel --</option>
-                            {haspelList.map(h => <option key={h.id} value={h.id}>{h.haspel_code} ({h.type?.toUpperCase()}, sisa: {h.remaining_meters}m)</option>)}
-                          </select>
-                          <div className="form-group">
-                            <input type="number" className="form-input" placeholder="Meter dipakai" value={item.meters_used} onChange={e => updateItem(item.id, 'meters_used', e.target.value)} />
-                          </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <Select 
+                            isMulti 
+                            options={haspelOptions} 
+                            placeholder="Pilih beberapa Haspel..."
+                            value={item.selected_haspels || []}
+                            onChange={val => updateItem(item.id, 'selected_haspels', val)}
+                            styles={{
+                              control: (base) => ({
+                                ...base,
+                                background: 'var(--bg-input)',
+                                borderColor: 'var(--border)',
+                                color: 'var(--text-primary)',
+                              }),
+                              menu: (base) => ({
+                                ...base,
+                                background: 'var(--bg-input)',
+                                color: 'var(--text-primary)',
+                              }),
+                              option: (base, state) => ({
+                                ...base,
+                                backgroundColor: state.isFocused ? 'var(--accent-dim)' : 'transparent',
+                                color: state.isFocused ? 'var(--accent)' : 'var(--text-primary)',
+                                cursor: 'pointer'
+                              }),
+                              multiValue: (base) => ({
+                                ...base,
+                                backgroundColor: 'var(--accent-dim)',
+                              }),
+                              multiValueLabel: (base) => ({
+                                ...base,
+                                color: 'var(--accent)',
+                              })
+                            }}
+                          />
+                          {(item.selected_haspels || []).map(h => (
+                            <div key={h.value} className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <div style={{ flex: 1, fontSize: '12px', color: 'var(--text-secondary)' }}>{h.label}</div>
+                              <input 
+                                type="number" 
+                                className="form-input" 
+                                placeholder="Meter dipakai" 
+                                style={{ width: '130px' }}
+                                value={(item.haspel_meters || {})[h.value] || ''} 
+                                onChange={e => updateItem(item.id, 'haspel_meters', { ...(item.haspel_meters || {}), [h.value]: e.target.value })} 
+                              />
+                            </div>
+                          ))}
                         </div>
                       )}
                       {item.item_type === 'other' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <input className="form-input" placeholder="Nama barang yang dibawa (contoh: Tang, Kabel Patch, dll)" value={item.item_name || ''} onChange={e => updateItem(item.id, 'item_name', e.target.value)} />
+                        <div className="grid-2">
+                          <Select 
+                            options={otherOptions} 
+                            placeholder="Pilih Barang Lainnya..."
+                            value={item.selected_other || null}
+                            onChange={val => updateItem(item.id, 'selected_other', val)}
+                            styles={{
+                              control: (base) => ({
+                                ...base,
+                                background: 'var(--bg-input)',
+                                borderColor: 'var(--border)',
+                                color: 'var(--text-primary)',
+                              }),
+                              menu: (base) => ({
+                                ...base,
+                                background: 'var(--bg-input)',
+                                color: 'var(--text-primary)',
+                              }),
+                              option: (base, state) => ({
+                                ...base,
+                                backgroundColor: state.isFocused ? 'var(--accent-dim)' : 'transparent',
+                                color: state.isFocused ? 'var(--accent)' : 'var(--text-primary)',
+                                cursor: 'pointer'
+                              }),
+                              singleValue: (base) => ({
+                                ...base,
+                                color: 'var(--text-primary)',
+                              })
+                            }}
+                          />
                           <input type="number" className="form-input" placeholder="Jumlah" min="1" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
                         </div>
                       )}
