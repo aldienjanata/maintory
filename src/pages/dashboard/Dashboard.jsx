@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { getDailyQuote } from '../../utils/quotes'
 import { 
   AlertTriangle, 
+  AlertCircle,
   Wrench, 
   Package, 
   ArrowDownToLine, 
@@ -26,8 +27,12 @@ import { id } from 'date-fns/locale'
 
 const COLORS = ['#00d4ff', '#f85149', '#3fb950', '#d29922', '#bc8cff']
 
+const SITE_LABELS = { banyumas: 'Banyumas', cilacap: 'Cilacap', cilacap_herman: 'Cilacap (Herman)' }
+const WORK_LABELS = { ikr_psb: 'IKR/PSB', maintenance: 'Maintenance' }
+
 export default function Dashboard() {
   const { profile } = useAuth()
+  const role = profile?.role || 'teknisi'
   const [quote, setQuote] = useState({ text: '', author: '' })
   const [loading, setLoading] = useState(true)
   const [logs, setLogs] = useState([])
@@ -60,15 +65,19 @@ export default function Dashboard() {
         .order('date_input', { ascending: false })
 
       if (allTickets) {
-        // Stats
         const todayTickets = allTickets.filter(t => isToday(new Date(t.created_at)))
         const openTickets = allTickets.filter(t => t.status === 'aktif')
 
         // Tiket Overdue: aktif dan masuk lebih dari 1 hari yang lalu
-        const overdue = openTickets.filter(t => {
+        let overdue = openTickets.filter(t => {
           const days = differenceInDays(new Date(), new Date(t.date_input))
           return days >= 1
-        }).sort((a, b) => new Date(a.date_input) - new Date(b.date_input)) // oldest first
+        }).sort((a, b) => new Date(a.date_input) - new Date(b.date_input))
+
+        // Untuk teknisi: hanya tampilkan tiket yang melibatkan mereka
+        if (role === 'teknisi') {
+          overdue = overdue.filter(t => t.technicians?.includes(profile.id))
+        }
 
         setOverdueTickets(overdue)
         setStats(prev => ({
@@ -91,7 +100,6 @@ export default function Dashboard() {
         })
         setMaintenanceChartData(last7Days)
 
-        // Pie chart data: by status
         setMaintenanceByStatus([
           { name: 'Aktif', value: openTickets.length },
           { name: 'Close', value: allTickets.filter(t => t.status === 'close').length },
@@ -116,16 +124,19 @@ export default function Dashboard() {
         setStats(prev => ({ ...prev, stockOnt: snCount }))
       }
 
-      // Fetch pending schedules for current user
+      // Fetch pending schedules untuk user saat ini
+      // Jadwal yang tanggalnya sudah lewat (sebelum hari ini) tapi statusnya masih pending
       const todayStr = format(new Date(), 'yyyy-MM-dd')
       const { data: scheds } = await supabase
         .from('technician_schedules')
         .select('*')
         .eq('status', 'pending')
         .lt('schedule_date', todayStr)
+        .order('schedule_date', { ascending: true })
       
       if (scheds) {
-        const myPending = scheds.filter(s => s.technicians?.includes(profile.id)).sort((a, b) => new Date(a.schedule_date) - new Date(b.schedule_date))
+        // Filter hanya jadwal yang melibatkan user ini
+        const myPending = scheds.filter(s => s.technicians?.includes(profile.id))
         setPendingSchedules(myPending)
       }
 
@@ -259,20 +270,44 @@ export default function Dashboard() {
 
       {/* ===== ALERT: Tunggakan Pengeluaran ===== */}
       {pendingSchedules.length > 0 && (
-        <div className="card mb-4" style={{ borderColor: 'rgba(248, 81, 73, 0.4)', background: 'rgba(248, 81, 73, 0.04)', padding: '12px 14px' }}>
-          <div className="flex justify-between items-center mb-2">
+        <div className="card mb-4" style={{ borderColor: 'rgba(248, 81, 73, 0.5)', background: 'rgba(248, 81, 73, 0.05)', padding: '14px 16px' }}>
+          <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
               <AlertCircle size={18} style={{ color: 'var(--danger)' }} />
               <span className="font-semibold" style={{ color: 'var(--danger)', fontSize: '13.5px' }}>
-                {pendingSchedules.length} Tunggakan Laporan Pengeluaran
+                {pendingSchedules.length} Jadwal Belum Dilaporkan!
               </span>
             </div>
-            <Link to="/pengeluaran" className="btn btn-danger btn-sm" style={{ padding: '4px 10px', fontSize: '11px' }}>
+            <Link to="/pengeluaran" className="btn btn-danger btn-sm" style={{ padding: '4px 12px', fontSize: '11px' }}>
               Isi Sekarang
             </Link>
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', paddingLeft: '26px' }}>
-            Anda memiliki jadwal tugas yang <strong>belum diisi</strong> laporan pengeluarannya. Harap segera diselesaikan.
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {pendingSchedules.map(sched => (
+              <div key={sched.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: 'rgba(248, 81, 73, 0.08)', borderRadius: '6px',
+                padding: '8px 12px', gap: '10px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, fontSize: '12px', color: 'var(--danger)' }}>
+                    {format(new Date(sched.schedule_date), 'dd MMM yyyy', { locale: id })}
+                  </span>
+                  <span className="badge badge-danger" style={{ fontSize: '10px' }}>
+                    {SITE_LABELS[sched.site] || sched.site}
+                  </span>
+                  <span className="badge badge-muted" style={{ fontSize: '10px' }}>
+                    {WORK_LABELS[sched.work_type] || sched.work_type}
+                  </span>
+                </div>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                  ⚠ Belum diisi
+                </span>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: '11.5px', color: 'var(--danger)', marginTop: '10px', fontStyle: 'italic' }}>
+            Harap segera isi laporan pengeluaran untuk jadwal di atas. Jika tidak ada pengeluaran, tetap harus mengisi dengan catatan.
           </div>
         </div>
       )}
