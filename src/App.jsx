@@ -12,7 +12,7 @@ import Dropcore from './pages/inventory/Dropcore'
 import Pengeluaran from './pages/pengeluaran/Pengeluaran'
 import Dismantle from './pages/dismantle/Dismantle'
 import OntReplacement from './pages/ont/OntReplacement'
-import ActivityLogs from './pages/logs/ActivityLogs'
+import ActivityLogs from './pages/activity/ActivityLogs'
 import Settings from './pages/settings/Settings'
 
 const ProtectedRoute = ({ children }) => {
