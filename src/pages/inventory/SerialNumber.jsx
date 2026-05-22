@@ -4,9 +4,10 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, X, Hash, UploadCloud, CheckCircle, Clock } from 'lucide-react'
+import { Search, Plus, Trash2, X, Hash, UploadCloud, CheckCircle, Clock, FileDown, Upload, Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
+import * as XLSX from 'xlsx'
 
 export default function SerialNumber() {
   const { profile } = useAuth()
@@ -112,6 +113,59 @@ export default function SerialNumber() {
     terpakai: items.filter(i => i.status === 'terpakai').length,
   }
 
+  const handleExportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filtered.map(i => ({
+      'Serial Number': i.serial_number,
+      'Merk': i.brand?.brand_name || '-',
+      'Tipe': i.type?.type_name || '-',
+      'Tanggal Masuk': i.date_in,
+      'Status': i.status,
+      'Note': i.note || '',
+    })))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Serial Number')
+    XLSX.writeFile(wb, `serial_number_${new Date().toISOString().slice(0,10)}.xlsx`)
+    toast.success('Export berhasil')
+  }
+
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([['Serial Number', 'Tanggal Masuk (yyyy-mm-dd)']])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Template')
+    XLSX.writeFile(wb, 'template_serial_number.xlsx')
+  }
+
+  const handleImportExcel = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = async (evt) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'binary' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const data = XLSX.utils.sheet_to_json(ws)
+        if (!data.length) { toast.error('File kosong'); return }
+        const toInsert = data
+          .map(row => ({
+            serial_number: String(row['Serial Number'] || '').trim(),
+            date_in: row['Tanggal Masuk (yyyy-mm-dd)'] || row['Tanggal Masuk'] || format(new Date(), 'yyyy-MM-dd'),
+            status: 'tersedia',
+            created_by: profile.id,
+          }))
+          .filter(r => r.serial_number)
+        if (!toInsert.length) { toast.error('Tidak ada data valid'); return }
+        const { error } = await supabase.from('serial_numbers').insert(toInsert)
+        if (error) throw error
+        toast.success(`${toInsert.length} SN berhasil diimport`)
+        fetchAll()
+      } catch (err) {
+        toast.error('Gagal import: ' + err.message)
+      }
+    }
+    reader.readAsBinaryString(file)
+    e.target.value = ''
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -148,9 +202,9 @@ export default function SerialNumber() {
 
       <div className="card">
         <div className="filter-bar">
-          <div className="search-box">
+          <div className="search-box" style={{ maxWidth: '200px' }}>
             <Search size={16} className="search-icon" />
-            <input type="text" placeholder="Cari SN atau merk..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Cari SN..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <select className="filter-select" value={brandFilter} onChange={e => setBrandFilter(e.target.value)}>
             <option value="all">Semua Merk</option>
@@ -161,6 +215,14 @@ export default function SerialNumber() {
             <option value="tersedia">Tersedia</option>
             <option value="terpakai">Terpakai</option>
           </select>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate}><FileDown size={14} /> Template</button>
+            <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', marginBottom: 0 }}>
+              <Upload size={14} /> Import
+              <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportExcel} />
+            </label>
+            <button className="btn btn-secondary btn-sm" onClick={handleExportExcel}><Download size={14} /> Export</button>
+          </div>
         </div>
 
         <div className="table-container">

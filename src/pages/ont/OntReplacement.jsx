@@ -112,7 +112,7 @@ export default function OntReplacement() {
 
       <div className="card">
         <div className="filter-bar mb-4">
-          <div className="search-box">
+          <div className="search-box" style={{ maxWidth: '200px' }}>
             <Search size={16} className="search-icon" />
             <input type="text" placeholder="Cari nama, ID, SN..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>

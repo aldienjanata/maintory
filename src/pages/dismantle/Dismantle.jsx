@@ -4,9 +4,10 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, Edit2, X, ArrowDownToLine, CheckCircle, Clock, MapPin, Phone } from 'lucide-react'
+import { Search, Plus, Trash2, Edit2, X, ArrowDownToLine, CheckCircle, Clock, MapPin, Phone, FileDown, Upload, Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
+import * as XLSX from 'xlsx'
 
 export default function Dismantle() {
   const { profile } = useAuth()
@@ -109,6 +110,72 @@ export default function Dismantle() {
     return matchSearch && matchStatus
   })
 
+  const handleExportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filtered.map(item => ({
+      'Tanggal Input': item.date_input,
+      'ID Pelanggan': item.customer_id,
+      'Nama Lengkap': item.full_name,
+      'No HP': item.phone_number || '',
+      'Alamat': item.address || '',
+      'SN ONT': item.serial_number || '',
+      'Bayar Terakhir': item.last_payment || '',
+      'Teknisi': getTechNames(item.technicians),
+      'Status': item.aksi,
+      'Tanggal Ambil': item.pickup_date || '',
+      'Note': item.note || '',
+    })))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Dismantle')
+    XLSX.writeFile(wb, `dismantle_${new Date().toISOString().slice(0,10)}.xlsx`)
+    toast.success('Export berhasil')
+  }
+
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([[
+      'Tanggal Input (yyyy-mm-dd)', 'ID Pelanggan', 'Nama Lengkap',
+      'No HP', 'Alamat', 'SN ONT', 'Bayar Terakhir', 'Note'
+    ]])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Template')
+    XLSX.writeFile(wb, 'template_dismantle.xlsx')
+  }
+
+  const handleImportExcel = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = async (evt) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'binary' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const data = XLSX.utils.sheet_to_json(ws)
+        if (!data.length) { toast.error('File kosong'); return }
+        const toInsert = data.map(row => ({
+          date_input: row['Tanggal Input (yyyy-mm-dd)'] || row['Tanggal Input'] || format(new Date(), 'yyyy-MM-dd'),
+          customer_id: String(row['ID Pelanggan'] || '').trim(),
+          full_name: String(row['Nama Lengkap'] || '').trim(),
+          phone_number: String(row['No HP'] || '').trim(),
+          address: String(row['Alamat'] || '').trim(),
+          serial_number: String(row['SN ONT'] || '').trim(),
+          last_payment: String(row['Bayar Terakhir'] || '').trim(),
+          note: String(row['Note'] || '').trim(),
+          technicians: [],
+          aksi: 'aktif',
+          created_by: profile.id,
+        })).filter(r => r.customer_id && r.full_name)
+        if (!toInsert.length) { toast.error('Tidak ada data valid'); return }
+        const { error } = await supabase.from('dismantles').insert(toInsert)
+        if (error) throw error
+        toast.success(`${toInsert.length} data dismantle berhasil diimport`)
+        fetchAll()
+      } catch (err) {
+        toast.error('Gagal import: ' + err.message)
+      }
+    }
+    reader.readAsBinaryString(file)
+    e.target.value = ''
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -139,15 +206,23 @@ export default function Dismantle() {
 
       <div className="card">
         <div className="filter-bar">
-          <div className="search-box">
+          <div className="search-box" style={{ maxWidth: '200px' }}>
             <Search size={16} className="search-icon" />
-            <input type="text" placeholder="Cari nama atau ID pelanggan..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Cari nama/ID..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="all">Semua Status</option>
             <option value="aktif">Aktif</option>
             <option value="close">Close</option>
           </select>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+            <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate}><FileDown size={14} /> Template</button>
+            <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', marginBottom: 0 }}>
+              <Upload size={14} /> Import
+              <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleImportExcel} />
+            </label>
+            <button className="btn btn-secondary btn-sm" onClick={handleExportExcel}><Download size={14} /> Export</button>
+          </div>
         </div>
 
         <div className="table-container">

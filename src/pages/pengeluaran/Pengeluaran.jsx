@@ -4,9 +4,10 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, Edit2, X, Truck, CalendarDays, Users } from 'lucide-react'
+import { Search, Plus, Trash2, Edit2, X, Truck, CalendarDays, Users, Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
+import * as XLSX from 'xlsx'
 
 const SITES = [
   { value: 'banyumas', label: 'Banyumas' },
@@ -32,6 +33,9 @@ export default function Pengeluaran() {
   const [dateFilter, setDateFilter] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  
+  const [activeTab, setActiveTab] = useState('pengeluaran')
+  const [scheduleTickets, setScheduleTickets] = useState([])
 
   const [form, setForm] = useState({
     expense_date: format(new Date(), 'yyyy-MM-dd'),
@@ -48,16 +52,18 @@ export default function Pengeluaran() {
 
   const fetchAll = async () => {
     setLoading(true)
-    const [expRes, techRes, snRes, haspelRes] = await Promise.all([
+    const [expRes, techRes, snRes, haspelRes, schedRes] = await Promise.all([
       supabase.from('daily_expenses').select('*, items:expense_items(*)').order('expense_date', { ascending: false }),
       supabase.from('users').select('id, full_name, username').in('role', ['admin', 'teknisi']).eq('is_active', true),
       supabase.from('serial_numbers').select('id, serial_number, brand:ont_brands(brand_name), type:ont_types(type_name)').eq('status', 'tersedia'),
       supabase.from('dropcore_haspels').select('id, haspel_code, type, remaining_meters').eq('status', 'tersedia'),
+      supabase.from('maintenance_tickets').select('*').eq('status', 'aktif').order('date_input', { ascending: true }),
     ])
     if (!expRes.error) setExpenses(expRes.data || [])
     if (!techRes.error) setTechnicians(techRes.data || [])
     if (!snRes.error) setSnList(snRes.data || [])
     if (!haspelRes.error) setHaspelList(haspelRes.data || [])
+    if (!schedRes.error) setScheduleTickets(schedRes.data || [])
     setLoading(false)
   }
 
@@ -73,7 +79,7 @@ export default function Pengeluaran() {
   const addItem = () => {
     setForm(f => ({
       ...f,
-      items: [...f.items, { id: Math.random().toString(36).substr(2, 9), item_type: 'ont', serial_number_id: '', haspel_id: '', meters_used: '', warehouse_item_id: '', quantity: 1 }]
+      items: [...f.items, { id: Math.random().toString(36).substr(2, 9), item_type: 'ont', serial_number_id: '', haspel_id: '', meters_used: '', warehouse_item_id: '', quantity: 1, item_name: '' }]
     }))
   }
 
@@ -113,6 +119,7 @@ export default function Pengeluaran() {
           meters_used: rest.meters_used || null,
           warehouse_item_id: rest.warehouse_item_id || null,
           quantity: rest.quantity,
+          item_name: rest.item_name || null,
         }))
         const { error: itemsError } = await supabase.from('expense_items').insert(itemsToInsert)
         if (itemsError) throw itemsError
@@ -174,6 +181,22 @@ export default function Pengeluaran() {
     return matchDate && matchSearch
   })
 
+  const handleExportExcel = () => {
+    const rows = filtered.map(exp => ({
+      'Tanggal': exp.expense_date,
+      'Lokasi': SITES.find(s => s.value === exp.site)?.label || exp.site,
+      'Jenis Pekerjaan': WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type,
+      'Teknisi': getTechNames(exp.technicians),
+      'Jumlah Item': exp.items?.length || 0,
+      'Note': exp.note || '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Pengeluaran')
+    XLSX.writeFile(wb, `pengeluaran_${new Date().toISOString().slice(0,10)}.xlsx`)
+    toast.success('Export berhasil')
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -182,6 +205,9 @@ export default function Pengeluaran() {
           <p>Rekap penggunaan material oleh teknisi per hari</p>
         </div>
         <div className="page-header-right">
+          <button className="btn btn-secondary" onClick={handleExportExcel}>
+            <Download size={16} /> Export
+          </button>
           {can(role, 'pengeluaran.input') && (
             <button className="btn btn-primary" onClick={() => { resetForm(); setIsModalOpen(true) }}>
               <Plus size={16} /> Tambah Pengeluaran
@@ -190,11 +216,23 @@ export default function Pengeluaran() {
         </div>
       </div>
 
+      <div className="tabs">
+        <button className={`tab-item ${activeTab === 'pengeluaran' ? 'active' : ''}`} onClick={() => setActiveTab('pengeluaran')}>
+          <Truck size={14} /> Pengeluaran Harian
+        </button>
+        {(role === 'admin' || role === 'superadmin') && (
+          <button className={`tab-item ${activeTab === 'jadwal' ? 'active' : ''}`} onClick={() => setActiveTab('jadwal')}>
+            <CalendarDays size={14} /> Jadwal Teknisi
+          </button>
+        )}
+      </div>
+
+      {activeTab === 'pengeluaran' && (
       <div className="card">
         <div className="filter-bar">
-          <div className="search-box">
+          <div className="search-box" style={{ maxWidth: '220px' }}>
             <Search size={16} className="search-icon" />
-            <input type="text" placeholder="Cari teknisi atau lokasi..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Cari teknisi/lokasi..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <input type="date" className="filter-select" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ padding: '0 12px' }} />
           {dateFilter && <button className="btn btn-ghost btn-sm" onClick={() => setDateFilter('')}>Reset</button>}
@@ -239,6 +277,47 @@ export default function Pengeluaran() {
           )}
         </div>
       </div>
+      )}
+
+      {activeTab === 'jadwal' && (role === 'admin' || role === 'superadmin') && (
+        <div className="card">
+          <div className="flex justify-between items-center mb-3">
+            <h3 style={{ fontSize: '15px', fontWeight: 700 }}>Jadwal Teknisi — Tiket Aktif</h3>
+            <span className="badge badge-warning">{scheduleTickets.length} Tiket</span>
+          </div>
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tanggal</th>
+                  <th>No Tiket</th>
+                  <th>Pelanggan</th>
+                  <th>Desa</th>
+                  <th>Keluhan</th>
+                  <th>Teknisi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scheduleTickets.length > 0 ? scheduleTickets.map(t => (
+                  <tr key={t.id}>
+                    <td className="text-secondary">{t.date_input}</td>
+                    <td><span className="font-semibold">#{t.ticket_number}</span></td>
+                    <td>
+                      <div className="font-semibold">{t.customer_name}</div>
+                      <div className="text-secondary" style={{ fontSize: '11px' }}>{t.customer_id}</div>
+                    </td>
+                    <td>{t.village}</td>
+                    <td style={{ maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.complaint}</td>
+                    <td>{t.technicians?.length ? getTechNames(t.technicians) : <span className="badge badge-danger">Belum Ditugaskan</span>}</td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-secondary)' }}>Tidak ada tiket aktif</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="modal-overlay">
@@ -322,7 +401,10 @@ export default function Pengeluaran() {
                         </div>
                       )}
                       {item.item_type === 'other' && (
-                        <input type="number" className="form-input" placeholder="Jumlah" min="1" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <input className="form-input" placeholder="Nama barang yang dibawa (contoh: Tang, Kabel Patch, dll)" value={item.item_name || ''} onChange={e => updateItem(item.id, 'item_name', e.target.value)} />
+                          <input type="number" className="form-input" placeholder="Jumlah" min="1" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
+                        </div>
                       )}
                     </div>
                   </div>

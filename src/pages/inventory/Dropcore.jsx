@@ -115,6 +115,8 @@ export default function Dropcore() {
           { label: 'Meter Tersisa', value: `${remainingMeter.toLocaleString()} m`, color: 'var(--success)' },
           { label: 'Meter Terpakai', value: `${usedMeter.toLocaleString()} m`, color: 'var(--warning)' },
           { label: 'Haspel Habis', value: haspels.filter(h => h.status === 'habis').length, color: 'var(--danger)' },
+          { label: 'Haspel 1C', value: haspels.filter(h => h.type === '1c').length, color: 'var(--purple)' },
+          { label: 'Haspel 4C', value: haspels.filter(h => h.type === '4c').length, color: 'var(--orange)' },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <div className="stat-card-header">
@@ -128,16 +130,28 @@ export default function Dropcore() {
         ))}
       </div>
 
+      {/* Meter breakdown by type */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <div className="card" style={{ flex: 1, padding: '12px 16px', minWidth: '140px' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Meter Tersisa (1C)</div>
+          <div style={{ fontWeight: 700, color: 'var(--purple)' }}>{haspels.filter(h => h.type === '1c').reduce((s, h) => s + Number(h.initial_meters || 0) - Number(h.used_meters || 0), 0).toLocaleString()} m</div>
+        </div>
+        <div className="card" style={{ flex: 1, padding: '12px 16px', minWidth: '140px' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Meter Tersisa (4C)</div>
+          <div style={{ fontWeight: 700, color: 'var(--orange)' }}>{haspels.filter(h => h.type === '4c').reduce((s, h) => s + Number(h.initial_meters || 0) - Number(h.used_meters || 0), 0).toLocaleString()} m</div>
+        </div>
+      </div>
+
       <div className="card">
         <div className="filter-bar">
-          <div className="search-box">
+          <div className="search-box" style={{ maxWidth: '180px' }}>
             <Search size={16} className="search-icon" />
-            <input type="text" placeholder="Cari kode haspel..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Cari kode..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <select className="filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
             <option value="all">Semua Tipe</option>
-            <option value="1c">Dropcore 1C</option>
-            <option value="4c">Dropcore 4C</option>
+            <option value="1c">1C</option>
+            <option value="4c">4C</option>
           </select>
           <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="all">Semua Status</option>

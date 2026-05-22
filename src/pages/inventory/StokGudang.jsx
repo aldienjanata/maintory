@@ -4,7 +4,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, Edit2, X, Package, TrendingDown, TrendingUp } from 'lucide-react'
+import { Search, Plus, Trash2, Edit2, X, Package, TrendingDown, TrendingUp, FileDown, Upload, Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 const UNITS = ['unit', 'buah', 'pcs', 'meter', 'roll', 'set', 'dus', 'kg']
 const ITEM_TYPES = [
@@ -101,6 +102,56 @@ export default function StokGudang() {
 
   const totalStok = filtered.reduce((s, i) => s + (Number(i.initial_stock) || 0), 0)
 
+  const handleExportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filtered.map(i => ({
+      'Nama Item': i.item_name,
+      'Tipe': ITEM_TYPES.find(t => t.value === i.item_type)?.label || i.item_type,
+      'Stok Awal': i.initial_stock,
+      'Satuan': i.unit,
+    })))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Stok Gudang')
+    XLSX.writeFile(wb, `stok_gudang_${new Date().toISOString().slice(0,10)}.xlsx`)
+    toast.success('Export berhasil')
+  }
+
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([['Nama Item', 'Tipe (ont/dropcore_1c/dropcore_4c/other)', 'Stok Awal', 'Satuan (unit/buah/pcs/meter/roll/set/dus/kg)']])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Template')
+    XLSX.writeFile(wb, 'template_stok_gudang.xlsx')
+  }
+
+  const handleImportExcel = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = async (evt) => {
+      try {
+        const wb = XLSX.read(evt.target.result, { type: 'binary' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const data = XLSX.utils.sheet_to_json(ws)
+        if (!data.length) { toast.error('File kosong atau format tidak sesuai'); return }
+        const toInsert = data.map(row => ({
+          item_name: row['Nama Item'] || '',
+          item_type: row['Tipe (ont/dropcore_1c/dropcore_4c/other)'] || row['Tipe'] || 'other',
+          initial_stock: Number(row['Stok Awal']) || 0,
+          unit: row['Satuan (unit/buah/pcs/meter/roll/set/dus/kg)'] || row['Satuan'] || 'unit',
+          created_by: profile.id,
+        })).filter(r => r.item_name)
+        if (!toInsert.length) { toast.error('Tidak ada data valid'); return }
+        const { error } = await supabase.from('warehouses').insert(toInsert)
+        if (error) throw error
+        toast.success(`${toInsert.length} item berhasil diimport`)
+        fetchItems()
+      } catch (err) {
+        toast.error('Gagal import: ' + err.message)
+      }
+    }
+    reader.readAsBinaryString(file)
+    e.target.value = ''
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -148,7 +199,7 @@ export default function StokGudang() {
 
       <div className="card">
         <div className="filter-bar">
-          <div className="search-box">
+          <div className="search-box" style={{ maxWidth: '260px' }}>
             <Search size={16} className="search-icon" />
             <input type="text" placeholder="Cari nama item..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
@@ -156,6 +207,18 @@ export default function StokGudang() {
             <option value="all">Semua Tipe</option>
             {ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate}>
+              <FileDown size={14} /> Template
+            </button>
+            <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', marginBottom: 0 }}>
+              <Upload size={14} /> Import
+              <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleImportExcel} />
+            </label>
+            <button className="btn btn-secondary btn-sm" onClick={handleExportExcel}>
+              <Download size={14} /> Export
+            </button>
+          </div>
         </div>
 
         <div className="table-container">
