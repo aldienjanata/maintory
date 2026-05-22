@@ -60,7 +60,8 @@ export function AuthProvider({ children }) {
 
   async function login(username, password) {
     // Login via email (email = username@maintory.local)
-    const email = `${username}@maintory.local`
+    const cleanUsername = username.trim().toLowerCase()
+    const email = `${cleanUsername}@maintory.local`
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) throw new Error(error.message || 'Username atau password salah')
