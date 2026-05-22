@@ -111,14 +111,38 @@ export default function Dropcore() {
       {/* Summary */}
       <div className="stats-grid mb-4">
         {[
-          { label: 'Total Haspel', value: haspels.length, color: 'var(--accent)' },
-          { label: 'Meter Tersisa', value: `${remainingMeter.toLocaleString()} m`, color: 'var(--success)' },
-          { label: 'Meter Terpakai', value: `${usedMeter.toLocaleString()} m`, color: 'var(--warning)' },
-          { label: 'Haspel Habis', value: haspels.filter(h => h.status === 'habis').length, color: 'var(--danger)' },
-          { label: 'Haspel 1C', value: haspels.filter(h => h.type === '1c').length, color: 'var(--purple)' },
-          { label: 'Haspel 4C', value: haspels.filter(h => h.type === '4c').length, color: 'var(--orange)' },
+          { key: 'total', label: 'Total Haspel', value: haspels.length, color: 'var(--accent)' },
+          { key: 'meters', label: 'Meter Tersisa', value: `${remainingMeter.toLocaleString()} m`, color: 'var(--success)' },
+          { key: 'used', label: 'Meter Terpakai', value: `${usedMeter.toLocaleString()} m`, color: 'var(--warning)' },
+          { key: 'habis', label: 'Haspel Habis', value: haspels.filter(h => h.status === 'habis').length, color: 'var(--danger)' },
+          { 
+            key: '1c', 
+            label: 'Total Haspel 1C', 
+            value: (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span>{haspels.filter(h => h.type === '1c').length}</span>
+                <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  {haspels.filter(h => h.type === '1c').reduce((s, h) => s + Number(h.initial_meters || 0) - Number(h.used_meters || 0), 0).toLocaleString()} m tersisa
+                </span>
+              </div>
+            ), 
+            color: 'var(--purple)' 
+          },
+          { 
+            key: '4c', 
+            label: 'Total Haspel 4C', 
+            value: (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span>{haspels.filter(h => h.type === '4c').length}</span>
+                <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  {haspels.filter(h => h.type === '4c').reduce((s, h) => s + Number(h.initial_meters || 0) - Number(h.used_meters || 0), 0).toLocaleString()} m tersisa
+                </span>
+              </div>
+            ), 
+            color: 'var(--orange)' 
+          },
         ].map(s => (
-          <div key={s.label} className="stat-card">
+          <div key={s.key} className="stat-card">
             <div className="stat-card-header">
               <div className="stat-card-icon" style={{ background: `${s.color}20` }}>
                 <Cable size={20} style={{ color: s.color }} />
@@ -128,18 +152,6 @@ export default function Dropcore() {
             <div className="stat-card-label">{s.label}</div>
           </div>
         ))}
-      </div>
-
-      {/* Meter breakdown by type */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <div className="card" style={{ flex: 1, padding: '12px 16px', minWidth: '140px' }}>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Meter Tersisa (1C)</div>
-          <div style={{ fontWeight: 700, color: 'var(--purple)' }}>{haspels.filter(h => h.type === '1c').reduce((s, h) => s + Number(h.initial_meters || 0) - Number(h.used_meters || 0), 0).toLocaleString()} m</div>
-        </div>
-        <div className="card" style={{ flex: 1, padding: '12px 16px', minWidth: '140px' }}>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Meter Tersisa (4C)</div>
-          <div style={{ fontWeight: 700, color: 'var(--orange)' }}>{haspels.filter(h => h.type === '4c').reduce((s, h) => s + Number(h.initial_meters || 0) - Number(h.used_meters || 0), 0).toLocaleString()} m</div>
-        </div>
       </div>
 
       <div className="card">
