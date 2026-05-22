@@ -1,0 +1,296 @@
+import { useState, useEffect } from 'react'
+import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
+import { can } from '../../utils/permissions'
+import { logActivity } from '../../utils/logActivity'
+import toast from 'react-hot-toast'
+import { Search, Plus, Trash2, Edit2, X, ArrowDownToLine, CheckCircle, Clock, MapPin, Phone } from 'lucide-react'
+import { format } from 'date-fns'
+import { id } from 'date-fns/locale'
+
+export default function Dismantle() {
+  const { profile } = useAuth()
+  const role = profile?.role || 'teknisi'
+
+  const [items, setItems] = useState([])
+  const [technicians, setTechnicians] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editItem, setEditItem] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  const emptyForm = {
+    date_input: format(new Date(), 'yyyy-MM-dd'),
+    customer_id: '', full_name: '', address: '', sharelok: '',
+    phone_number: '', last_payment: '', serial_number: '',
+    technicians: [], aksi: 'aktif', pickup_date: '', note: ''
+  }
+  const [form, setForm] = useState(emptyForm)
+
+  useEffect(() => { fetchAll() }, [])
+
+  const fetchAll = async () => {
+    setLoading(true)
+    const [res, techRes] = await Promise.all([
+      supabase.from('dismantles').select('*').order('date_input', { ascending: false }),
+      supabase.from('users').select('id, full_name').in('role', ['admin', 'teknisi']).eq('is_active', true),
+    ])
+    if (!res.error) setItems(res.data || [])
+    if (!techRes.error) setTechnicians(techRes.data || [])
+    setLoading(false)
+  }
+
+  const openAdd = () => { setEditItem(null); setForm(emptyForm); setIsModalOpen(true) }
+  const openEdit = (item) => {
+    setEditItem(item)
+    setForm({
+      date_input: item.date_input, customer_id: item.customer_id, full_name: item.full_name,
+      address: item.address || '', sharelok: item.sharelok || '', phone_number: item.phone_number || '',
+      last_payment: item.last_payment || '', serial_number: item.serial_number || '',
+      technicians: item.technicians || [], aksi: item.aksi, pickup_date: item.pickup_date || '', note: item.note || ''
+    })
+    setIsModalOpen(true)
+  }
+
+  const toggleTech = (techId) => {
+    setForm(f => ({ ...f, technicians: f.technicians.includes(techId) ? f.technicians.filter(t => t !== techId) : [...f.technicians, techId] }))
+  }
+
+  const handleSave = async () => {
+    if (!form.customer_id || !form.full_name) { toast.error('ID Pelanggan dan nama wajib diisi'); return }
+    setSaving(true)
+    try {
+      if (editItem) {
+        const { error } = await supabase.from('dismantles').update({ ...form, updated_at: new Date().toISOString() }).eq('id', editItem.id)
+        if (error) throw error
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Edit Dismantle', detail: `ID: ${form.customer_id}` })
+        toast.success('Data dismantle diperbarui')
+      } else {
+        const { error } = await supabase.from('dismantles').insert({ ...form, created_by: profile.id })
+        if (error) throw error
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Tambah Dismantle', detail: `ID: ${form.customer_id} - ${form.full_name}` })
+        toast.success('Data dismantle ditambahkan')
+      }
+      setIsModalOpen(false)
+      fetchAll()
+    } catch (err) {
+      toast.error(err.code === '23505' ? 'ID Pelanggan sudah ada!' : 'Gagal: ' + err.message)
+    } finally { setSaving(false) }
+  }
+
+  const handleClose = async (item) => {
+    if (!window.confirm(`Tandai dismantle ${item.full_name} sebagai selesai (Close)?`)) return
+    const { error } = await supabase.from('dismantles').update({ aksi: 'close', pickup_date: format(new Date(), 'yyyy-MM-dd'), updated_at: new Date().toISOString() }).eq('id', item.id)
+    if (!error) {
+      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Close Dismantle', detail: `ID: ${item.customer_id}` })
+      toast.success('Dismantle ditandai selesai')
+      fetchAll()
+    }
+  }
+
+  const handleDelete = async (item) => {
+    if (!window.confirm(`Hapus data dismantle ${item.full_name}?`)) return
+    await supabase.from('dismantles').delete().eq('id', item.id)
+    await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Hapus Dismantle', detail: item.customer_id })
+    toast.success('Data dihapus')
+    fetchAll()
+  }
+
+  const getTechNames = (ids) => {
+    if (!ids?.length) return '-'
+    return ids.map(id => technicians.find(t => t.id === id)?.full_name || '?').join(', ')
+  }
+
+  const filtered = items.filter(i => {
+    const matchSearch = i.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || i.customer_id?.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchStatus = statusFilter === 'all' || i.aksi === statusFilter
+    return matchSearch && matchStatus
+  })
+
+  return (
+    <div>
+      <div className="page-header">
+        <div className="page-header-left">
+          <h2>Data Dismantle</h2>
+          <p>Kelola pencabutan perangkat pelanggan</p>
+        </div>
+        <div className="page-header-right">
+          {can(role, 'dismantle.input') && (
+            <button className="btn btn-primary" onClick={openAdd}><Plus size={16} /> Tambah Dismantle</button>
+          )}
+        </div>
+      </div>
+
+      <div className="stats-grid mb-4">
+        {[
+          { label: 'Total', val: items.length, color: 'var(--accent)' },
+          { label: 'Aktif', val: items.filter(i => i.aksi === 'aktif').length, color: 'var(--warning)' },
+          { label: 'Selesai', val: items.filter(i => i.aksi === 'close').length, color: 'var(--success)' },
+        ].map(s => (
+          <div key={s.label} className="stat-card">
+            <div className="stat-card-header"><div className="stat-card-icon" style={{ background: `${s.color}20` }}><ArrowDownToLine size={20} style={{ color: s.color }} /></div></div>
+            <div className="stat-card-value" style={{ color: s.color }}>{s.val}</div>
+            <div className="stat-card-label">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="filter-bar">
+          <div className="search-box">
+            <Search size={16} className="search-icon" />
+            <input type="text" placeholder="Cari nama atau ID pelanggan..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          </div>
+          <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <option value="all">Semua Status</option>
+            <option value="aktif">Aktif</option>
+            <option value="close">Close</option>
+          </select>
+        </div>
+
+        <div className="table-container">
+          {loading ? (
+            <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
+          ) : filtered.length > 0 ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>Tanggal</th>
+                  <th>Pelanggan</th>
+                  <th>Bayar Terakhir</th>
+                  <th>SN</th>
+                  <th>Lokasi</th>
+                  <th>Teknisi</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'right' }}>Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(item => (
+                  <tr key={item.id}>
+                    <td className="text-secondary">{format(new Date(item.date_input), 'dd MMM yy', { locale: id })}</td>
+                    <td>
+                      <div className="font-semibold">{item.full_name}</div>
+                      <div className="text-secondary" style={{ fontSize: '11px' }}>{item.customer_id}</div>
+                      {item.phone_number && (
+                        <a href={`https://wa.me/${item.phone_number.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="badge badge-success" style={{ marginTop: '4px', textDecoration: 'none', fontSize: '10px' }}>
+                          <Phone size={10} /> {item.phone_number}
+                        </a>
+                      )}
+                    </td>
+                    <td>{item.last_payment || '-'}</td>
+                    <td><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{item.serial_number || '-'}</span></td>
+                    <td>
+                      {item.sharelok ? (
+                        <a href={item.sharelok} target="_blank" rel="noreferrer" className="text-accent" style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <MapPin size={12} /> Buka Maps
+                        </a>
+                      ) : <span className="text-secondary">-</span>}
+                    </td>
+                    <td style={{ fontSize: '12px' }}>{getTechNames(item.technicians)}</td>
+                    <td>
+                      {item.aksi === 'close'
+                        ? <span className="badge badge-success"><CheckCircle size={10} /> Close</span>
+                        : <span className="badge badge-warning"><Clock size={10} /> Aktif</span>
+                      }
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                        {item.aksi === 'aktif' && (
+                          <button className="btn-icon text-success" title="Selesaikan" onClick={() => handleClose(item)}><CheckCircle size={15} /></button>
+                        )}
+                        {can(role, 'dismantle.edit') && (
+                          <button className="btn-icon" title="Edit" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
+                        )}
+                        {can(role, 'dismantle.delete') && (
+                          <button className="btn-icon text-danger" title="Hapus" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="empty-state"><ArrowDownToLine size={48} /><h3>Tidak Ada Data</h3><p>Belum ada data dismantle.</p></div>
+          )}
+        </div>
+      </div>
+
+      {isModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal modal-lg">
+            <div className="modal-header">
+              <h3>{editItem ? 'Edit Data Dismantle' : 'Tambah Dismantle'}</h3>
+              <button className="btn-icon" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div className="grid-2">
+                <div className="form-group">
+                  <label className="form-label">Tanggal Input</label>
+                  <input type="date" className="form-input" value={form.date_input} onChange={e => setForm(f => ({ ...f, date_input: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">ID Pelanggan <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <input className="form-input" placeholder="ID Pelanggan" value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))} disabled={!!editItem} />
+                </div>
+              </div>
+              <div className="grid-2">
+                <div className="form-group">
+                  <label className="form-label">Nama Lengkap <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <input className="form-input" placeholder="Nama Pelanggan" value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">No HP</label>
+                  <input className="form-input" placeholder="08xx" value={form.phone_number} onChange={e => setForm(f => ({ ...f, phone_number: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Alamat</label>
+                <input className="form-input" placeholder="Alamat lengkap" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
+              </div>
+              <div className="grid-2">
+                <div className="form-group">
+                  <label className="form-label">Sharelok (Link Maps)</label>
+                  <input className="form-input" placeholder="https://maps.google.com/..." value={form.sharelok} onChange={e => setForm(f => ({ ...f, sharelok: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Bayar Terakhir</label>
+                  <input className="form-input" placeholder="Contoh: Januari 2024" value={form.last_payment} onChange={e => setForm(f => ({ ...f, last_payment: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Serial Number ONT</label>
+                <input className="form-input" placeholder="SN perangkat yang akan dicabut" value={form.serial_number} onChange={e => setForm(f => ({ ...f, serial_number: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Pilih Teknisi</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                  {technicians.map(t => (
+                    <button key={t.id} type="button" onClick={() => toggleTech(t.id)}
+                      className={`badge ${form.technicians.includes(t.id) ? 'badge-accent' : 'badge-muted'}`}
+                      style={{ border: 'none', cursor: 'pointer', padding: '5px 10px' }}>
+                      {t.full_name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Note</label>
+                <textarea className="form-input" rows={2} value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder="Keterangan tambahan..." />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : (editItem ? 'Simpan Perubahan' : 'Tambah')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
