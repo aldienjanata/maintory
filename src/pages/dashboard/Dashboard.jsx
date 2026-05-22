@@ -131,16 +131,15 @@ export default function Dashboard() {
   }
 
   const StatCard = ({ title, value, icon: Icon, colorVar, subLabel }) => (
-    <div className="stat-card">
-      <div className="stat-card-header">
-        <div className="stat-card-icon" style={{ background: `${colorVar}20` }}>
-          <Icon size={22} style={{ color: colorVar }} />
+    <div className="stat-card stat-card-compact">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="stat-card-icon" style={{ background: `${colorVar}20`, width: '40px', height: '40px', flexShrink: 0 }}>
+          <Icon size={20} style={{ color: colorVar }} />
         </div>
-      </div>
-      <div>
-        <div className="stat-card-value" style={{ color: colorVar }}>{value}</div>
-        <div className="stat-card-label">{title}</div>
-        {subLabel && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{subLabel}</div>}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="stat-card-value" style={{ color: colorVar, fontSize: '22px' }}>{value}</div>
+          <div className="stat-card-label" style={{ fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+        </div>
       </div>
     </div>
   )
@@ -176,13 +175,19 @@ export default function Dashboard() {
       <div className="page-header">
         <div className="page-header-left">
           <h2>Dashboard Overview</h2>
-          <p>Ringkasan sistem dan aktivitas real-time — {format(new Date(), 'EEEE, dd MMMM yyyy', { locale: id })}</p>
+          <p className="dashboard-date">{format(new Date(), 'EEEE, dd MMMM yyyy', { locale: id })}</p>
         </div>
         <div className="page-header-right">
           <Link to="/maintenance" className="btn btn-primary">
-            <Plus size={16} /> Input Tiket Maintenance
+            <Plus size={16} /> Input Tiket
           </Link>
         </div>
+      </div>
+
+      {/* ===== QUOTE OF THE DAY — TOP ===== */}
+      <div className="quote-card mb-4">
+        <div className="quote-text">{quote.text}</div>
+        <div className="quote-author">— {quote.author}</div>
       </div>
 
       {/* ===== ALERT: Maintenance Belum Close ===== */}
@@ -192,79 +197,56 @@ export default function Dashboard() {
             <div className="flex items-center gap-2">
               <AlertTriangle size={18} style={{ color: 'var(--warning)' }} />
               <span className="font-semibold" style={{ color: 'var(--warning)', fontSize: '14px' }}>
-                {overdueTickets.length} Tiket Belum Diselesaikan
+                {overdueTickets.length} Tiket Belum Selesai
               </span>
             </div>
             {overdueTickets.length > 3 && (
               <button
                 className="btn btn-ghost btn-sm"
                 onClick={() => setShowAllAlerts(!showAllAlerts)}
-                style={{ color: 'var(--warning)' }}
+                style={{ color: 'var(--warning)', flexShrink: 0 }}
               >
-                {showAllAlerts ? (
-                  <><ChevronUp size={14} /> Sembunyikan</>
-                ) : (
-                  <><ChevronDown size={14} /> Lihat Semua ({overdueTickets.length})</>
-                )}
+                {showAllAlerts ? <ChevronUp size={14} /> : <><ChevronDown size={14} /> +{overdueTickets.length - 3}</>}
               </button>
             )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {visibleAlerts.map((ticket, i) => (
-              <div key={ticket.id} style={{
-                background: 'var(--bg-hover)',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-                padding: '10px 14px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px',
-                flexWrap: 'wrap'
-              }}>
-                <div className="flex items-center gap-3">
+            {visibleAlerts.map((ticket) => (
+              <div key={ticket.id} className="alert-ticket-row">
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1, minWidth: 0 }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--warning-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--warning)' }}>#{ticket.ticket_number}</span>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--warning)' }}>#{ticket.ticket_number}</span>
                   </div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)' }}>
-                      {ticket.customer_name}
-                      {ticket.village && <span className="text-secondary" style={{ fontSize: '12px', marginLeft: '6px' }}>({ticket.village})</span>}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {ticket.customer_name} {ticket.village && <span className="text-secondary" style={{ fontSize: '11px' }}>({ticket.village})</span>}
                     </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {ticket.complaint}
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="badge badge-warning">
-                    <Clock size={10} /> {getDateLabel(ticket.date_input)}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                  <span className="badge badge-warning" style={{ fontSize: '10px' }}>
+                    <Clock size={9} /> {getDateLabel(ticket.date_input)}
                   </span>
-                  <Link to="/maintenance" className="btn btn-warning btn-sm">
-                    Selesaikan
+                  <Link to="/maintenance" className="btn btn-warning btn-sm" style={{ padding: '4px 10px', fontSize: '11px' }}>
+                    Selesai
                   </Link>
                 </div>
               </div>
             ))}
-
-            {!showAllAlerts && overdueTickets.length > 3 && (
-              <div style={{ textAlign: 'center', padding: '4px' }}>
-                <span className="text-secondary" style={{ fontSize: '12px' }}>
-                  + {overdueTickets.length - 3} tiket lainnya belum diselesaikan
-                </span>
-              </div>
-            )}
           </div>
         </div>
       )}
 
       {/* ===== STATS GRID ===== */}
       <div className="stats-grid mb-4">
-        <StatCard title="Masuk Hari Ini" value={stats.maintenanceToday} icon={Wrench} colorVar="var(--accent)" subLabel="Total tiket maintenance" />
-        <StatCard title="Tiket Aktif" value={stats.maintenanceOpen} icon={AlertTriangle} colorVar="var(--warning)" subLabel="Belum diselesaikan" />
-        <StatCard title="Stok ONT" value={stats.stockOnt} icon={Package} colorVar="var(--success)" subLabel="Unit tersedia" />
-        <StatCard title="Dismantle Aktif" value={stats.dismantleActive} icon={ArrowDownToLine} colorVar="var(--danger)" subLabel="Proses pencabutan" />
+        <StatCard title="Masuk Hari Ini" value={stats.maintenanceToday} icon={Wrench} colorVar="var(--accent)" />
+        <StatCard title="Tiket Aktif" value={stats.maintenanceOpen} icon={AlertTriangle} colorVar="var(--warning)" />
+        <StatCard title="Stok ONT" value={stats.stockOnt} icon={Package} colorVar="var(--success)" />
+        <StatCard title="Dismantle Aktif" value={stats.dismantleActive} icon={ArrowDownToLine} colorVar="var(--danger)" />
       </div>
 
       {/* ===== CHARTS ROW ===== */}
@@ -296,60 +278,51 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Maintenance by Status (Pie) + Quote */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Status Pie */}
-          <div className="card" style={{ flex: 1 }}>
-            <div className="flex justify-between items-center mb-3">
-              <div>
-                <h3 style={{ fontSize: '15px', fontWeight: 700 }}>Status Tiket</h3>
-                <p className="text-secondary" style={{ fontSize: '12px' }}>Distribusi semua tiket</p>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: '120px', height: '120px', flexShrink: 0 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={maintenanceByStatus}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={35}
-                      outerRadius={55}
-                      dataKey="value"
-                      strokeWidth={0}
-                    >
-                      <Cell fill="var(--warning)" />
-                      <Cell fill="var(--success)" />
-                    </Pie>
-                    <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div style={{ flex: 1 }}>
-                {maintenanceByStatus.map((item, i) => (
-                  <div key={item.name} className="flex items-center justify-between" style={{ marginBottom: '10px' }}>
-                    <div className="flex items-center gap-2">
-                      <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: i === 0 ? 'var(--warning)' : 'var(--success)', flexShrink: 0 }} />
-                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{item.name}</span>
-                    </div>
-                    <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>{item.value}</span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between" style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '4px' }}>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Total</span>
-                  <span style={{ fontWeight: 700, color: 'var(--accent)' }}>
-                    {maintenanceByStatus.reduce((s, i) => s + i.value, 0)}
-                  </span>
-                </div>
-              </div>
+        {/* Maintenance by Status (Pie) */}
+        <div className="card">
+          <div className="flex justify-between items-center mb-3">
+            <div>
+              <h3 style={{ fontSize: '15px', fontWeight: 700 }}>Status Tiket</h3>
+              <p className="text-secondary" style={{ fontSize: '12px' }}>Distribusi semua tiket</p>
             </div>
           </div>
-
-          {/* Quote of the Day */}
-          <div className="quote-card">
-            <div className="quote-text">{quote.text}</div>
-            <div className="quote-author">— {quote.author}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ width: '120px', height: '120px', flexShrink: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={maintenanceByStatus}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={35}
+                    outerRadius={55}
+                    dataKey="value"
+                    strokeWidth={0}
+                  >
+                    <Cell fill="var(--warning)" />
+                    <Cell fill="var(--success)" />
+                  </Pie>
+                  <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ flex: 1 }}>
+              {maintenanceByStatus.map((item, i) => (
+                <div key={item.name} className="flex items-center justify-between" style={{ marginBottom: '10px' }}>
+                  <div className="flex items-center gap-2">
+                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: i === 0 ? 'var(--warning)' : 'var(--success)', flexShrink: 0 }} />
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{item.name}</span>
+                  </div>
+                  <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>{item.value}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between" style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '4px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Total</span>
+                <span style={{ fontWeight: 700, color: 'var(--accent)' }}>
+                  {maintenanceByStatus.reduce((s, i) => s + i.value, 0)}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

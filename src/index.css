@@ -770,13 +770,38 @@ tbody tr:hover td { background: var(--bg-hover); }
 /* ========== GRIDS ========== */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-bottom: 24px;
 }
 
+/* Compact stat card — icon + value side by side */
+.stat-card-compact {
+  padding: 14px 16px !important;
+}
+
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+/* ===== ALERT TICKET ROW ===== */
+.alert-ticket-row {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  overflow: hidden;
+}
+
+/* Dashboard date subtitle */
+.dashboard-date {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
 
 /* ========== QUOTE CARD ========== */
 .quote-card {
@@ -1307,7 +1332,11 @@ tbody tr:hover td { background: var(--bg-hover); }
   .page-content { padding: 12px; }
 
   /* --- Grids --- */
-  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
   .grid-2, .grid-3 { grid-template-columns: 1fr; gap: 12px; }
 
   /* --- Page Header --- */
