@@ -53,91 +53,95 @@ export default function Login() {
   }
 
   return (
-    <div className="loading-screen" style={{ background: 'var(--bg-primary)' }}>
-      {/* Background illustration/gradient can be added here */}
+    <div className="loading-screen">
+      <div className="login-bg"></div>
       
-      <div className="card" style={{ width: '100%', maxWidth: '400px', margin: '0 20px', padding: '40px 30px' }}>
-        
-        <div className="flex-center" style={{ flexDirection: 'column', marginBottom: '30px' }}>
-          <img 
-            src="/logo.png" 
-            alt="Maintory Logo" 
-            style={{ width: '80px', height: '80px', objectFit: 'contain', marginBottom: '16px' }} 
-          />
-          <h1 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
-            Maintory
-          </h1>
-          <p className="text-secondary" style={{ fontSize: '14px' }}>
-            Cabang Banyumas
-          </p>
+      <div className="login-content">
+        <div className="mascot-container">
+          <div className="mascot-glow"></div>
+          <img src="/mascot.png" alt="Maintory Mascot" className="mascot-img" />
         </div>
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        
+        <div className="card" style={{ width: '100%', maxWidth: '400px', margin: '0 20px', padding: '40px 30px', position: 'relative', zIndex: 10, background: 'rgba(30, 35, 45, 0.7)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)' }}>
           
-          <div className="form-group">
-            <label className="form-label">Username</label>
-            <div className="form-input-icon">
-              <span className="icon"><User size={18} /></span>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Masukkan username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                disabled={isSubmitting}
-              />
-            </div>
+          <div className="flex-center" style={{ flexDirection: 'column', marginBottom: '30px' }}>
+            <h1 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px', textAlign: 'center' }}>
+              Welcome to <span style={{ color: 'var(--accent)' }}>Maintory</span>
+            </h1>
+            <p className="text-secondary" style={{ fontSize: '14px' }}>
+              Cabang Banyumas
+            </p>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <div className="form-input-icon input-with-btn">
-              <span className="icon"><Lock size={18} /></span>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                className="form-input"
-                placeholder="Masukkan password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isSubmitting}
-              />
-              <button
-                type="button"
-                className="toggle-btn"
-                onClick={() => setShowPassword(!showPassword)}
-                disabled={isSubmitting}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            
+            <div className="form-group">
+              <label className="form-label">Username</label>
+              <div className="form-input-icon">
+                <span className="icon"><User size={18} /></span>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Masukkan username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  disabled={isSubmitting}
+                  style={{ background: 'rgba(0,0,0,0.2)' }}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
-            <input 
-              type="checkbox" 
-              id="remember" 
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
+            <div className="form-group">
+              <label className="form-label">Password</label>
+              <div className="form-input-icon input-with-btn">
+                <span className="icon"><Lock size={18} /></span>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-input"
+                  placeholder="Masukkan password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isSubmitting}
+                  style={{ background: 'rgba(0,0,0,0.2)' }}
+                />
+                <button
+                  type="button"
+                  className="toggle-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={isSubmitting}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+              <input 
+                type="checkbox" 
+                id="remember" 
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                disabled={isSubmitting}
+                style={{ accentColor: 'var(--accent)', width: '16px', height: '16px' }}
+              />
+              <label htmlFor="remember" className="text-secondary" style={{ fontSize: '13.5px', cursor: 'pointer' }}>
+                Ingat Saya
+              </label>
+            </div>
+
+            <button 
+              type="submit" 
+              className="btn btn-primary flex-center mt-2" 
+              style={{ width: '100%', padding: '14px', fontSize: '16px', fontWeight: 'bold', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0, 240, 255, 0.3)' }}
               disabled={isSubmitting}
-              style={{ accentColor: 'var(--accent)', width: '16px', height: '16px' }}
-            />
-            <label htmlFor="remember" className="text-secondary" style={{ fontSize: '13.5px', cursor: 'pointer' }}>
-              Ingat Saya
-            </label>
-          </div>
+            >
+              {isSubmitting ? (
+                <span className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px', borderTopColor: '#000' }}></span>
+              ) : 'Log In System'}
+            </button>
+          </form>
 
-          <button 
-            type="submit" 
-            className="btn btn-primary flex-center mt-2" 
-            style={{ width: '100%', padding: '12px' }}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <span className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px', borderTopColor: '#000' }}></span>
-            ) : 'Masuk'}
-          </button>
-        </form>
-
+        </div>
       </div>
     </div>
   )
