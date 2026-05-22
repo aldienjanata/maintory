@@ -1326,9 +1326,8 @@ tbody tr:hover td { background: var(--bg-hover); }
     transform: translateX(0);
   }
 
-  /* --- Layout --- */
-  .main-content { margin-left: 0; }
   .header { left: 0; padding: 0 14px; }
+  .mobile-menu-btn { display: inline-flex !important; }
   .page-content { padding: 12px; }
 
   /* --- Grids --- */
@@ -1440,3 +1439,5 @@ tbody tr:hover td { background: var(--bg-hover); }
   backdrop-filter: blur(2px);
 }
 .sidebar-overlay.active { display: block; }
+
+.mobile-menu-btn { display: none; }

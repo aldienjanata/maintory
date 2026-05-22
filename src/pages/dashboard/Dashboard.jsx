@@ -185,26 +185,26 @@ export default function Dashboard() {
       </div>
 
       {/* ===== QUOTE OF THE DAY — TOP ===== */}
-      <div className="quote-card mb-4">
+      <div className="quote-card" style={{ marginBottom: '12px' }}>
         <div className="quote-text">{quote.text}</div>
         <div className="quote-author">— {quote.author}</div>
       </div>
 
       {/* ===== ALERT: Maintenance Belum Close ===== */}
       {overdueTickets.length > 0 && (
-        <div className="card mb-4" style={{ borderColor: 'rgba(210, 153, 34, 0.4)', background: 'rgba(210, 153, 34, 0.04)' }}>
+        <div className="card mb-3" style={{ borderColor: 'rgba(210, 153, 34, 0.4)', background: 'rgba(210, 153, 34, 0.04)', padding: '12px 14px' }}>
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
               <AlertTriangle size={18} style={{ color: 'var(--warning)' }} />
-              <span className="font-semibold" style={{ color: 'var(--warning)', fontSize: '14px' }}>
-                {overdueTickets.length} Tiket Belum Selesai
+              <span className="font-semibold" style={{ color: 'var(--warning)', fontSize: '13.5px' }}>
+                {overdueTickets.length} Tiket Kemarin Belum Selesai
               </span>
             </div>
             {overdueTickets.length > 3 && (
               <button
                 className="btn btn-ghost btn-sm"
                 onClick={() => setShowAllAlerts(!showAllAlerts)}
-                style={{ color: 'var(--warning)', flexShrink: 0 }}
+                style={{ color: 'var(--warning)', flexShrink: 0, padding: '2px 6px', fontSize: '11px' }}
               >
                 {showAllAlerts ? <ChevronUp size={14} /> : <><ChevronDown size={14} /> +{overdueTickets.length - 3}</>}
               </button>
@@ -240,6 +240,21 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* ===== ALERT: Pemakaian Material Belum Diisi (Dummy untuk sementara) ===== */}
+      <div className="card mb-4" style={{ borderColor: 'rgba(248, 81, 73, 0.4)', background: 'rgba(248, 81, 73, 0.04)', padding: '12px 14px' }}>
+        <div className="flex justify-between items-center mb-2">
+          <div className="flex items-center gap-2">
+            <XCircle size={18} style={{ color: 'var(--danger)' }} />
+            <span className="font-semibold" style={{ color: 'var(--danger)', fontSize: '13.5px' }}>
+              0 Pemakaian Material Belum Diisi
+            </span>
+          </div>
+        </div>
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', paddingLeft: '26px' }}>
+          Teknisi wajib mengisi material pada tiket yang sudah <strong>Close</strong>.
+        </div>
+      </div>
 
       {/* ===== STATS GRID ===== */}
       <div className="stats-grid mb-4">

@@ -21,9 +21,8 @@ export default function Header({ onMenuClick }) {
   return (
     <header className="header">
       <button 
-        className="btn-icon d-md-none" 
+        className="btn-icon d-md-none mobile-menu-btn" 
         onClick={onMenuClick}
-        style={{ display: 'none' }} // Visible only on mobile via CSS
       >
         <Menu size={20} />
       </button>

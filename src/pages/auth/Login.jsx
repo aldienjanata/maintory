@@ -17,7 +17,12 @@ export default function Login() {
   useEffect(() => {
     if (user) navigate('/')
     const savedUsername = localStorage.getItem('maintory-saved-user')
-    if (savedUsername) {
+    const savedPassword = localStorage.getItem('maintory-saved-pass')
+    if (savedUsername && savedPassword) {
+      setUsername(savedUsername)
+      setPassword(savedPassword)
+      setRememberMe(true)
+    } else if (savedUsername) {
       setUsername(savedUsername)
       setRememberMe(true)
     }
@@ -34,8 +39,10 @@ export default function Login() {
       await login(username, password)
       if (rememberMe) {
         localStorage.setItem('maintory-saved-user', username)
+        localStorage.setItem('maintory-saved-pass', password)
       } else {
         localStorage.removeItem('maintory-saved-user')
+        localStorage.removeItem('maintory-saved-pass')
       }
       toast.success('Login berhasil')
       navigate('/')
@@ -70,8 +77,8 @@ export default function Login() {
 
         {/* Logo area */}
         <div className="login-logo-wrap">
-          <div className="login-logo-icon">
-            <Zap size={28} />
+          <div className="login-logo-icon" style={{ background: 'transparent', boxShadow: 'none' }}>
+            <img src="/logo.png" alt="Maintory" style={{ width: '48px', height: '48px', objectFit: 'contain' }} />
           </div>
           <div>
             <h1 className="login-title">Maintory</h1>
@@ -154,7 +161,7 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="login-footer">Cabang Banyumas &bull; © 2025 Maintory</p>
+        <p className="login-footer">Cabang Banyumas &bull; © 2026 Maintory</p>
       </div>
     </div>
   )
