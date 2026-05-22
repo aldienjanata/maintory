@@ -176,7 +176,13 @@ export default function StokGudang() {
   }
 
   const handleDownloadTemplate = () => {
-    const ws = XLSX.utils.aoa_to_sheet([['Nama Item', 'Tipe (ont/dropcore_1c/dropcore_4c/other)', 'Stok Awal', 'Satuan (unit/buah/pcs/meter/roll/set/dus/kg/haspel)']])
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Nama Item', 'Tipe', 'Stok Awal', 'Satuan'],
+      ['ONT ZTE F670L', 'ont', '0', 'unit'],
+      ['Dropcore 1C Haspel A', 'dropcore_1c', '0', 'haspel'],
+      ['Dropcore 4C Haspel B', 'dropcore_4c', '0', 'haspel'],
+      ['Kabel UTP CAT6', 'other', '10', 'roll'],
+    ])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Template')
     XLSX.writeFile(wb, 'template_stok_gudang.xlsx')
@@ -192,23 +198,39 @@ export default function StokGudang() {
         const ws = wb.Sheets[wb.SheetNames[0]]
         const data = XLSX.utils.sheet_to_json(ws)
         if (!data.length) { toast.error('File kosong atau format tidak sesuai'); return }
+        const VALID_TYPES = ['ont', 'dropcore_1c', 'dropcore_4c', 'other']
         const toInsert = data.map(row => {
-          const type = row['Tipe (ont/dropcore_1c/dropcore_4c/other)'] || row['Tipe'] || 'other'
-          let unit = row['Satuan (unit/buah/pcs/meter/roll/set/dus/kg/haspel)'] || row['Satuan (unit/buah/pcs/meter/roll/set/dus/kg)'] || row['Satuan'] || ''
+          // Try multiple column name variants and sanitize
+          const rawType = (
+            row['Tipe'] ||
+            row['Tipe (ont/dropcore_1c/dropcore_4c/other)'] ||
+            row['tipe'] ||
+            'other'
+          ).toString().trim().toLowerCase()
+          // Validate and fallback to 'other' if invalid
+          const type = VALID_TYPES.includes(rawType) ? rawType : 'other'
+
+          const rawUnit = (
+            row['Satuan'] ||
+            row['Satuan (unit/buah/pcs/meter/roll/set/dus/kg/haspel)'] ||
+            row['Satuan (unit/buah/pcs/meter/roll/set/dus/kg)'] ||
+            ''
+          ).toString().trim().toLowerCase()
+          let unit = rawUnit
           if (!unit) {
             if (type === 'ont') unit = 'unit'
             else if (type.startsWith('dropcore')) unit = 'haspel'
             else unit = 'pcs'
           }
           return {
-            item_name: row['Nama Item'] || '',
+            item_name: (row['Nama Item'] || row['nama item'] || '').toString().trim(),
             item_type: type,
-            initial_stock: type !== 'other' ? 0 : (Number(row['Stok Awal']) || 0),
-            unit: unit.toLowerCase(),
+            initial_stock: type !== 'other' ? 0 : (Number(row['Stok Awal'] || row['stok awal']) || 0),
+            unit,
             created_by: profile.id,
           }
         }).filter(r => r.item_name)
-        if (!toInsert.length) { toast.error('Tidak ada data valid'); return }
+        if (!toInsert.length) { toast.error('Tidak ada data valid di file'); return }
         const { error } = await supabase.from('warehouses').insert(toInsert)
         if (error) throw error
         toast.success(`${toInsert.length} item berhasil diimport`)
