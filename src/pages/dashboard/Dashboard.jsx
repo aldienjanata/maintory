@@ -192,9 +192,11 @@ export default function Dashboard() {
           <p className="dashboard-date">{format(new Date(), 'EEEE, dd MMMM yyyy', { locale: id })}</p>
         </div>
         <div className="page-header-right">
-          <Link to="/maintenance" className="btn btn-primary">
-            <Plus size={16} /> Input Tiket
-          </Link>
+          {(role === 'admin' || role === 'superadmin') && (
+            <Link to="/maintenance" className="btn btn-primary">
+              <Plus size={16} /> Input Tiket
+            </Link>
+          )}
         </div>
       </div>
 

@@ -164,6 +164,10 @@ export default function Pengeluaran() {
   const handleSave = async () => {
     if (!form.expense_date || !form.site) { toast.error('Tanggal dan lokasi wajib diisi'); return }
     if (form.technicians.length === 0) { toast.error('Pilih minimal 1 teknisi'); return }
+    if (form.items.length === 0 && (!form.note || !form.note.trim())) {
+      toast.error('Jika tidak ada pengeluaran barang, mohon isi Note (misal: "Tidak ada pengeluaran")')
+      return
+    }
     setSaving(true)
     try {
       const { data: expData, error: expError } = await supabase.from('daily_expenses').insert({
