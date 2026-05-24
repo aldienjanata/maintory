@@ -276,12 +276,18 @@ export default function SerialNumber() {
             <option value="terpakai">Terpakai</option>
           </select>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate}><FileDown size={14} /> Template</button>
-            <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', marginBottom: 0 }}>
-              <Upload size={14} /> Import
-              <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportExcel} />
-            </label>
-            <button className="btn btn-secondary btn-sm" onClick={handleExportExcel}><Download size={14} /> Export</button>
+            {can(role, 'inventory.sn.import') && (
+              <>
+                <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate}><FileDown size={14} /> Template</button>
+                <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', marginBottom: 0 }}>
+                  <Upload size={14} /> Import
+                  <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleImportExcel} />
+                </label>
+              </>
+            )}
+            {can(role, 'inventory.sn.export') && (
+              <button className="btn btn-secondary btn-sm" onClick={handleExportExcel}><Download size={14} /> Export</button>
+            )}
           </div>
         </div>
 
