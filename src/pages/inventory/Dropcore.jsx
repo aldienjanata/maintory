@@ -4,7 +4,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, Edit2, X, Cable, AlertTriangle } from 'lucide-react'
+import { Search, Plus, Trash2, Edit2, X, Cable, AlertTriangle, Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 
@@ -94,6 +95,23 @@ export default function Dropcore() {
     return Math.round((used / total) * 100)
   }
 
+  const handleExportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filtered.map(h => ({
+      'Kode Haspel': h.haspel_code,
+      'Tipe': h.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C',
+      'Tanggal Masuk': h.date_in,
+      'Meter Awal': Number(h.initial_meters),
+      'Terpakai': Number(h.used_meters),
+      'Sisa': Number(h.initial_meters) - Number(h.used_meters),
+      'Status': h.status,
+      'Note': h.note || ''
+    })))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Dropcore')
+    XLSX.writeFile(wb, `dropcore_${new Date().toISOString().slice(0,10)}.xlsx`)
+    toast.success('Export berhasil')
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -102,6 +120,9 @@ export default function Dropcore() {
           <p>Kelola inventaris kabel dropcore berdasarkan haspel</p>
         </div>
         <div className="page-header-right">
+          {can(role, 'inventory.dropcore.export') && (
+            <button className="btn btn-secondary" onClick={handleExportExcel}><Download size={16} /> Export</button>
+          )}
           {can(role, 'inventory.dropcore.add') && (
             <button className="btn btn-primary" onClick={openAdd}><Plus size={16} /> Tambah Haspel</button>
           )}
