@@ -1393,10 +1393,12 @@ tbody tr:hover td { background: var(--bg-hover); }
 }
 
 @media (max-width: 480px) {
-  .stats-grid { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .page-content { padding: 10px; }
   .card { padding: 12px; }
-  .stat-card-value { font-size: 20px; }
+  .stat-card { padding: 12px; gap: 8px; }
+  .stat-card-value { font-size: 18px; }
+  .stat-card-label { font-size: 11px; }
   .page-header-left h2 { font-size: 16px; }
 }
 
