@@ -266,7 +266,7 @@ export default function StokGudang() {
           <p>Manajemen inventaris barang dan peralatan</p>
         </div>
         <div className="page-header-right">
-          {can(role, 'inventory.add') && (
+          {can(role, 'inventory.stok.manage') && (
             <button className="btn btn-primary" onClick={openAdd}><Plus size={16} /> Tambah Item</button>
           )}
         </div>
@@ -340,7 +340,7 @@ export default function StokGudang() {
                   <th>Stok Keluar</th>
                   <th>Stok Saat Ini</th>
                   <th>Satuan</th>
-                  {can(role, 'inventory.edit') && <th style={{ textAlign: 'right' }}>Aksi</th>}
+                  {can(role, 'inventory.stok.manage') && <th style={{ textAlign: 'right' }}>Aksi</th>}
                 </tr>
               </thead>
               <tbody>
@@ -359,11 +359,11 @@ export default function StokGudang() {
                       </span>
                     </td>
                     <td className="text-secondary">{item.unit}</td>
-                    {can(role, 'inventory.edit') && (
+                    {can(role, 'inventory.stok.manage') && (
                       <td style={{ textAlign: 'right' }}>
                         <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
                           <button className="btn-icon" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
-                          {can(role, 'inventory.delete') && (
+                          {can(role, 'inventory.stok.manage') && (
                             <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
                           )}
                         </div>

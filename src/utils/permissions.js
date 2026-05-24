@@ -18,7 +18,7 @@ export const can = (role, action) => {
 
     // Inventory - Stok Gudang
     'inventory.stok.view': ['superadmin', 'admin', 'teknisi'],
-    'inventory.stok.manage': ['superadmin'],
+    'inventory.stok.manage': ['superadmin', 'admin'],
     'inventory.stok.export': ['superadmin', 'admin'],
     'inventory.stok.import': ['superadmin'],
 
@@ -26,7 +26,7 @@ export const can = (role, action) => {
     'inventory.sn.view': ['superadmin', 'admin', 'teknisi'],
     'inventory.sn.add': ['superadmin', 'admin'],
     'inventory.sn.edit': ['superadmin', 'admin'],
-    'inventory.sn.delete': ['superadmin'],
+    'inventory.sn.delete': ['superadmin', 'admin'],
     'inventory.sn.import': ['superadmin', 'admin'],
     'inventory.sn.export': ['superadmin', 'admin'],
 

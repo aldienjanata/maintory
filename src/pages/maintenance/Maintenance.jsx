@@ -265,11 +265,11 @@ export default function Maintenance() {
 
       <div className="card mb-4">
         <div className="filter-bar">
-          <div className="search-box">
+          <div className="search-box" style={{ maxWidth: '250px' }}>
             <Search size={16} className="search-icon" />
             <input 
               type="text" 
-              placeholder="Cari nama, ID, desa, no tiket..." 
+              placeholder="Cari nama, ID, desa, tiket..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -388,12 +388,23 @@ export default function Maintenance() {
             <div className="modal-body">
               <div className="form-group mb-4">
                 <label className="form-label">Paste pesan WhatsApp di sini (bisa banyak sekaligus)</label>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', padding: '10px', background: 'var(--bg-hover)', borderRadius: '6px' }}>
+                  <strong>Contoh Format:</strong><br/>
+                  1.Desa Bangsa<br/>
+                  Nama : Wasito<br/>
+                  Alamat : RT 004 RW 001 Desa Bangsa Kecamatan Kebasen<br/>
+                  ID Pelanggan : 816806946@bms.wifian.net.id<br/>
+                  No Hp : +6281327419114<br/>
+                  Keluhan : Loss Merah<br/>
+                  Sharelok : https://maps.app.goo.gl/mqVmn9tvgrUSZiBd9?g_st<br/>
+                  Note : Info By Pak Joko
+                </div>
                 <textarea 
                   className="form-input" 
                   rows={8} 
                   value={waText}
                   onChange={handleWaTextChange}
-                  placeholder="1.Desa KARANGTENGAH&#10;Nama : SULISTYOWATI&#10;Alamat : Dusun Karanganyar...&#10;..."
+                  placeholder="Paste teks WA di sini..."
                   style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: '13px' }}
                 />
               </div>

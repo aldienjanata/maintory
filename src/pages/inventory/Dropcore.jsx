@@ -102,7 +102,7 @@ export default function Dropcore() {
           <p>Kelola inventaris kabel dropcore berdasarkan haspel</p>
         </div>
         <div className="page-header-right">
-          {can(role, 'inventory.add') && (
+          {can(role, 'inventory.dropcore.add') && (
             <button className="btn btn-primary" onClick={openAdd}><Plus size={16} /> Tambah Haspel</button>
           )}
         </div>
@@ -187,7 +187,7 @@ export default function Dropcore() {
                   <th>Sisa</th>
                   <th>Progress</th>
                   <th>Status</th>
-                  {can(role, 'inventory.edit') && <th style={{ textAlign: 'right' }}>Aksi</th>}
+                  {can(role, 'inventory.dropcore.edit') && <th style={{ textAlign: 'right' }}>Aksi</th>}
                 </tr>
               </thead>
               <tbody>
@@ -215,11 +215,11 @@ export default function Dropcore() {
                           : <span className="badge badge-success">Tersedia</span>
                         }
                       </td>
-                      {can(role, 'inventory.edit') && (
+                      {can(role, 'inventory.dropcore.edit') && (
                         <td style={{ textAlign: 'right' }}>
                           <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
                             <button className="btn-icon" onClick={() => openEdit(h)}><Edit2 size={15} /></button>
-                            {can(role, 'inventory.delete') && (
+                            {can(role, 'inventory.dropcore.delete') && (
                               <button className="btn-icon text-danger" onClick={() => handleDelete(h)}><Trash2 size={15} /></button>
                             )}
                           </div>

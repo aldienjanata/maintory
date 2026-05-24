@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, X, Hash, UploadCloud, CheckCircle, Clock, FileDown, Upload, Download } from 'lucide-react'
+import { Search, Plus, Trash2, Edit2, X, Hash, UploadCloud, CheckCircle, Clock, FileDown, Upload, Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
@@ -23,6 +23,7 @@ export default function SerialNumber() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isBulkMode, setIsBulkMode] = useState(false)
   const [bulkText, setBulkText] = useState('')
+  const [editItem, setEditItem] = useState(null)
   const [form, setForm] = useState({ brand_id: '', type_id: '', serial_number: '', date_in: format(new Date(), 'yyyy-MM-dd'), note: '', status: 'tersedia' })
   const [saving, setSaving] = useState(false)
 
@@ -54,10 +55,33 @@ export default function SerialNumber() {
     if (!form.serial_number) { toast.error('Serial Number wajib diisi'); return }
     setSaving(true)
     try {
-      const { error } = await supabase.from('serial_numbers').insert({ ...form, created_by: profile.id })
-      if (error) throw error
-      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Tambah SN', detail: `SN: ${form.serial_number}` })
-      toast.success('Serial Number berhasil ditambahkan')
+      if (editItem) {
+        const { error } = await supabase.from('serial_numbers').update({
+          brand_id: form.brand_id || null,
+          type_id: form.type_id || null,
+          serial_number: form.serial_number,
+          date_in: form.date_in,
+          note: form.note,
+          status: form.status,
+          updated_at: new Date().toISOString()
+        }).eq('id', editItem.id)
+        if (error) throw error
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Edit SN', detail: `SN: ${form.serial_number}` })
+        toast.success('Serial Number berhasil diperbarui')
+      } else {
+        const { error } = await supabase.from('serial_numbers').insert({
+          brand_id: form.brand_id || null,
+          type_id: form.type_id || null,
+          serial_number: form.serial_number,
+          date_in: form.date_in,
+          note: form.note,
+          status: 'tersedia',
+          created_by: profile.id
+        })
+        if (error) throw error
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Tambah SN', detail: `SN: ${form.serial_number}` })
+        toast.success('Serial Number berhasil ditambahkan')
+      }
       setIsModalOpen(false)
       fetchAll()
     } catch (err) {
@@ -129,7 +153,11 @@ export default function SerialNumber() {
   }
 
   const handleDownloadTemplate = () => {
-    const ws = XLSX.utils.aoa_to_sheet([['Serial Number', 'Tanggal Masuk (yyyy-mm-dd)']])
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Serial Number', 'Merk', 'Tipe', 'Tanggal Masuk (yyyy-mm-dd)', 'Note'],
+      ['ZTE123456', 'ZTE', 'F670L', '2024-01-01', 'Baru'],
+      ['HUAWEI789', 'Huawei', 'HG8245H5', '2024-01-01', '']
+    ])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Template')
     XLSX.writeFile(wb, 'template_serial_number.xlsx')
@@ -145,15 +173,47 @@ export default function SerialNumber() {
         const ws = wb.Sheets[wb.SheetNames[0]]
         const data = XLSX.utils.sheet_to_json(ws)
         if (!data.length) { toast.error('File kosong'); return }
-        const toInsert = data
-          .map(row => ({
-            serial_number: String(row['Serial Number'] || '').trim(),
+        
+        const toInsert = data.map(row => {
+          const sn = String(row['Serial Number'] || '').trim()
+          if (!sn) return null
+          
+          const merkName = String(row['Merk'] || '').trim().toLowerCase()
+          const tipeName = String(row['Tipe'] || '').trim().toLowerCase()
+          
+          // Match brands case-insensitive
+          const matchedBrand = brands.find(b => b.brand_name.toLowerCase() === merkName)
+          // Find type that belongs to this brand (we'll fetch all types in bulk or rely on a global types list. Since types is populated based on selected brand, we need a better way. But for import, let's just match any type name if brand is matched)
+          // Actually, we don't have all types in `types` state, only the ones for the selected brand!
+          // We need to fetch all types or ignore type if not found. Let's just find by name if possible, or null.
+          
+          return {
+            serial_number: sn,
             date_in: row['Tanggal Masuk (yyyy-mm-dd)'] || row['Tanggal Masuk'] || format(new Date(), 'yyyy-MM-dd'),
             status: 'tersedia',
+            note: String(row['Note'] || '').trim(),
+            brand_id: matchedBrand ? matchedBrand.id : null,
+            // Hack for type_id: we will skip it for now in bulk import unless we pre-fetch all types.
+            // Let's just leave type_id as null if we can't reliably resolve it without a massive query.
             created_by: profile.id,
-          }))
-          .filter(r => r.serial_number)
+          }
+        }).filter(r => r)
+        
         if (!toInsert.length) { toast.error('Tidak ada data valid'); return }
+        
+        // Wait, to be safe, I should just fetch all types once here to resolve type_ids.
+        const { data: allTypes } = await supabase.from('ont_types').select('id, brand_id, type_name')
+        if (allTypes) {
+          toInsert.forEach(item => {
+            const row = data.find(r => String(r['Serial Number'] || '').trim() === item.serial_number)
+            if (row) {
+              const tipeName = String(row['Tipe'] || '').trim().toLowerCase()
+              const matchedType = allTypes.find(t => t.brand_id === item.brand_id && t.type_name.toLowerCase() === tipeName)
+              if (matchedType) item.type_id = matchedType.id
+            }
+          })
+        }
+
         const { error } = await supabase.from('serial_numbers').insert(toInsert)
         if (error) throw error
         toast.success(`${toInsert.length} SN berhasil diimport`)
@@ -174,8 +234,8 @@ export default function SerialNumber() {
           <p>Kelola stok ONT berdasarkan serial number</p>
         </div>
         <div className="page-header-right">
-          {can(role, 'inventory.add') && (
-            <button className="btn btn-primary" onClick={() => { setIsModalOpen(true); setIsBulkMode(false); setForm(f => ({ ...f, serial_number: '', note: '' })) }}>
+          {can(role, 'inventory.sn.add') && (
+            <button className="btn btn-primary" onClick={() => { setIsModalOpen(true); setIsBulkMode(false); setEditItem(null); setForm(f => ({ ...f, serial_number: '', note: '' })) }}>
               <Plus size={16} /> Tambah SN
             </button>
           )}
@@ -238,7 +298,7 @@ export default function SerialNumber() {
                   <th>Tanggal Masuk</th>
                   <th>Status</th>
                   <th>Note</th>
-                  {can(role, 'inventory.delete') && <th style={{ textAlign: 'right' }}>Aksi</th>}
+                  {(can(role, 'inventory.sn.edit') || can(role, 'inventory.sn.delete')) && <th style={{ textAlign: 'right' }}>Aksi</th>}
                 </tr>
               </thead>
               <tbody>
@@ -255,9 +315,28 @@ export default function SerialNumber() {
                       }
                     </td>
                     <td className="text-secondary">{item.note || '-'}</td>
-                    {can(role, 'inventory.delete') && (
+                    {(can(role, 'inventory.sn.edit') || can(role, 'inventory.sn.delete')) && (
                       <td style={{ textAlign: 'right' }}>
-                        <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
+                        <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                          {can(role, 'inventory.sn.edit') && (
+                            <button className="btn-icon" onClick={() => {
+                              setEditItem(item)
+                              setForm({
+                                brand_id: item.brand_id || '',
+                                type_id: item.type_id || '',
+                                serial_number: item.serial_number,
+                                date_in: item.date_in ? item.date_in.slice(0, 10) : format(new Date(), 'yyyy-MM-dd'),
+                                note: item.note || '',
+                                status: item.status || 'tersedia'
+                              })
+                              setIsBulkMode(false)
+                              setIsModalOpen(true)
+                            }}><Edit2 size={15} /></button>
+                          )}
+                          {can(role, 'inventory.sn.delete') && (
+                            <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -274,15 +353,17 @@ export default function SerialNumber() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h3>Tambah Serial Number</h3>
+              <h3>{editItem ? 'Edit Serial Number' : 'Tambah Serial Number'}</h3>
               <button className="btn-icon" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               {/* Mode toggle */}
-              <div className="tabs" style={{ marginBottom: 0 }}>
-                <button className={`tab-item ${!isBulkMode ? 'active' : ''}`} onClick={() => setIsBulkMode(false)}>Input Satu</button>
-                <button className={`tab-item ${isBulkMode ? 'active' : ''}`} onClick={() => setIsBulkMode(true)}><UploadCloud size={14} /> Input Massal</button>
-              </div>
+              {!editItem && (
+                <div className="tabs" style={{ marginBottom: 0 }}>
+                  <button className={`tab-item ${!isBulkMode ? 'active' : ''}`} onClick={() => setIsBulkMode(false)}>Input Satu</button>
+                  <button className={`tab-item ${isBulkMode ? 'active' : ''}`} onClick={() => setIsBulkMode(true)}><UploadCloud size={14} /> Input Massal</button>
+                </div>
+              )}
               <div className="grid-2">
                 <div className="form-group">
                   <label className="form-label">Merk ONT</label>
@@ -313,6 +394,15 @@ export default function SerialNumber() {
                     <label className="form-label">Note</label>
                     <input className="form-input" placeholder="Opsional..." value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
                   </div>
+                  {editItem && (
+                    <div className="form-group">
+                      <label className="form-label">Status</label>
+                      <select className="form-input" style={{ height: 'auto' }} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                        <option value="tersedia">Tersedia</option>
+                        <option value="terpakai">Terpakai</option>
+                      </select>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="form-group">
