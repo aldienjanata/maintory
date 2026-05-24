@@ -32,9 +32,23 @@ export default function Dropcore() {
     setLoading(false)
   }
 
+  const generateNextCode = (typeToGenerate, currentHaspels = haspels) => {
+    const typePrefix = typeToGenerate === '1c' ? 'H1C-' : 'H4C-'
+    const existingNums = currentHaspels
+      .filter(h => h.haspel_code && h.haspel_code.toUpperCase().startsWith(typePrefix))
+      .map(h => {
+        const numStr = h.haspel_code.substring(typePrefix.length)
+        return parseInt(numStr, 10)
+      })
+      .filter(n => !isNaN(n))
+    
+    const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1
+    return `${typePrefix}${String(nextNum).padStart(3, '0')}`
+  }
+
   const openAdd = () => {
     setEditItem(null)
-    setForm({ haspel_code: '', type: '1c', initial_meters: 1000, used_meters: 0, date_in: format(new Date(), 'yyyy-MM-dd'), note: '' })
+    setForm({ haspel_code: generateNextCode('1c'), type: '1c', initial_meters: 1000, used_meters: 0, date_in: format(new Date(), 'yyyy-MM-dd'), note: '' })
     setIsModalOpen(true)
   }
 
@@ -273,7 +287,14 @@ export default function Dropcore() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Tipe</label>
-                  <select className="form-input" style={{ height: 'auto' }} value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
+                  <select className="form-input" style={{ height: 'auto' }} value={form.type} onChange={e => {
+                    const newType = e.target.value
+                    if (!editItem) {
+                      setForm(f => ({ ...f, type: newType, haspel_code: generateNextCode(newType) }))
+                    } else {
+                      setForm(f => ({ ...f, type: newType }))
+                    }
+                  }}>
                     <option value="1c">Dropcore 1C</option>
                     <option value="4c">Dropcore 4C</option>
                   </select>
