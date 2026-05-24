@@ -573,6 +573,7 @@ tbody td {
   color: var(--text-primary);
   font-size: 13.5px;
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 tbody tr:last-child td { border-bottom: none; }
@@ -1353,8 +1354,9 @@ tbody tr:hover td { background: var(--bg-hover); }
     width: 100%;
     flex-wrap: wrap;
     gap: 8px;
+    justify-content: flex-start;
   }
-  .page-header-right .btn { flex: 1; justify-content: center; font-size: 12px; }
+  .page-header-right .btn { font-size: 12px; padding: 6px 12px; }
 
   /* --- Filter bar --- */
   .filter-bar {
@@ -1374,8 +1376,8 @@ tbody tr:hover td { background: var(--bg-hover); }
 
   /* --- Tables — make scrollable on mobile --- */
   .table-container { border-radius: var(--radius-sm); font-size: 12px; }
-  tbody td { padding: 10px 10px; font-size: 12px; }
-  thead th { padding: 8px 10px; font-size: 10px; }
+  tbody td { padding: 10px 10px; font-size: 12px; white-space: nowrap; }
+  thead th { padding: 8px 10px; font-size: 10px; white-space: nowrap; }
 
   /* --- Modal --- */
   .modal { max-width: 100%; margin: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
