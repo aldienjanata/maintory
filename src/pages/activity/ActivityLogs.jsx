@@ -102,34 +102,51 @@ export default function ActivityLogs() {
           {loading ? (
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : filtered.length > 0 ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Waktu</th>
-                  <th>User</th>
-                  <th>Role</th>
-                  <th>Modul</th>
-                  <th>Aksi</th>
-                  <th>Detail</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(log => (
-                  <tr key={log.id}>
-                    <td style={{ whiteSpace: 'nowrap', fontSize: '12px' }} className="text-secondary">
-                      {format(new Date(log.created_at), 'dd MMM yy, HH:mm', { locale: id })}
-                    </td>
-                    <td>
-                      <div className="font-semibold">{log.username || '-'}</div>
-                    </td>
-                    <td>{getRoleBadge(log.role)}</td>
-                    <td>{getModuleBadge(log.module)}</td>
-                    <td className="font-semibold" style={{ fontSize: '13px' }}>{log.action}</td>
-                    <td className="text-secondary" style={{ fontSize: '12px', maxWidth: '250px' }}>{log.detail || '-'}</td>
+            <>
+              <table className="desktop-only">
+                <thead>
+                  <tr>
+                    <th>Waktu</th>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th>Modul</th>
+                    <th>Aksi</th>
+                    <th>Detail</th>
                   </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(log => (
+                    <tr key={log.id}>
+                      <td style={{ whiteSpace: 'nowrap', fontSize: '12px' }} className="text-secondary">
+                        {format(new Date(log.created_at), 'dd MMM yy, HH:mm', { locale: id })}
+                      </td>
+                      <td><div className="font-semibold">{log.username || '-'}</div></td>
+                      <td>{getRoleBadge(log.role)}</td>
+                      <td>{getModuleBadge(log.module)}</td>
+                      <td className="font-semibold" style={{ fontSize: '13px' }}>{log.action}</td>
+                      <td className="text-secondary" style={{ fontSize: '12px', maxWidth: '250px' }}>{log.detail || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="mobile-only mobile-card-list">
+                {filtered.map(log => (
+                  <div key={log.id} className="mobile-card">
+                    <div className="mobile-card-header" style={{ cursor: 'default' }}>
+                      <div style={{ flex: 1 }}>
+                        <div className="mobile-card-title">{log.username || '-'} {getRoleBadge(log.role)}</div>
+                        <div className="mobile-card-subtitle">{format(new Date(log.created_at), 'dd MMM yy, HH:mm', { locale: id })}</div>
+                      </div>
+                      <div>{getModuleBadge(log.module)}</div>
+                    </div>
+                    <div className="mobile-card-body">
+                      <div className="mobile-info-row"><span className="mobile-info-label">Aksi</span><span className="mobile-info-value font-semibold">{log.action}</span></div>
+                      <div className="mobile-info-row"><span className="mobile-info-label">Detail</span><span className="mobile-info-value text-secondary" style={{ fontSize: '12px' }}>{log.detail || '-'}</span></div>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           ) : (
             <div className="empty-state"><History size={48} /><h3>Tidak Ada Log</h3><p>Belum ada aktivitas tercatat sesuai filter.</p></div>
           )}

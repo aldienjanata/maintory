@@ -346,7 +346,7 @@ export default function StokGudang() {
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : filtered.length > 0 ? (
             <>
-              <table>
+              <table className="desktop-only">
                 <thead>
                   <tr>
                     <th>Nama Item</th>

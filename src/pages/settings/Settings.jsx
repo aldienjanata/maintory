@@ -174,45 +174,78 @@ export default function Settings() {
             {loading ? (
               <div className="flex-center" style={{ height: '150px' }}><div className="spinner" /></div>
             ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Username</th>
-                    <th>Nama Lengkap</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th style={{ textAlign: 'right' }}>Aksi</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <>
+                <table className="desktop-only">
+                  <thead>
+                    <tr>
+                      <th>Username</th>
+                      <th>Nama Lengkap</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th style={{ textAlign: 'right' }}>Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map(u => (
+                      <tr key={u.id}>
+                        <td><span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{u.username}</span></td>
+                        <td>{u.full_name}</td>
+                        <td>{getRoleBadge(u.role)}</td>
+                        <td>
+                          {u.is_active
+                            ? <span className="badge badge-success"><CheckCircle size={10} /> Aktif</span>
+                            : <span className="badge badge-muted">Nonaktif</span>
+                          }
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                            <button className="btn-icon" onClick={() => openEdit(u)} title="Edit"><Edit2 size={15} /></button>
+                            <button
+                              className={`btn-icon ${u.is_active ? 'text-warning' : 'text-success'}`}
+                              onClick={() => handleToggleActive(u)}
+                              title={u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                              disabled={u.id === profile?.id}
+                            >
+                              {u.is_active ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="mobile-only mobile-card-list">
                   {users.map(u => (
-                    <tr key={u.id}>
-                      <td><span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{u.username}</span></td>
-                      <td>{u.full_name}</td>
-                      <td>{getRoleBadge(u.role)}</td>
-                      <td>
-                        {u.is_active
-                          ? <span className="badge badge-success"><CheckCircle size={10} /> Aktif</span>
-                          : <span className="badge badge-muted">Nonaktif</span>
-                        }
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                          <button className="btn-icon" onClick={() => openEdit(u)} title="Edit"><Edit2 size={15} /></button>
+                    <div key={u.id} className="mobile-card">
+                      <div className="mobile-card-header" style={{ cursor: 'default' }}>
+                        <div style={{ flex: 1 }}>
+                          <div className="mobile-card-title" style={{ fontFamily: 'monospace' }}>{u.username}</div>
+                          <div className="mobile-card-subtitle">{u.full_name}</div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                          {getRoleBadge(u.role)}
+                          {u.is_active
+                            ? <span className="badge badge-success"><CheckCircle size={10} /> Aktif</span>
+                            : <span className="badge badge-muted">Nonaktif</span>
+                          }
+                        </div>
+                      </div>
+                      <div className="mobile-card-body">
+                        <div className="mobile-card-actions">
+                          <button className="btn btn-secondary btn-sm" onClick={() => openEdit(u)}><Edit2 size={14} /> Edit</button>
                           <button
-                            className={`btn-icon ${u.is_active ? 'text-warning' : 'text-success'}`}
+                            className={`btn btn-sm ${u.is_active ? 'btn-secondary text-warning' : 'btn-secondary text-success'}`}
                             onClick={() => handleToggleActive(u)}
-                            title={u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
                             disabled={u.id === profile?.id}
                           >
-                            {u.is_active ? <EyeOff size={15} /> : <Eye size={15} />}
+                            {u.is_active ? <><EyeOff size={14} /> Nonaktifkan</> : <><Eye size={14} /> Aktifkan</>}
                           </button>
                         </div>
-                      </td>
-                    </tr>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </>
             )}
           </div>
         </div>

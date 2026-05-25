@@ -1434,11 +1434,6 @@ tbody tr:hover td { background: var(--bg-hover); }
   margin-top: 12px;
   align-items: start;
 }
-@media (min-width: 768px) {
-  .mobile-card-list {
-    grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
-  }
-}
 .mobile-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow); }
 .mobile-card-header { padding: 14px; display: flex; align-items: flex-start; justify-content: space-between; cursor: pointer; transition: background 0.2s; }
 .mobile-card-header:hover { background: var(--bg-hover); }
