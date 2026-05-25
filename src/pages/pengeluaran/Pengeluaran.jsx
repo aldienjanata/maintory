@@ -93,7 +93,12 @@ export default function Pengeluaran() {
   }
 
   // React Select Options
-  const ontOptions = snList.map(s => ({ value: s.id, label: `${s.serial_number} (${s.brand?.brand_name || ''} ${s.type?.type_name || ''})` }))
+  const ontOptions = snList.map(s => {
+    const parts = [s.serial_number]
+    if (s.brand?.brand_name) parts.push(s.brand.brand_name)
+    if (s.type?.type_name) parts.push(s.type.type_name)
+    return { value: s.id, label: parts.join(' ') }
+  })
   const haspelOptions = haspelList.map(h => ({ value: h.id, label: `${h.haspel_code} (${h.type?.toUpperCase() || ''}, sisa: ${h.remaining_meters}m)` }))
   const otherOptions = otherItems.map(w => ({ value: w.id, label: w.item_name }))
 
@@ -281,6 +286,22 @@ export default function Pengeluaran() {
     return matchDate && matchSearch
   })
 
+  // Data gabungan: Jadwal yang belum selesai + Pengeluaran aktual
+  const combinedData = [
+    ...schedules.filter(s => {
+      if (s.status === 'completed') return false
+      const matchDate = !dateFilter || s.schedule_date === dateFilter
+      const matchSearch = !searchTerm || getTechNames(s.technicians).toLowerCase().includes(searchTerm.toLowerCase()) || s.site?.includes(searchTerm.toLowerCase())
+      return matchDate && matchSearch
+    }).map(s => ({
+      ...s,
+      isSchedule: true,
+      expense_date: s.schedule_date, // Alias agar format tanggal bisa sama
+      items: []
+    })),
+    ...filtered
+  ]
+
   const handleExportExcel = () => {
     const rows = filtered.map(exp => ({
       'Tanggal': exp.expense_date,
@@ -390,54 +411,102 @@ export default function Pengeluaran() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(exp => (
-                    <tr key={exp.id}>
-                      <td className="font-semibold">{format(new Date(exp.expense_date), 'dd MMM yyyy', { locale: id })}</td>
-                      <td><span className="badge badge-info">{SITES.find(s => s.value === exp.site)?.label || exp.site}</span></td>
-                      <td><span className="badge badge-accent">{WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type}</span></td>
-                      <td>{getTechNames(exp.technicians)}</td>
-                      <td>{exp.items?.length || 0} item</td>
-                      <td className="text-secondary">{exp.note || '-'}</td>
-                      {can(role, 'pengeluaran.delete') && (
-                        <td style={{ textAlign: 'right' }}>
-                          <button className="btn-icon text-danger" onClick={() => handleDelete(exp)}><Trash2 size={15} /></button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
+                  {combinedData.map(item => {
+                    if (item.isSchedule) {
+                      return (
+                        <tr key={`sched-${item.id}`} style={{ background: 'var(--warning-dim)' }}>
+                          <td className="font-semibold">{format(new Date(item.expense_date), 'dd MMM yyyy', { locale: id })}</td>
+                          <td><span className="badge badge-info">{SITES.find(s => s.value === item.site)?.label || item.site}</span></td>
+                          <td><span className="badge badge-accent">{WORK_TYPES.find(w => w.value === item.work_type)?.label || item.work_type}</span></td>
+                          <td>{getTechNames(item.technicians)}</td>
+                          <td><span className="badge badge-warning">Belum Isi</span></td>
+                          <td className="text-secondary">-</td>
+                          <td style={{ textAlign: 'right' }}>
+                            <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(item)}>
+                              <Plus size={14} /> Isi Pengeluaran
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    }
+                    return (
+                      <tr key={`exp-${item.id}`}>
+                        <td className="font-semibold">{format(new Date(item.expense_date), 'dd MMM yyyy', { locale: id })}</td>
+                        <td><span className="badge badge-info">{SITES.find(s => s.value === item.site)?.label || item.site}</span></td>
+                        <td><span className="badge badge-accent">{WORK_TYPES.find(w => w.value === item.work_type)?.label || item.work_type}</span></td>
+                        <td>{getTechNames(item.technicians)}</td>
+                        <td>{item.items?.length || 0} item</td>
+                        <td className="text-secondary">{item.note || '-'}</td>
+                        {can(role, 'pengeluaran.delete') ? (
+                          <td style={{ textAlign: 'right' }}>
+                            <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
+                          </td>
+                        ) : <td></td>}
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
 
               <div className="mobile-only mobile-card-list">
-                {filtered.map(exp => (
-                  <div key={exp.id} className="mobile-card">
-                    <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === exp.id ? null : exp.id)}>
-                      <div>
-                        <div className="mobile-card-title">{format(new Date(exp.expense_date), 'dd MMM yyyy', { locale: id })}</div>
-                        <div className="mobile-card-subtitle">{SITES.find(s => s.value === exp.site)?.label || exp.site}</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <span className="badge badge-accent">{WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type}</span>
-                      </div>
-                    </div>
-                    {expandedId === exp.id && (
-                      <div className="mobile-card-body">
-                        <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(exp.technicians)}</span></div>
-                        <div className="mobile-info-row"><span className="mobile-info-label">Jumlah Item</span><span className="mobile-info-value">{exp.items?.length || 0} item</span></div>
-                        <div className="mobile-info-row"><span className="mobile-info-label">Note</span><span className="mobile-info-value">{exp.note || '-'}</span></div>
-                        {can(role, 'pengeluaran.delete') && (
-                          <div className="mobile-card-actions">
-                            <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(exp)}><Trash2 size={14} /> Hapus</button>
+                {combinedData.map(item => {
+                  if (item.isSchedule) {
+                    return (
+                      <div key={`sched-${item.id}`} className="mobile-card" style={{ borderLeft: '4px solid var(--warning)' }}>
+                        <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === `sched-${item.id}` ? null : `sched-${item.id}`)}>
+                          <div>
+                            <div className="mobile-card-title">{format(new Date(item.expense_date), 'dd MMM yyyy', { locale: id })}</div>
+                            <div className="mobile-card-subtitle">{SITES.find(s => s.value === item.site)?.label || item.site}</div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span className="badge badge-warning mb-1" style={{ display: 'inline-block' }}>Belum Isi</span>
+                            <br />
+                            <span className="badge badge-accent">{WORK_TYPES.find(w => w.value === item.work_type)?.label || item.work_type}</span>
+                          </div>
+                        </div>
+                        {expandedId === `sched-${item.id}` && (
+                          <div className="mobile-card-body">
+                            <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(item.technicians)}</span></div>
+                            <div className="mobile-card-actions">
+                              <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(item)} style={{ width: '100%', justifyContent: 'center' }}>
+                                <Plus size={14} /> Isi Pengeluaran
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                ))}
+                    )
+                  }
+                  return (
+                    <div key={`exp-${item.id}`} className="mobile-card">
+                      <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === `exp-${item.id}` ? null : `exp-${item.id}`)}>
+                        <div>
+                          <div className="mobile-card-title">{format(new Date(item.expense_date), 'dd MMM yyyy', { locale: id })}</div>
+                          <div className="mobile-card-subtitle">{SITES.find(s => s.value === item.site)?.label || item.site}</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span className="badge badge-accent">{WORK_TYPES.find(w => w.value === item.work_type)?.label || item.work_type}</span>
+                        </div>
+                      </div>
+                      {expandedId === `exp-${item.id}` && (
+                        <div className="mobile-card-body">
+                          <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(item.technicians)}</span></div>
+                          <div className="mobile-info-row"><span className="mobile-info-label">Jumlah Item</span><span className="mobile-info-value">{item.items?.length || 0} item</span></div>
+                          <div className="mobile-info-row"><span className="mobile-info-label">Note</span><span className="mobile-info-value">{item.note || '-'}</span></div>
+                          {can(role, 'pengeluaran.delete') && (
+                            <div className="mobile-card-actions">
+                              <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </>
           ) : (
-            <div className="empty-state"><Truck size={48} /><h3>Belum Ada Data</h3><p>Belum ada pengeluaran tercatat.</p></div>
+            <div className="empty-state"><Truck size={48} /><h3>Belum Ada Data</h3><p>Belum ada pengeluaran atau jadwal tercatat.</p></div>
           )}
         </div>
       </div>
@@ -590,6 +659,10 @@ export default function Pengeluaran() {
                               background: 'var(--bg-input)',
                               color: 'var(--text-primary)',
                             }),
+                            input: (base) => ({
+                              ...base,
+                              color: 'var(--text-primary)',
+                            }),
                             option: (base, state) => ({
                               ...base,
                               backgroundColor: state.isFocused ? 'var(--accent-dim)' : 'transparent',
@@ -625,6 +698,10 @@ export default function Pengeluaran() {
                               menu: (base) => ({
                                 ...base,
                                 background: 'var(--bg-input)',
+                                color: 'var(--text-primary)',
+                              }),
+                              input: (base) => ({
+                                ...base,
                                 color: 'var(--text-primary)',
                               }),
                               option: (base, state) => ({
@@ -675,6 +752,10 @@ export default function Pengeluaran() {
                               menu: (base) => ({
                                 ...base,
                                 background: 'var(--bg-input)',
+                                color: 'var(--text-primary)',
+                              }),
+                              input: (base) => ({
+                                ...base,
                                 color: 'var(--text-primary)',
                               }),
                               option: (base, state) => ({
