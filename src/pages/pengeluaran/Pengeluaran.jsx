@@ -396,7 +396,7 @@ export default function Pengeluaran() {
         <div className="table-container">
           {loading ? (
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
-          ) : filtered.length > 0 ? (
+          ) : combinedData.length > 0 ? (
             <>
               <table className="desktop-only">
                 <thead>
