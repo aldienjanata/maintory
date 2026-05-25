@@ -68,9 +68,9 @@ export default function StokGudang() {
         let current = initial
         let remaining_meters = 0
 
-        const isOnt = item.item_type === 'ont' || (/ont|modem/i.test(item.item_name) && item.item_type === 'other')
-        const isDc1c = item.item_type === 'dropcore_1c' || (/dropcore/i.test(item.item_name) && /1c/i.test(item.item_name) && item.item_type === 'other')
-        const isDc4c = item.item_type === 'dropcore_4c' || (/dropcore/i.test(item.item_name) && /4c/i.test(item.item_name) && item.item_type === 'other')
+        const isOnt = item.item_type === 'ont'
+        const isDc1c = item.item_type === 'dropcore_1c'
+        const isDc4c = item.item_type === 'dropcore_4c'
 
         if (isOnt) {
           initial = totalSnCount
