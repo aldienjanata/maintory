@@ -44,6 +44,8 @@ export default function Pengeluaran() {
   const [myPendingSchedules, setMyPendingSchedules] = useState([])
   const [myTodaySchedule, setMyTodaySchedule] = useState(null)
   const [selectedScheduleId, setSelectedScheduleId] = useState('')
+  const [statusFilter, setStatusFilter] = useState('semua')
+  const [schedStatusFilter, setSchedStatusFilter] = useState('semua')
 
   const [form, setForm] = useState({
     expense_date: format(new Date(), 'yyyy-MM-dd'),
@@ -290,21 +292,29 @@ export default function Pengeluaran() {
   // Data gabungan: Jadwal yang belum selesai + Pengeluaran aktual
   // Exclude jadwal yang sudah punya linked expense (via schedule_id)
   const expenseScheduleIds = new Set(expenses.map(e => e.schedule_id).filter(Boolean))
+
+  const pendingSchedules = schedules.filter(s => {
+    if (s.status === 'completed') return false
+    if (expenseScheduleIds.has(s.id)) return false
+    const matchDate = !dateFilter || s.schedule_date === dateFilter
+    const matchSearch = !searchTerm || getTechNames(s.technicians).toLowerCase().includes(searchTerm.toLowerCase()) || s.site?.includes(searchTerm.toLowerCase())
+    return matchDate && matchSearch
+  }).map(s => ({ ...s, isSchedule: true, expense_date: s.schedule_date, items: [] }))
+
   const combinedData = [
-    ...schedules.filter(s => {
-      if (s.status === 'completed') return false
-      if (expenseScheduleIds.has(s.id)) return false // sudah diisi, jangan tampil lagi
-      const matchDate = !dateFilter || s.schedule_date === dateFilter
-      const matchSearch = !searchTerm || getTechNames(s.technicians).toLowerCase().includes(searchTerm.toLowerCase()) || s.site?.includes(searchTerm.toLowerCase())
-      return matchDate && matchSearch
-    }).map(s => ({
-      ...s,
-      isSchedule: true,
-      expense_date: s.schedule_date,
-      items: []
-    })),
-    ...filtered
+    ...(statusFilter !== 'terisi' ? pendingSchedules : []),
+    ...(statusFilter !== 'belum' ? filtered : [])
   ]
+
+  // Filter jadwal tab
+  const filteredSchedules = schedules.map(s => ({
+    ...s,
+    isFilled: s.status === 'completed' || expenseScheduleIds.has(s.id)
+  })).filter(s => {
+    if (schedStatusFilter === 'terisi') return s.isFilled
+    if (schedStatusFilter === 'belum') return !s.isFilled
+    return true
+  })
 
   const handleExportExcel = () => {
     const rows = filtered.map(exp => ({
@@ -379,154 +389,105 @@ export default function Pengeluaran() {
             <CalendarDays size={14} /> Jadwal Teknisi
           </button>
         )}
-      </div>
-
-      {activeTab === 'pengeluaran' && (
+      </div>      {activeTab === 'pengeluaran' && (
       <div className="card">
-        <div className="filter-bar">
-          <div className="search-box" style={{ maxWidth: '220px' }}>
+        <div className="filter-bar" style={{ flexWrap: 'wrap', gap: '8px' }}>
+          <div className="search-box" style={{ maxWidth: '200px' }}>
             <Search size={16} className="search-icon" />
-            <input type="text" placeholder="Cari teknisi/lokasi..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Cari teknisi..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <input type="date" className="filter-select" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ padding: '0 12px' }} />
-          {dateFilter && <button className="btn btn-ghost btn-sm" onClick={() => setDateFilter('')}>Reset</button>}
+          <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '0 12px' }}>
+            <option value="semua">Semua Status</option>
+            <option value="belum">Belum Isi</option>
+            <option value="terisi">Sudah Terisi</option>
+          </select>
+          {(dateFilter || statusFilter !== 'semua') && <button className="btn btn-ghost btn-sm" onClick={() => { setDateFilter(''); setStatusFilter('semua') }}>Reset</button>}
         </div>
 
         <div className="table-container">
           {loading ? (
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : combinedData.length > 0 ? (
-            <>
-              <table className="desktop-only">
-                <thead>
-                  <tr>
-                    <th>Tanggal</th>
-                    <th>Lokasi</th>
-                    <th>Jenis Pekerjaan</th>
-                    <th>Teknisi</th>
-                    <th>Jumlah Item</th>
-                    <th>Note</th>
-                    {can(role, 'pengeluaran.delete') && <th style={{ textAlign: 'right' }}>Aksi</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {combinedData.map(item => {
-                    if (item.isSchedule) {
-                      return (
-                        <tr key={`sched-${item.id}`} style={{ background: 'var(--warning-dim)' }}>
-                          <td className="font-semibold">{format(new Date(item.expense_date), 'dd MMM yyyy', { locale: id })}</td>
-                          <td><span className="badge badge-info">{SITES.find(s => s.value === item.site)?.label || item.site}</span></td>
-                          <td><span className="badge badge-accent">{WORK_TYPES.find(w => w.value === item.work_type)?.label || item.work_type}</span></td>
-                          <td>{getTechNames(item.technicians)}</td>
-                          <td><span className="badge badge-warning">Belum Isi</span></td>
-                          <td className="text-secondary">-</td>
-                          <td style={{ textAlign: 'right' }}>
-                            {(item.technicians?.includes(profile.id) || ['admin', 'superadmin'].includes(role)) && (
-                              <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(item)}>
-                                <Plus size={14} /> Isi Pengeluaran
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    }
-                    return (
-                      <tr key={`exp-${item.id}`}>
-                        <td className="font-semibold">{format(new Date(item.expense_date), 'dd MMM yyyy', { locale: id })}</td>
-                        <td><span className="badge badge-info">{SITES.find(s => s.value === item.site)?.label || item.site}</span></td>
-                        <td><span className="badge badge-accent">{WORK_TYPES.find(w => w.value === item.work_type)?.label || item.work_type}</span></td>
-                        <td>{getTechNames(item.technicians)}</td>
-                        <td>{item.items?.length || 0} item</td>
-                        <td className="text-secondary">{item.note || '-'}</td>
-                        {can(role, 'pengeluaran.delete') ? (
-                          <td style={{ textAlign: 'right' }}>
-                            <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
-                          </td>
-                        ) : <td></td>}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-
-              <div className="mobile-only mobile-card-list">
-                {combinedData.map(item => {
-                  if (item.isSchedule) {
-                    return (
-                      <div key={`sched-${item.id}`} className="mobile-card" style={{ borderLeft: '4px solid var(--warning)' }}>
-                        <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === `sched-${item.id}` ? null : `sched-${item.id}`)}>
-                          <div>
-                            <div className="mobile-card-title">{format(new Date(item.expense_date), 'dd MMM yyyy', { locale: id })}</div>
-                            <div className="mobile-card-subtitle">{getTechNames(item.technicians)}</div>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <span className="badge badge-warning mb-1" style={{ display: 'inline-block' }}>Belum Isi</span>
-                            <br />
-                            <span className="badge badge-accent">{WORK_TYPES.find(w => w.value === item.work_type)?.label || item.work_type}</span>
-                          </div>
-                        </div>
-                        {expandedId === `sched-${item.id}` && (
-                          <div className="mobile-card-body">
-                            <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site}</span></div>
-                            {(item.technicians?.includes(profile.id) || ['admin', 'superadmin'].includes(role)) && (
-                              <div className="mobile-card-actions">
-                                <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(item)} style={{ width: '100%', justifyContent: 'center' }}>
-                                  <Plus size={14} /> Isi Pengeluaran
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  }
+            <div className="mobile-card-list">
+              {combinedData.map(item => {
+                if (item.isSchedule) {
                   return (
-                    <div key={`exp-${item.id}`} className="mobile-card">
-                      <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === `exp-${item.id}` ? null : `exp-${item.id}`)}>
-                        <div>
+                    <div key={`sched-${item.id}`} className="mobile-card" style={{ borderLeft: '4px solid var(--warning)' }}>
+                      <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === `sched-${item.id}` ? null : `sched-${item.id}`)}
+                        style={{ cursor: 'pointer' }}>
+                        <div style={{ flex: 1 }}>
                           <div className="mobile-card-title">{format(new Date(item.expense_date), 'dd MMM yyyy', { locale: id })}</div>
                           <div className="mobile-card-subtitle">{getTechNames(item.technicians)}</div>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
+                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                          <span className="badge badge-warning">Belum Isi</span>
                           <span className="badge badge-accent">{WORK_TYPES.find(w => w.value === item.work_type)?.label || item.work_type}</span>
                         </div>
                       </div>
-                      {expandedId === `exp-${item.id}` && (
+                      {expandedId === `sched-${item.id}` && (
                         <div className="mobile-card-body">
                           <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site}</span></div>
-                          <div className="mobile-info-row"><span className="mobile-info-label">Jumlah Item</span><span className="mobile-info-value">{item.items?.length || 0} item</span></div>
-                          {item.items?.length > 0 && (
-                            <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid var(--border)' }}>
-                              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '4px' }}>BARANG KELUAR:</div>
-                              {item.items.map((it, i) => {
-                                let label = ''
-                                if (it.item_type === 'ont') label = `ONT: ${it.sn?.serial_number || it.serial_number_id}`
-                                else if (it.item_type === 'dropcore') label = `Dropcore: ${it.haspel?.haspel_code || it.haspel_id} — ${it.meters_used}m`
-                                else if (it.item_type === 'other') label = `${it.warehouse_item?.item_name || 'Barang'} × ${it.quantity}`
-                                return (
-                                  <div key={i} style={{ fontSize: '12px', color: 'var(--text-primary)', padding: '2px 0', display: 'flex', gap: '6px' }}>
-                                    <span style={{ color: 'var(--accent)' }}>•</span>
-                                    <span>{label}</span>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          )}
-                          <div className="mobile-info-row"><span className="mobile-info-label">Note</span><span className="mobile-info-value">{item.note || '-'}</span></div>
-                          {can(role, 'pengeluaran.delete') && (
+                          {(item.technicians?.includes(profile.id) || ['admin', 'superadmin'].includes(role)) && (
                             <div className="mobile-card-actions">
-                              <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
+                              <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(item)} style={{ flex: 1, justifyContent: 'center' }}>
+                                <Plus size={14} /> Isi
+                              </button>
                             </div>
                           )}
                         </div>
                       )}
                     </div>
                   )
-                })}
-              </div>
-            </>
+                }
+                return (
+                  <div key={`exp-${item.id}`} className="mobile-card" style={{ borderLeft: '4px solid var(--accent)' }}>
+                    <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === `exp-${item.id}` ? null : `exp-${item.id}`)}
+                      style={{ cursor: 'pointer' }}>
+                      <div style={{ flex: 1 }}>
+                        <div className="mobile-card-title">{format(new Date(item.expense_date), 'dd MMM yyyy', { locale: id })}</div>
+                        <div className="mobile-card-subtitle">{getTechNames(item.technicians)}</div>
+                      </div>
+                      <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                        <span className="badge badge-success">Sudah Terisi</span>
+                        <span className="badge badge-accent">{WORK_TYPES.find(w => w.value === item.work_type)?.label || item.work_type}</span>
+                      </div>
+                    </div>
+                    {expandedId === `exp-${item.id}` && (
+                      <div className="mobile-card-body">
+                        <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Jumlah Item</span><span className="mobile-info-value">{item.items?.length || 0} item</span></div>
+                        {item.items?.length > 0 && (
+                          <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid var(--border)' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '4px', letterSpacing: '0.5px' }}>BARANG KELUAR:</div>
+                            {item.items.map((it, i) => {
+                              let label = ''
+                              if (it.item_type === 'ont') label = `ONT: ${it.sn?.serial_number || '-'}`
+                              else if (it.item_type === 'dropcore') label = `Dropcore: ${it.haspel?.haspel_code || '-'} — ${it.meters_used}m`
+                              else if (it.item_type === 'other') label = `${it.warehouse_item?.item_name || 'Barang'} × ${it.quantity}`
+                              return (
+                                <div key={i} style={{ fontSize: '12px', color: 'var(--text-primary)', padding: '2px 0', display: 'flex', gap: '6px' }}>
+                                  <span style={{ color: 'var(--accent)' }}>•</span>
+                                  <span>{label}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                        <div className="mobile-info-row"><span className="mobile-info-label">Note</span><span className="mobile-info-value">{item.note || '-'}</span></div>
+                        {can(role, 'pengeluaran.delete') && (
+                          <div className="mobile-card-actions">
+                            <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           ) : (
-            <div className="empty-state"><Truck size={48} /><h3>Belum Ada Data</h3><p>Belum ada pengeluaran atau jadwal tercatat.</p></div>
+            <div className="empty-state"><Truck size={48} /><h3>Belum Ada Data</h3><p>Tidak ada data sesuai filter yang dipilih.</p></div>
           )}
         </div>
       </div>
@@ -534,59 +495,46 @@ export default function Pengeluaran() {
 
       {activeTab === 'jadwal' && (role === 'admin' || role === 'superadmin') && (
         <div className="card">
-          <div className="flex justify-between items-center mb-3">
+          <div className="flex justify-between items-center mb-3" style={{ flexWrap: 'wrap', gap: '8px' }}>
             <h3 style={{ fontSize: '15px', fontWeight: 700 }}>Jadwal Tim Teknisi</h3>
-            <button className="btn btn-primary btn-sm" onClick={() => { setScheduleForm({ schedule_date: format(new Date(), 'yyyy-MM-dd'), site: 'banyumas', work_type: 'ikr_psb', technicians: [], note: '' }); setIsScheduleModalOpen(true); }}>
-              <Plus size={14} /> Tambah Jadwal
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <select className="filter-select" value={schedStatusFilter} onChange={e => setSchedStatusFilter(e.target.value)} style={{ padding: '0 10px', height: '34px', fontSize: '13px' }}>
+                <option value="semua">Semua Status</option>
+                <option value="belum">Belum Isi</option>
+                <option value="terisi">Sudah Terisi</option>
+              </select>
+              <button className="btn btn-primary btn-sm" onClick={() => { setScheduleForm({ schedule_date: format(new Date(), 'yyyy-MM-dd'), site: 'banyumas', work_type: 'ikr_psb', technicians: [], note: '' }); setIsScheduleModalOpen(true); }}>
+                <Plus size={14} /> Tambah Jadwal
+              </button>
+            </div>
           </div>
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Tanggal</th>
-                  <th>Lokasi</th>
-                  <th>Pekerjaan</th>
-                  <th>Tim Teknisi</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {schedules.length > 0 ? schedules.map(t => (
-                  <tr key={t.id}>
-                    <td className="text-secondary">{format(new Date(t.schedule_date), 'dd MMM yyyy', { locale: id })}</td>
-                    <td><span className="badge badge-info">{SITES.find(s => s.value === t.site)?.label || t.site}</span></td>
-                    <td>{WORK_TYPES.find(w => w.value === t.work_type)?.label || t.work_type}</td>
-                    <td>{t.technicians?.length ? getTechNames(t.technicians) : <span className="badge badge-danger">Kosong</span>}</td>
-                    <td>
-                      {t.status === 'completed' 
-                        ? <span className="badge badge-success">Selesai</span> 
-                        : <span className="badge badge-warning">Belum Isi</span>}
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                        {t.status !== 'completed' ? (
-                          <button className="btn btn-secondary btn-sm" onClick={() => handleOpenAddExpense(t)}>
-                            <Plus size={14} /> Isi Pengeluaran
-                          </button>
-                        ) : (
-                          <button 
-                            className={`btn-icon ${t.allow_extra_expense ? 'text-success' : 'text-secondary'}`} 
-                            title={t.allow_extra_expense ? 'Tutup Akses Ekstra' : 'Buka Akses Pengeluaran Tambahan'}
-                            onClick={() => toggleScheduleExtraAccess(t)}
-                          >
-                            {t.allow_extra_expense ? <Unlock size={16} /> : <Lock size={16} />}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-secondary)' }}>Tidak ada jadwal teknisi</td></tr>
+          <div className="mobile-card-list">
+            {filteredSchedules.length > 0 ? filteredSchedules.map(t => (
+              <div key={t.id} className="mobile-card" style={{ borderLeft: `4px solid ${t.isFilled ? 'var(--success)' : 'var(--warning)'}` }}>
+                <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === `jadwal-${t.id}` ? null : `jadwal-${t.id}`)}
+                  style={{ cursor: 'pointer' }}>
+                  <div style={{ flex: 1 }}>
+                    <div className="mobile-card-title">{format(new Date(t.schedule_date), 'dd MMM yyyy', { locale: id })}</div>
+                    <div className="mobile-card-subtitle">{t.technicians?.length ? getTechNames(t.technicians) : <span className="badge badge-danger">Kosong</span>}</div>
+                  </div>
+                  <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    {t.isFilled
+                      ? <span className="badge badge-success">Sudah Terisi</span>
+                      : <span className="badge badge-warning">Belum Isi</span>}
+                    <span className="badge badge-accent">{WORK_TYPES.find(w => w.value === t.work_type)?.label || t.work_type}</span>
+                  </div>
+                </div>
+                {expandedId === `jadwal-${t.id}` && (
+                  <div className="mobile-card-body">
+                    <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === t.site)?.label || t.site}</span></div>
+                    <div className="mobile-info-row"><span className="mobile-info-label">Pekerjaan</span><span className="mobile-info-value">{WORK_TYPES.find(w => w.value === t.work_type)?.label || t.work_type}</span></div>
+                    {t.note && <div className="mobile-info-row"><span className="mobile-info-label">Note</span><span className="mobile-info-value">{t.note}</span></div>}
+                  </div>
                 )}
-              </tbody>
-            </table>
+              </div>
+            )) : (
+              <div className="empty-state"><CalendarDays size={40} /><h3>Tidak Ada Jadwal</h3><p>Tidak ada jadwal sesuai filter.</p></div>
+            )}
           </div>
         </div>
       )}
