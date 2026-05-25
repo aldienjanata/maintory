@@ -66,7 +66,7 @@ export default function Pengeluaran() {
       supabase.from('daily_expenses').select('*, items:expense_items(*, warehouse_item:warehouses(item_name), haspel:dropcore_haspels(haspel_code), sn:serial_numbers(serial_number))').order('expense_date', { ascending: false }),
       supabase.from('users').select('id, full_name, username').in('role', ['admin', 'teknisi']).eq('is_active', true),
       supabase.from('serial_numbers').select('id, serial_number, brand:ont_brands(brand_name), type:ont_types(type_name)').eq('status', 'tersedia'),
-      supabase.from('dropcore_haspels').select('id, haspel_code, type, remaining_meters').eq('status', 'tersedia'),
+      supabase.from('dropcore_haspels').select('id, haspel_code, type, remaining_meters, used_meters').eq('status', 'tersedia'),
       supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }),
       supabase.from('warehouses').select('id, item_name, initial_stock').eq('item_type', 'other')
     ])
@@ -229,7 +229,8 @@ export default function Pengeluaran() {
           // Update SN status if used
           const ontIds = itemsToInsert.filter(i => i.item_type === 'ont').map(i => i.serial_number_id)
           if (ontIds.length > 0) {
-            await supabase.from('serial_numbers').update({ status: 'terpakai' }).in('id', ontIds)
+            const { error: snError } = await supabase.from('serial_numbers').update({ status: 'terpakai' }).in('id', ontIds)
+            if (snError) console.error("Gagal update SN:", snError)
           }
 
           // Update dropcore haspels
@@ -238,9 +239,23 @@ export default function Pengeluaran() {
             const haspel = haspelList.find(h => h.id === dc.haspel_id)
             if (haspel) {
               const newUsed = Number(haspel.used_meters || 0) + Number(dc.meters_used)
-              await supabase.from('dropcore_haspels')
+              const { error: dcError } = await supabase.from('dropcore_haspels')
                 .update({ used_meters: newUsed })
                 .eq('id', dc.haspel_id)
+              if (dcError) console.error("Gagal update dropcore:", dcError)
+            }
+          }
+
+          // Update warehouses for 'other' items
+          const otherItemsList = itemsToInsert.filter(i => i.item_type === 'other')
+          for (const other of otherItemsList) {
+            const wItem = otherItems.find(w => w.id === other.warehouse_item_id)
+            if (wItem) {
+              const newStock = Number(wItem.initial_stock || 0) - Number(other.quantity)
+              const { error: whError } = await supabase.from('warehouses')
+                .update({ initial_stock: newStock })
+                .eq('id', other.warehouse_item_id)
+              if (whError) console.error("Gagal update gudang:", whError)
             }
           }
         }
