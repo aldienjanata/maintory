@@ -1321,7 +1321,6 @@ tbody tr:hover td { background: var(--bg-hover); }
   }
   
   .desktop-only { display: none !important; }
-  .mobile-only { display: block !important; }
 
   /* --- Sidebar --- */
   .sidebar {
@@ -1423,9 +1422,9 @@ tbody tr:hover td { background: var(--bg-hover); }
 }
 
 /* ========== MISC ========== */
-.desktop-only { display: block; }
-table.desktop-only { display: table; }
-.mobile-only { display: none; }
+@media (min-width: 769px) {
+  .mobile-only { display: none !important; }
+}
 
 /* --- Mobile Card Layout --- */
 .mobile-card-list {
