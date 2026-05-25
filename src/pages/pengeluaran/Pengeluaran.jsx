@@ -430,8 +430,8 @@ export default function Pengeluaran() {
                           <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site}</span></div>
                           {(item.technicians?.includes(profile.id) || ['admin', 'superadmin'].includes(role)) && (
                             <div className="mobile-card-actions">
-                              <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(item)} style={{ flex: 1, justifyContent: 'center' }}>
-                                <Plus size={14} /> Isi
+                              <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(item)}>
+                                <Plus size={14} /> Isi Pengeluaran
                               </button>
                             </div>
                           )}
