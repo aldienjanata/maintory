@@ -213,9 +213,10 @@ export default function Pengeluaran() {
               }
             })
           } else if (item.item_type === 'other') {
-            if (item.selected_other) {
-               itemsToInsert.push({ expense_id: expData.id, item_type: 'other', warehouse_item_id: item.selected_other.value, quantity: item.quantity })
-            }
+            (item.selected_others || []).forEach(opt => {
+               const qty = item.other_quantities?.[opt.value] || 1
+               itemsToInsert.push({ expense_id: expData.id, item_type: 'other', warehouse_item_id: opt.value, quantity: qty })
+            })
           }
         }
         
@@ -417,9 +418,11 @@ export default function Pengeluaran() {
                           <td><span className="badge badge-warning">Belum Isi</span></td>
                           <td className="text-secondary">-</td>
                           <td style={{ textAlign: 'right' }}>
-                            <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(item)}>
-                              <Plus size={14} /> Isi Pengeluaran
-                            </button>
+                            {(item.technicians?.includes(profile.id) || ['admin', 'superadmin'].includes(role)) && (
+                              <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(item)}>
+                                <Plus size={14} /> Isi Pengeluaran
+                              </button>
+                            )}
                           </td>
                         </tr>
                       )
@@ -451,7 +454,7 @@ export default function Pengeluaran() {
                         <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === `sched-${item.id}` ? null : `sched-${item.id}`)}>
                           <div>
                             <div className="mobile-card-title">{format(new Date(item.expense_date), 'dd MMM yyyy', { locale: id })}</div>
-                            <div className="mobile-card-subtitle">{SITES.find(s => s.value === item.site)?.label || item.site}</div>
+                            <div className="mobile-card-subtitle">{getTechNames(item.technicians)}</div>
                           </div>
                           <div style={{ textAlign: 'right' }}>
                             <span className="badge badge-warning mb-1" style={{ display: 'inline-block' }}>Belum Isi</span>
@@ -461,12 +464,14 @@ export default function Pengeluaran() {
                         </div>
                         {expandedId === `sched-${item.id}` && (
                           <div className="mobile-card-body">
-                            <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(item.technicians)}</span></div>
-                            <div className="mobile-card-actions">
-                              <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(item)} style={{ width: '100%', justifyContent: 'center' }}>
-                                <Plus size={14} /> Isi Pengeluaran
-                              </button>
-                            </div>
+                            <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site}</span></div>
+                            {(item.technicians?.includes(profile.id) || ['admin', 'superadmin'].includes(role)) && (
+                              <div className="mobile-card-actions">
+                                <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(item)} style={{ width: '100%', justifyContent: 'center' }}>
+                                  <Plus size={14} /> Isi Pengeluaran
+                                </button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -477,7 +482,7 @@ export default function Pengeluaran() {
                       <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === `exp-${item.id}` ? null : `exp-${item.id}`)}>
                         <div>
                           <div className="mobile-card-title">{format(new Date(item.expense_date), 'dd MMM yyyy', { locale: id })}</div>
-                          <div className="mobile-card-subtitle">{SITES.find(s => s.value === item.site)?.label || item.site}</div>
+                          <div className="mobile-card-subtitle">{getTechNames(item.technicians)}</div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <span className="badge badge-accent">{WORK_TYPES.find(w => w.value === item.work_type)?.label || item.work_type}</span>
@@ -485,7 +490,7 @@ export default function Pengeluaran() {
                       </div>
                       {expandedId === `exp-${item.id}` && (
                         <div className="mobile-card-body">
-                          <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(item.technicians)}</span></div>
+                          <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site}</span></div>
                           <div className="mobile-info-row"><span className="mobile-info-label">Jumlah Item</span><span className="mobile-info-value">{item.items?.length || 0} item</span></div>
                           <div className="mobile-info-row"><span className="mobile-info-label">Note</span><span className="mobile-info-value">{item.note || '-'}</span></div>
                           {can(role, 'pengeluaran.delete') && (
@@ -731,12 +736,13 @@ export default function Pengeluaran() {
                         </div>
                       )}
                       {item.item_type === 'other' && (
-                        <div className="grid-2">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           <Select 
+                            isMulti
                             options={otherOptions} 
                             placeholder="Pilih Barang Lainnya..."
-                            value={item.selected_other || null}
-                            onChange={val => updateItem(item.id, 'selected_other', val)}
+                            value={item.selected_others || []}
+                            onChange={val => updateItem(item.id, 'selected_others', val)}
                             styles={{
                               control: (base) => ({
                                 ...base,
@@ -759,13 +765,30 @@ export default function Pengeluaran() {
                                 color: state.isFocused ? 'var(--accent)' : 'var(--text-primary)',
                                 cursor: 'pointer'
                               }),
-                              singleValue: (base) => ({
+                              multiValue: (base) => ({
                                 ...base,
-                                color: 'var(--text-primary)',
+                                backgroundColor: 'var(--accent-dim)',
+                              }),
+                              multiValueLabel: (base) => ({
+                                ...base,
+                                color: 'var(--accent)',
                               })
                             }}
                           />
-                          <input type="number" className="form-input" placeholder="Jumlah" min="1" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', e.target.value)} />
+                          {(item.selected_others || []).map(o => (
+                            <div key={o.value} className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <div style={{ flex: 1, fontSize: '12px', color: 'var(--text-secondary)' }}>{o.label}</div>
+                              <input 
+                                type="number" 
+                                className="form-input" 
+                                placeholder="Jumlah" 
+                                min="1"
+                                style={{ width: '100px' }}
+                                value={(item.other_quantities || {})[o.value] || ''} 
+                                onChange={e => updateItem(item.id, 'other_quantities', { ...(item.other_quantities || {}), [o.value]: e.target.value })} 
+                              />
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
