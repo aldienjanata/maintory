@@ -52,15 +52,15 @@ export default function StokGudang() {
       
       const dc1cList = haspels.filter(h => h.type === '1c')
       const dc1cHaspelsTotal = dc1cList.length
-      const dc1cHaspelsOut = dc1cList.filter(h => h.status === 'habis').length
-      const dc1cHaspelsCurrent = dc1cList.filter(h => h.status === 'tersedia').length
-      const dc1cRemainingMeters = dc1cList.reduce((acc, h) => acc + Number(h.remaining_meters || 0), 0)
+      const dc1cHaspelsCurrent = dc1cList.filter(h => (Number(h.initial_meters || 0) - Number(h.used_meters || 0)) === 1000).length
+      const dc1cHaspelsOut = dc1cHaspelsTotal - dc1cHaspelsCurrent
+      const dc1cRemainingMeters = dc1cList.reduce((acc, h) => acc + (Number(h.initial_meters || 0) - Number(h.used_meters || 0)), 0)
       
       const dc4cList = haspels.filter(h => h.type === '4c')
       const dc4cHaspelsTotal = dc4cList.length
-      const dc4cHaspelsOut = dc4cList.filter(h => h.status === 'habis').length
-      const dc4cHaspelsCurrent = dc4cList.filter(h => h.status === 'tersedia').length
-      const dc4cRemainingMeters = dc4cList.reduce((acc, h) => acc + Number(h.remaining_meters || 0), 0)
+      const dc4cHaspelsCurrent = dc4cList.filter(h => (Number(h.initial_meters || 0) - Number(h.used_meters || 0)) === 1000).length
+      const dc4cHaspelsOut = dc4cHaspelsTotal - dc4cHaspelsCurrent
+      const dc4cRemainingMeters = dc4cList.reduce((acc, h) => acc + (Number(h.initial_meters || 0) - Number(h.used_meters || 0)), 0)
       
       const processed = whItems.map(item => {
         let initial = Number(item.initial_stock) || 0

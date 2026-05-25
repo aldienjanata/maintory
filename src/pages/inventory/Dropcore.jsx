@@ -147,16 +147,16 @@ export default function Dropcore() {
       {/* Summary */}
       <div className="stats-grid mb-4">
         {[
-          { key: 'total', label: 'Total Haspel', value: haspels.length, color: 'var(--accent)' },
+          { key: 'total', label: 'Total Haspel Utuh', value: haspels.filter(h => (Number(h.initial_meters || 0) - Number(h.used_meters || 0)) === 1000).length, color: 'var(--accent)' },
           { key: 'meters', label: 'Meter Tersisa', value: `${remainingMeter.toLocaleString()} m`, color: 'var(--success)' },
           { key: 'used', label: 'Meter Terpakai', value: `${usedMeter.toLocaleString()} m`, color: 'var(--warning)' },
           { key: 'habis', label: 'Haspel Habis', value: haspels.filter(h => h.status === 'habis').length, color: 'var(--danger)' },
           { 
             key: '1c', 
-            label: 'Total Haspel 1C', 
+            label: 'Haspel 1C Utuh', 
             value: (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span>{haspels.filter(h => h.type === '1c').length}</span>
+                <span>{haspels.filter(h => h.type === '1c' && (Number(h.initial_meters || 0) - Number(h.used_meters || 0)) === 1000).length}</span>
                 <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginTop: '2px' }}>
                   {haspels.filter(h => h.type === '1c').reduce((s, h) => s + Number(h.initial_meters || 0) - Number(h.used_meters || 0), 0).toLocaleString()} m tersisa
                 </span>
@@ -166,10 +166,10 @@ export default function Dropcore() {
           },
           { 
             key: '4c', 
-            label: 'Total Haspel 4C', 
+            label: 'Haspel 4C Utuh', 
             value: (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span>{haspels.filter(h => h.type === '4c').length}</span>
+                <span>{haspels.filter(h => h.type === '4c' && (Number(h.initial_meters || 0) - Number(h.used_meters || 0)) === 1000).length}</span>
                 <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginTop: '2px' }}>
                   {haspels.filter(h => h.type === '4c').reduce((s, h) => s + Number(h.initial_meters || 0) - Number(h.used_meters || 0), 0).toLocaleString()} m tersisa
                 </span>
