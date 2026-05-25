@@ -61,7 +61,7 @@ export default function Pengeluaran() {
   const fetchAll = async () => {
     setLoading(true)
     const [expRes, techRes, snRes, haspelRes, schedRes, whRes] = await Promise.all([
-      supabase.from('daily_expenses').select('*, items:expense_items(*)').order('expense_date', { ascending: false }),
+      supabase.from('daily_expenses').select('*, items:expense_items(*, warehouse_item:warehouses(item_name), haspel:dropcore_haspels(haspel_code), sn:serial_numbers(serial_number))').order('expense_date', { ascending: false }),
       supabase.from('users').select('id, full_name, username').in('role', ['admin', 'teknisi']).eq('is_active', true),
       supabase.from('serial_numbers').select('id, serial_number, brand:ont_brands(brand_name), type:ont_types(type_name)').eq('status', 'tersedia'),
       supabase.from('dropcore_haspels').select('id, haspel_code, type, remaining_meters').eq('status', 'tersedia'),
@@ -288,16 +288,19 @@ export default function Pengeluaran() {
   })
 
   // Data gabungan: Jadwal yang belum selesai + Pengeluaran aktual
+  // Exclude jadwal yang sudah punya linked expense (via schedule_id)
+  const expenseScheduleIds = new Set(expenses.map(e => e.schedule_id).filter(Boolean))
   const combinedData = [
     ...schedules.filter(s => {
       if (s.status === 'completed') return false
+      if (expenseScheduleIds.has(s.id)) return false // sudah diisi, jangan tampil lagi
       const matchDate = !dateFilter || s.schedule_date === dateFilter
       const matchSearch = !searchTerm || getTechNames(s.technicians).toLowerCase().includes(searchTerm.toLowerCase()) || s.site?.includes(searchTerm.toLowerCase())
       return matchDate && matchSearch
     }).map(s => ({
       ...s,
       isSchedule: true,
-      expense_date: s.schedule_date, // Alias agar format tanggal bisa sama
+      expense_date: s.schedule_date,
       items: []
     })),
     ...filtered
@@ -492,6 +495,23 @@ export default function Pengeluaran() {
                         <div className="mobile-card-body">
                           <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site}</span></div>
                           <div className="mobile-info-row"><span className="mobile-info-label">Jumlah Item</span><span className="mobile-info-value">{item.items?.length || 0} item</span></div>
+                          {item.items?.length > 0 && (
+                            <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid var(--border)' }}>
+                              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '4px' }}>BARANG KELUAR:</div>
+                              {item.items.map((it, i) => {
+                                let label = ''
+                                if (it.item_type === 'ont') label = `ONT: ${it.sn?.serial_number || it.serial_number_id}`
+                                else if (it.item_type === 'dropcore') label = `Dropcore: ${it.haspel?.haspel_code || it.haspel_id} — ${it.meters_used}m`
+                                else if (it.item_type === 'other') label = `${it.warehouse_item?.item_name || 'Barang'} × ${it.quantity}`
+                                return (
+                                  <div key={i} style={{ fontSize: '12px', color: 'var(--text-primary)', padding: '2px 0', display: 'flex', gap: '6px' }}>
+                                    <span style={{ color: 'var(--accent)' }}>•</span>
+                                    <span>{label}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
                           <div className="mobile-info-row"><span className="mobile-info-label">Note</span><span className="mobile-info-value">{item.note || '-'}</span></div>
                           {can(role, 'pengeluaran.delete') && (
                             <div className="mobile-card-actions">
