@@ -22,6 +22,7 @@ export default function Dropcore() {
   const [editItem, setEditItem] = useState(null)
   const [form, setForm] = useState({ haspel_code: '', type: '1c', initial_meters: 1000, used_meters: 0, date_in: format(new Date(), 'yyyy-MM-dd'), note: '' })
   const [saving, setSaving] = useState(false)
+  const [expandedId, setExpandedId] = useState(null)
 
   useEffect(() => { fetchHaspels() }, [])
 
@@ -211,60 +212,117 @@ export default function Dropcore() {
           {loading ? (
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : filtered.length > 0 ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Kode Haspel</th>
-                  <th>Tipe</th>
-                  <th>Tanggal Masuk</th>
-                  <th>Meter Awal</th>
-                  <th>Terpakai</th>
-                  <th>Sisa</th>
-                  <th>Progress</th>
-                  <th>Status</th>
-                  {can(role, 'inventory.dropcore.edit') && <th style={{ textAlign: 'right' }}>Aksi</th>}
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              <table className="desktop-only">
+                <thead>
+                  <tr>
+                    <th>Kode Haspel</th>
+                    <th>Tipe</th>
+                    <th>Tanggal Masuk</th>
+                    <th>Meter Awal</th>
+                    <th>Terpakai</th>
+                    <th>Sisa</th>
+                    <th>Progress</th>
+                    <th>Status</th>
+                    {can(role, 'inventory.dropcore.edit') && <th style={{ textAlign: 'right' }}>Aksi</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(h => {
+                    const rem = Number(h.initial_meters) - Number(h.used_meters)
+                    const p = pct(h)
+                    const color = p >= 90 ? 'var(--danger)' : p >= 60 ? 'var(--warning)' : 'var(--success)'
+                    return (
+                      <tr key={h.id}>
+                        <td><span className="font-semibold text-accent">{h.haspel_code}</span></td>
+                        <td><span className={`badge ${h.type === '1c' ? 'badge-purple' : 'badge-orange'}`}>{h.type?.toUpperCase()}</span></td>
+                        <td className="text-secondary">{format(new Date(h.date_in), 'dd MMM yyyy', { locale: id })}</td>
+                        <td>{Number(h.initial_meters).toLocaleString()} m</td>
+                        <td style={{ color: 'var(--warning)' }}>{Number(h.used_meters).toLocaleString()} m</td>
+                        <td style={{ color: rem <= 0 ? 'var(--danger)' : 'var(--success)', fontWeight: 600 }}>{rem.toLocaleString()} m</td>
+                        <td style={{ minWidth: '100px' }}>
+                          <div style={{ background: 'var(--bg-hover)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                            <div style={{ background: color, height: '100%', width: `${Math.min(p, 100)}%`, transition: 'width 0.3s' }} />
+                          </div>
+                          <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>{p}%</div>
+                        </td>
+                        <td>
+                          {h.status === 'habis'
+                            ? <span className="badge badge-danger"><AlertTriangle size={10} /> Habis</span>
+                            : <span className="badge badge-success">Tersedia</span>
+                          }
+                        </td>
+                        {can(role, 'inventory.dropcore.edit') && (
+                          <td style={{ textAlign: 'right' }}>
+                            <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                              <button className="btn-icon" onClick={() => openEdit(h)}><Edit2 size={15} /></button>
+                              {can(role, 'inventory.dropcore.delete') && (
+                                <button className="btn-icon text-danger" onClick={() => handleDelete(h)}><Trash2 size={15} /></button>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+
+              <div className="mobile-only mobile-card-list">
                 {filtered.map(h => {
                   const rem = Number(h.initial_meters) - Number(h.used_meters)
                   const p = pct(h)
                   const color = p >= 90 ? 'var(--danger)' : p >= 60 ? 'var(--warning)' : 'var(--success)'
                   return (
-                    <tr key={h.id}>
-                      <td><span className="font-semibold text-accent">{h.haspel_code}</span></td>
-                      <td><span className={`badge ${h.type === '1c' ? 'badge-purple' : 'badge-orange'}`}>{h.type?.toUpperCase()}</span></td>
-                      <td className="text-secondary">{format(new Date(h.date_in), 'dd MMM yyyy', { locale: id })}</td>
-                      <td>{Number(h.initial_meters).toLocaleString()} m</td>
-                      <td style={{ color: 'var(--warning)' }}>{Number(h.used_meters).toLocaleString()} m</td>
-                      <td style={{ color: rem <= 0 ? 'var(--danger)' : 'var(--success)', fontWeight: 600 }}>{rem.toLocaleString()} m</td>
-                      <td style={{ minWidth: '100px' }}>
-                        <div style={{ background: 'var(--bg-hover)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                          <div style={{ background: color, height: '100%', width: `${Math.min(p, 100)}%`, transition: 'width 0.3s' }} />
-                        </div>
-                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>{p}%</div>
-                      </td>
-                      <td>
-                        {h.status === 'habis'
-                          ? <span className="badge badge-danger"><AlertTriangle size={10} /> Habis</span>
-                          : <span className="badge badge-success">Tersedia</span>
-                        }
-                      </td>
-                      {can(role, 'inventory.dropcore.edit') && (
-                        <td style={{ textAlign: 'right' }}>
-                          <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                            <button className="btn-icon" onClick={() => openEdit(h)}><Edit2 size={15} /></button>
-                            {can(role, 'inventory.dropcore.delete') && (
-                              <button className="btn-icon text-danger" onClick={() => handleDelete(h)}><Trash2 size={15} /></button>
-                            )}
+                    <div key={h.id} className="mobile-card">
+                      <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === h.id ? null : h.id)}>
+                        <div>
+                          <div className="mobile-card-title">{h.haspel_code}</div>
+                          <div className="mobile-card-subtitle">
+                            <span className={`badge ${h.type === '1c' ? 'badge-purple' : 'badge-orange'}`} style={{ padding: '0px 4px', fontSize: '10px' }}>{h.type?.toUpperCase()}</span>
+                            <span style={{ marginLeft: '8px' }}>
+                              {h.status === 'habis'
+                                ? <span style={{ color: 'var(--danger)', fontSize: '11px', fontWeight: 600 }}>Habis</span>
+                                : <span style={{ color: 'var(--success)', fontSize: '11px', fontWeight: 600 }}>Tersedia</span>
+                              }
+                            </span>
                           </div>
-                        </td>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '14px', fontWeight: 'bold', color: rem <= 0 ? 'var(--danger)' : 'var(--success)' }}>
+                            {rem.toLocaleString()} m
+                          </div>
+                        </div>
+                      </div>
+                      {expandedId === h.id && (
+                        <div className="mobile-card-body">
+                          <div className="mobile-info-row"><span className="mobile-info-label">Tanggal Masuk</span><span className="mobile-info-value">{format(new Date(h.date_in), 'dd MMM yyyy', { locale: id })}</span></div>
+                          <div className="mobile-info-row"><span className="mobile-info-label">Meter Awal</span><span className="mobile-info-value">{Number(h.initial_meters).toLocaleString()} m</span></div>
+                          <div className="mobile-info-row"><span className="mobile-info-label">Terpakai</span><span className="mobile-info-value" style={{ color: 'var(--warning)' }}>{Number(h.used_meters).toLocaleString()} m</span></div>
+                          <div className="mobile-info-row">
+                            <span className="mobile-info-label">Progress</span>
+                            <span className="mobile-info-value" style={{ width: '100px' }}>
+                              <div style={{ background: 'var(--border-light)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                                <div style={{ background: color, height: '100%', width: `${Math.min(p, 100)}%` }} />
+                              </div>
+                              <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', textAlign: 'right' }}>{p}%</div>
+                            </span>
+                          </div>
+                          {can(role, 'inventory.dropcore.edit') && (
+                            <div className="mobile-card-actions">
+                              <button className="btn btn-secondary btn-sm" onClick={() => openEdit(h)}><Edit2 size={14} /> Edit</button>
+                              {can(role, 'inventory.dropcore.delete') && (
+                                <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(h)}><Trash2 size={14} /> Hapus</button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
-                    </tr>
+                    </div>
                   )
                 })}
-              </tbody>
-            </table>
+              </div>
+            </>
           ) : (
             <div className="empty-state"><Cable size={48} /><h3>Tidak Ada Haspel</h3><p>Belum ada data haspel dropcore.</p></div>
           )}

@@ -23,6 +23,7 @@ export default function SerialNumber() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isBulkMode, setIsBulkMode] = useState(false)
   const [bulkText, setBulkText] = useState('')
+  const [expandedId, setExpandedId] = useState(null)
   const [editItem, setEditItem] = useState(null)
   const [form, setForm] = useState({ brand_id: '', type_id: '', serial_number: '', date_in: format(new Date(), 'yyyy-MM-dd'), note: '', status: 'tersedia' })
   const [saving, setSaving] = useState(false)
@@ -295,60 +296,109 @@ export default function SerialNumber() {
           {loading ? (
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : filtered.length > 0 ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Serial Number</th>
-                  <th>Merk</th>
-                  <th>Tipe</th>
-                  <th>Tanggal Masuk</th>
-                  <th>Status</th>
-                  <th>Note</th>
-                  {(can(role, 'inventory.sn.edit') || can(role, 'inventory.sn.delete')) && <th style={{ textAlign: 'right' }}>Aksi</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(item => (
-                  <tr key={item.id}>
-                    <td><span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '13px' }}>{item.serial_number}</span></td>
-                    <td>{item.brand?.brand_name || '-'}</td>
-                    <td>{item.type?.type_name || '-'}</td>
-                    <td className="text-secondary">{item.date_in ? format(new Date(item.date_in), 'dd MMM yyyy', { locale: id }) : '-'}</td>
-                    <td>
-                      {item.status === 'tersedia'
-                        ? <span className="badge badge-success"><CheckCircle size={10} /> Tersedia</span>
-                        : <span className="badge badge-warning"><Clock size={10} /> Terpakai</span>
-                      }
-                    </td>
-                    <td className="text-secondary">{item.note || '-'}</td>
-                    {(can(role, 'inventory.sn.edit') || can(role, 'inventory.sn.delete')) && (
-                      <td style={{ textAlign: 'right' }}>
-                        <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                          {can(role, 'inventory.sn.edit') && (
-                            <button className="btn-icon" onClick={() => {
-                              setEditItem(item)
-                              setForm({
-                                brand_id: item.brand_id || '',
-                                type_id: item.type_id || '',
-                                serial_number: item.serial_number,
-                                date_in: item.date_in ? item.date_in.slice(0, 10) : format(new Date(), 'yyyy-MM-dd'),
-                                note: item.note || '',
-                                status: item.status || 'tersedia'
-                              })
-                              setIsBulkMode(false)
-                              setIsModalOpen(true)
-                            }}><Edit2 size={15} /></button>
-                          )}
-                          {can(role, 'inventory.sn.delete') && (
-                            <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
-                          )}
-                        </div>
-                      </td>
-                    )}
+            <>
+              <table className="desktop-only">
+                <thead>
+                  <tr>
+                    <th>Serial Number</th>
+                    <th>Merk</th>
+                    <th>Tipe</th>
+                    <th>Tanggal Masuk</th>
+                    <th>Status</th>
+                    <th>Note</th>
+                    {(can(role, 'inventory.sn.edit') || can(role, 'inventory.sn.delete')) && <th style={{ textAlign: 'right' }}>Aksi</th>}
                   </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(item => (
+                    <tr key={item.id}>
+                      <td><span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '13px' }}>{item.serial_number}</span></td>
+                      <td>{item.brand?.brand_name || '-'}</td>
+                      <td>{item.type?.type_name || '-'}</td>
+                      <td className="text-secondary">{item.date_in ? format(new Date(item.date_in), 'dd MMM yyyy', { locale: id }) : '-'}</td>
+                      <td>
+                        {item.status === 'tersedia'
+                          ? <span className="badge badge-success"><CheckCircle size={10} /> Tersedia</span>
+                          : <span className="badge badge-warning"><Clock size={10} /> Terpakai</span>
+                        }
+                      </td>
+                      <td className="text-secondary">{item.note || '-'}</td>
+                      {(can(role, 'inventory.sn.edit') || can(role, 'inventory.sn.delete')) && (
+                        <td style={{ textAlign: 'right' }}>
+                          <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                            {can(role, 'inventory.sn.edit') && (
+                              <button className="btn-icon" onClick={() => {
+                                setEditItem(item)
+                                setForm({
+                                  brand_id: item.brand_id || '',
+                                  type_id: item.type_id || '',
+                                  serial_number: item.serial_number,
+                                  date_in: item.date_in ? item.date_in.slice(0, 10) : format(new Date(), 'yyyy-MM-dd'),
+                                  note: item.note || '',
+                                  status: item.status || 'tersedia'
+                                })
+                                setIsBulkMode(false)
+                                setIsModalOpen(true)
+                              }}><Edit2 size={15} /></button>
+                            )}
+                            {can(role, 'inventory.sn.delete') && (
+                              <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="mobile-only mobile-card-list">
+                {filtered.map(item => (
+                  <div key={item.id} className="mobile-card">
+                    <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
+                      <div>
+                        <div className="mobile-card-title" style={{ fontFamily: 'monospace' }}>{item.serial_number}</div>
+                        <div className="mobile-card-subtitle">{item.brand?.brand_name || '-'} {item.type?.type_name || '-'}</div>
+                      </div>
+                      <div>
+                        {item.status === 'tersedia'
+                          ? <span className="badge badge-success"><CheckCircle size={10} /> Tersedia</span>
+                          : <span className="badge badge-warning"><Clock size={10} /> Terpakai</span>
+                        }
+                      </div>
+                    </div>
+                    {expandedId === item.id && (
+                      <div className="mobile-card-body">
+                        <div className="mobile-info-row"><span className="mobile-info-label">Tanggal Masuk</span><span className="mobile-info-value">{item.date_in ? format(new Date(item.date_in), 'dd MMM yyyy', { locale: id }) : '-'}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Note</span><span className="mobile-info-value">{item.note || '-'}</span></div>
+                        {(can(role, 'inventory.sn.edit') || can(role, 'inventory.sn.delete')) && (
+                          <div className="mobile-card-actions">
+                            {can(role, 'inventory.sn.edit') && (
+                              <button className="btn btn-secondary btn-sm" onClick={() => {
+                                setEditItem(item)
+                                setForm({
+                                  brand_id: item.brand_id || '',
+                                  type_id: item.type_id || '',
+                                  serial_number: item.serial_number,
+                                  date_in: item.date_in ? item.date_in.slice(0, 10) : format(new Date(), 'yyyy-MM-dd'),
+                                  note: item.note || '',
+                                  status: item.status || 'tersedia'
+                                })
+                                setIsBulkMode(false)
+                                setIsModalOpen(true)
+                              }}><Edit2 size={14} /> Edit</button>
+                            )}
+                            {can(role, 'inventory.sn.delete') && (
+                              <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           ) : (
             <div className="empty-state"><Hash size={48} /><h3>Tidak Ada SN</h3><p>Belum ada serial number tersimpan.</p></div>
           )}

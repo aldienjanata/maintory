@@ -18,6 +18,7 @@ export default function Maintenance() {
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
   const [technicians, setTechnicians] = useState([])
+  const [expandedId, setExpandedId] = useState(null)
   
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('')
@@ -291,80 +292,154 @@ export default function Maintenance() {
               <div className="spinner"></div>
             </div>
           ) : filteredTickets.length > 0 ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>No Tiket</th>
-                  <th>Tanggal</th>
-                  <th>Pelanggan</th>
-                  <th>Keluhan & Note</th>
-                  <th>Lokasi</th>
-                  <th>Teknisi</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTickets.map(ticket => (
-                  <tr key={ticket.id}>
-                    <td><div className="font-semibold">#{ticket.ticket_number}</div></td>
-                    <td>{format(new Date(ticket.date_input), 'dd MMM yyyy', { locale: id })}</td>
-                    <td>
-                      <div className="font-semibold text-accent">{ticket.customer_name}</div>
-                      <div className="text-secondary" style={{ fontSize: '11px' }}>{ticket.customer_id}</div>
-                      {ticket.phone_number && (
-                        <a href={`https://wa.me/${ticket.phone_number.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="badge badge-success" style={{ marginTop: '4px', textDecoration: 'none' }}>
-                          <MessageCircle size={10} /> {ticket.phone_number}
-                        </a>
-                      )}
-                    </td>
-                    <td>
-                      <div>{ticket.complaint}</div>
-                      {ticket.note && <div className="text-secondary mt-2" style={{ fontSize: '12px' }}>Note: {ticket.note}</div>}
-                    </td>
-                    <td>
-                      <div>{ticket.village}</div>
-                      {ticket.sharelok && (
-                        <a href={ticket.sharelok} target="_blank" rel="noreferrer" className="text-accent" style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                          <MapPin size={12} /> Buka Maps
-                        </a>
-                      )}
-                    </td>
-                    <td>{getTechNames(ticket.technicians)}</td>
-                    <td>
-                      {ticket.status === 'close' ? (
-                        <span className="badge badge-success"><CheckCircle size={12} /> Close</span>
-                      ) : (
-                        <span className="badge badge-warning"><AlertCircle size={12} /> Aktif</span>
-                      )}
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                        {ticket.status === 'aktif' && (
-                          <button 
-                            className="btn-icon text-success" 
-                            title="Close Tiket"
-                            onClick={() => handleCloseTicket(ticket)}
-                          >
-                            <CheckCircle size={16} />
-                          </button>
+            <>
+              <table className="desktop-only">
+                <thead>
+                  <tr>
+                    <th>No Tiket</th>
+                    <th>Tanggal</th>
+                    <th>Pelanggan</th>
+                    <th>Keluhan & Note</th>
+                    <th>Lokasi</th>
+                    <th>Teknisi</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: 'right' }}>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTickets.map(ticket => (
+                    <tr key={ticket.id}>
+                      <td><div className="font-semibold">#{ticket.ticket_number}</div></td>
+                      <td>{format(new Date(ticket.date_input), 'dd MMM yyyy', { locale: id })}</td>
+                      <td>
+                        <div className="font-semibold text-accent">{ticket.customer_name}</div>
+                        <div className="text-secondary" style={{ fontSize: '11px' }}>{ticket.customer_id}</div>
+                        {ticket.phone_number && (
+                          <a href={`https://wa.me/${ticket.phone_number.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="badge badge-success" style={{ marginTop: '4px', textDecoration: 'none' }}>
+                            <MessageCircle size={10} /> {ticket.phone_number}
+                          </a>
                         )}
-                        {isAdmin(role) && (
-                          <>
-                            <button className="btn-icon" title="Edit (Coming Soon)">
-                              <Edit2 size={16} />
+                      </td>
+                      <td>
+                        <div>{ticket.complaint}</div>
+                        {ticket.note && <div className="text-secondary mt-2" style={{ fontSize: '12px' }}>Note: {ticket.note}</div>}
+                      </td>
+                      <td>
+                        <div>{ticket.village}</div>
+                        {ticket.sharelok && (
+                          <a href={ticket.sharelok} target="_blank" rel="noreferrer" className="text-accent" style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                            <MapPin size={12} /> Buka Maps
+                          </a>
+                        )}
+                      </td>
+                      <td>{getTechNames(ticket.technicians)}</td>
+                      <td>
+                        {ticket.status === 'close' ? (
+                          <span className="badge badge-success"><CheckCircle size={12} /> Close</span>
+                        ) : (
+                          <span className="badge badge-warning"><AlertCircle size={12} /> Aktif</span>
+                        )}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                          {ticket.status === 'aktif' && (
+                            <button 
+                              className="btn-icon text-success" 
+                              title="Close Tiket"
+                              onClick={() => handleCloseTicket(ticket)}
+                            >
+                              <CheckCircle size={16} />
                             </button>
-                            <button className="btn-icon text-danger" title="Hapus" onClick={() => handleDelete(ticket)}>
-                              <Trash2 size={16} />
-                            </button>
-                          </>
+                          )}
+                          {isAdmin(role) && (
+                            <>
+                              <button className="btn-icon text-danger" title="Hapus" onClick={() => handleDelete(ticket)}>
+                                <Trash2 size={16} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="mobile-only mobile-card-list">
+                {filteredTickets.map(ticket => (
+                  <div key={ticket.id} className="mobile-card">
+                    <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === ticket.id ? null : ticket.id)}>
+                      <div>
+                        <div className="mobile-card-title">{ticket.customer_name}</div>
+                        <div className="mobile-card-subtitle">#{ticket.ticket_number} - {ticket.village}</div>
+                      </div>
+                      <div>
+                        {ticket.status === 'close' ? (
+                          <span className="badge badge-success"><CheckCircle size={10} /> Close</span>
+                        ) : (
+                          <span className="badge badge-warning"><AlertCircle size={10} /> Aktif</span>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </div>
+                    {expandedId === ticket.id && (
+                      <div className="mobile-card-body">
+                        <div className="mobile-info-row"><span className="mobile-info-label">Tanggal</span><span className="mobile-info-value">{format(new Date(ticket.date_input), 'dd MMM yyyy', { locale: id })}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">ID Pelanggan</span><span className="mobile-info-value">{ticket.customer_id}</span></div>
+                        
+                        {ticket.phone_number && (
+                          <div className="mobile-info-row">
+                            <span className="mobile-info-label">WhatsApp</span>
+                            <span className="mobile-info-value">
+                              <a href={`https://wa.me/${ticket.phone_number.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-success" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
+                                <MessageCircle size={14} /> Hubungi
+                              </a>
+                            </span>
+                          </div>
+                        )}
+                        
+                        {ticket.sharelok && (
+                          <div className="mobile-info-row">
+                            <span className="mobile-info-label">Maps</span>
+                            <span className="mobile-info-value">
+                              <a href={ticket.sharelok} target="_blank" rel="noreferrer" className="text-accent" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
+                                <MapPin size={14} /> Buka Maps
+                              </a>
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="mobile-info-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                          <span className="mobile-info-label">Keluhan:</span>
+                          <span className="mobile-info-value" style={{ textAlign: 'left', maxWidth: '100%', marginTop: '4px' }}>{ticket.complaint}</span>
+                        </div>
+                        
+                        {ticket.note && (
+                          <div className="mobile-info-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                            <span className="mobile-info-label">Note:</span>
+                            <span className="mobile-info-value" style={{ textAlign: 'left', maxWidth: '100%', marginTop: '4px' }}>{ticket.note}</span>
+                          </div>
+                        )}
+
+                        <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(ticket.technicians)}</span></div>
+
+                        <div className="mobile-card-actions">
+                          {ticket.status === 'aktif' && (
+                            <button className="btn btn-secondary btn-sm text-success" onClick={() => handleCloseTicket(ticket)}>
+                              <CheckCircle size={14} /> Close Tiket
+                            </button>
+                          )}
+                          {isAdmin(role) && (
+                            <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(ticket)}>
+                              <Trash2 size={14} /> Hapus
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           ) : (
             <div className="empty-state">
               <Wrench size={48} />

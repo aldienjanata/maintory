@@ -21,6 +21,7 @@ export default function Dismantle() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editItem, setEditItem] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [expandedId, setExpandedId] = useState(null)
 
   const emptyForm = {
     date_input: format(new Date(), 'yyyy-MM-dd'),
@@ -229,65 +230,134 @@ export default function Dismantle() {
           {loading ? (
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : filtered.length > 0 ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Tanggal</th>
-                  <th>Pelanggan</th>
-                  <th>Bayar Terakhir</th>
-                  <th>SN</th>
-                  <th>Lokasi</th>
-                  <th>Teknisi</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(item => (
-                  <tr key={item.id}>
-                    <td className="text-secondary">{format(new Date(item.date_input), 'dd MMM yy', { locale: id })}</td>
-                    <td>
-                      <div className="font-semibold">{item.full_name}</div>
-                      <div className="text-secondary" style={{ fontSize: '11px' }}>{item.customer_id}</div>
-                      {item.phone_number && (
-                        <a href={`https://wa.me/${item.phone_number.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="badge badge-success" style={{ marginTop: '4px', textDecoration: 'none', fontSize: '10px' }}>
-                          <Phone size={10} /> {item.phone_number}
-                        </a>
-                      )}
-                    </td>
-                    <td>{item.last_payment || '-'}</td>
-                    <td><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{item.serial_number || '-'}</span></td>
-                    <td>
-                      {item.sharelok ? (
-                        <a href={item.sharelok} target="_blank" rel="noreferrer" className="text-accent" style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <MapPin size={12} /> Buka Maps
-                        </a>
-                      ) : <span className="text-secondary">-</span>}
-                    </td>
-                    <td style={{ fontSize: '12px' }}>{getTechNames(item.technicians)}</td>
-                    <td>
-                      {item.aksi === 'close'
-                        ? <span className="badge badge-success"><CheckCircle size={10} /> Close</span>
-                        : <span className="badge badge-warning"><Clock size={10} /> Aktif</span>
-                      }
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                        {item.aksi === 'aktif' && (
-                          <button className="btn-icon text-success" title="Selesaikan" onClick={() => handleClose(item)}><CheckCircle size={15} /></button>
-                        )}
-                        {can(role, 'dismantle.edit') && (
-                          <button className="btn-icon" title="Edit" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
-                        )}
-                        {can(role, 'dismantle.delete') && (
-                          <button className="btn-icon text-danger" title="Hapus" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
-                        )}
-                      </div>
-                    </td>
+            <>
+              <table className="desktop-only">
+                <thead>
+                  <tr>
+                    <th>Tanggal</th>
+                    <th>Pelanggan</th>
+                    <th>Bayar Terakhir</th>
+                    <th>SN</th>
+                    <th>Lokasi</th>
+                    <th>Teknisi</th>
+                    <th>Status</th>
+                    <th style={{ textAlign: 'right' }}>Aksi</th>
                   </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(item => (
+                    <tr key={item.id}>
+                      <td className="text-secondary">{format(new Date(item.date_input), 'dd MMM yy', { locale: id })}</td>
+                      <td>
+                        <div className="font-semibold">{item.full_name}</div>
+                        <div className="text-secondary" style={{ fontSize: '11px' }}>{item.customer_id}</div>
+                        {item.phone_number && (
+                          <a href={`https://wa.me/${item.phone_number.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="badge badge-success" style={{ marginTop: '4px', textDecoration: 'none', fontSize: '10px' }}>
+                            <Phone size={10} /> {item.phone_number}
+                          </a>
+                        )}
+                      </td>
+                      <td>{item.last_payment || '-'}</td>
+                      <td><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{item.serial_number || '-'}</span></td>
+                      <td>
+                        {item.sharelok ? (
+                          <a href={item.sharelok} target="_blank" rel="noreferrer" className="text-accent" style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <MapPin size={12} /> Buka Maps
+                          </a>
+                        ) : <span className="text-secondary">-</span>}
+                      </td>
+                      <td style={{ fontSize: '12px' }}>{getTechNames(item.technicians)}</td>
+                      <td>
+                        {item.aksi === 'close'
+                          ? <span className="badge badge-success"><CheckCircle size={10} /> Close</span>
+                          : <span className="badge badge-warning"><Clock size={10} /> Aktif</span>
+                        }
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                          {item.aksi === 'aktif' && (
+                            <button className="btn-icon text-success" title="Selesaikan" onClick={() => handleClose(item)}><CheckCircle size={15} /></button>
+                          )}
+                          {can(role, 'dismantle.edit') && (
+                            <button className="btn-icon" title="Edit" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
+                          )}
+                          {can(role, 'dismantle.delete') && (
+                            <button className="btn-icon text-danger" title="Hapus" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="mobile-only mobile-card-list">
+                {filtered.map(item => (
+                  <div key={item.id} className="mobile-card">
+                    <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
+                      <div>
+                        <div className="mobile-card-title">{item.full_name}</div>
+                        <div className="mobile-card-subtitle">{item.customer_id}</div>
+                      </div>
+                      <div>
+                        {item.aksi === 'close'
+                          ? <span className="badge badge-success"><CheckCircle size={10} /> Close</span>
+                          : <span className="badge badge-warning"><Clock size={10} /> Aktif</span>
+                        }
+                      </div>
+                    </div>
+                    {expandedId === item.id && (
+                      <div className="mobile-card-body">
+                        <div className="mobile-info-row"><span className="mobile-info-label">Tanggal</span><span className="mobile-info-value">{format(new Date(item.date_input), 'dd MMM yyyy', { locale: id })}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Bayar Terakhir</span><span className="mobile-info-value">{item.last_payment || '-'}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">SN</span><span className="mobile-info-value" style={{ fontFamily: 'monospace' }}>{item.serial_number || '-'}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(item.technicians)}</span></div>
+                        
+                        {item.phone_number && (
+                          <div className="mobile-info-row">
+                            <span className="mobile-info-label">WhatsApp</span>
+                            <span className="mobile-info-value">
+                              <a href={`https://wa.me/${item.phone_number.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-success" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
+                                <Phone size={14} /> Hubungi
+                              </a>
+                            </span>
+                          </div>
+                        )}
+                        
+                        {item.sharelok && (
+                          <div className="mobile-info-row">
+                            <span className="mobile-info-label">Maps</span>
+                            <span className="mobile-info-value">
+                              <a href={item.sharelok} target="_blank" rel="noreferrer" className="text-accent" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
+                                <MapPin size={14} /> Buka Maps
+                              </a>
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="mobile-card-actions">
+                          {item.aksi === 'aktif' && (
+                            <button className="btn btn-secondary btn-sm text-success" onClick={() => handleClose(item)}>
+                              <CheckCircle size={14} /> Selesaikan
+                            </button>
+                          )}
+                          {can(role, 'dismantle.edit') && (
+                            <button className="btn btn-secondary btn-sm" onClick={() => openEdit(item)}>
+                              <Edit2 size={14} /> Edit
+                            </button>
+                          )}
+                          {can(role, 'dismantle.delete') && (
+                            <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}>
+                              <Trash2 size={14} /> Hapus
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           ) : (
             <div className="empty-state"><ArrowDownToLine size={48} /><h3>Tidak Ada Data</h3><p>Belum ada data dismantle.</p></div>
           )}

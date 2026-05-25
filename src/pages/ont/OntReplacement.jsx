@@ -19,6 +19,7 @@ export default function OntReplacement() {
   const [searchTerm, setSearchTerm] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [expandedId, setExpandedId] = useState(null)
 
   const emptyForm = {
     replacement_date: format(new Date(), 'yyyy-MM-dd'),
@@ -122,48 +123,88 @@ export default function OntReplacement() {
           {loading ? (
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : filtered.length > 0 ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Tanggal</th>
-                  <th>Pelanggan</th>
-                  <th>SN Lama</th>
-                  <th></th>
-                  <th>SN Baru</th>
-                  <th>Alasan</th>
-                  <th>Teknisi</th>
-                  {can(role, 'ont.delete') && <th style={{ textAlign: 'right' }}>Aksi</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(item => (
-                  <tr key={item.id}>
-                    <td className="text-secondary">{format(new Date(item.replacement_date), 'dd MMM yyyy', { locale: id })}</td>
-                    <td>
-                      <div className="font-semibold">{item.customer_name}</div>
-                      <div className="text-secondary" style={{ fontSize: '11px' }}>{item.customer_id}</div>
-                    </td>
-                    <td><span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--danger)' }}>{item.old_serial_number}</span></td>
-                    <td><ArrowRight size={14} style={{ color: 'var(--text-muted)' }} /></td>
-                    <td>
-                      <span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--success)' }}>
-                        {item.new_sn?.serial_number || '-'}
-                      </span>
-                      {item.new_sn?.brand && (
-                        <div className="text-secondary" style={{ fontSize: '10px' }}>{item.new_sn.brand.brand_name} {item.new_sn.type?.type_name}</div>
-                      )}
-                    </td>
-                    <td className="text-secondary">{item.reason || '-'}</td>
-                    <td style={{ fontSize: '12px' }}>{getTechNames(item.technicians)}</td>
-                    {can(role, 'ont.delete') && (
-                      <td style={{ textAlign: 'right' }}>
-                        <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
-                      </td>
-                    )}
+            <>
+              <table className="desktop-only">
+                <thead>
+                  <tr>
+                    <th>Tanggal</th>
+                    <th>Pelanggan</th>
+                    <th>SN Lama</th>
+                    <th></th>
+                    <th>SN Baru</th>
+                    <th>Alasan</th>
+                    <th>Teknisi</th>
+                    {can(role, 'ont.delete') && <th style={{ textAlign: 'right' }}>Aksi</th>}
                   </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(item => (
+                    <tr key={item.id}>
+                      <td className="text-secondary">{format(new Date(item.replacement_date), 'dd MMM yyyy', { locale: id })}</td>
+                      <td>
+                        <div className="font-semibold">{item.customer_name}</div>
+                        <div className="text-secondary" style={{ fontSize: '11px' }}>{item.customer_id}</div>
+                      </td>
+                      <td><span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--danger)' }}>{item.old_serial_number}</span></td>
+                      <td><ArrowRight size={14} style={{ color: 'var(--text-muted)' }} /></td>
+                      <td>
+                        <span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--success)' }}>
+                          {item.new_sn?.serial_number || '-'}
+                        </span>
+                        {item.new_sn?.brand && (
+                          <div className="text-secondary" style={{ fontSize: '10px' }}>{item.new_sn.brand.brand_name} {item.new_sn.type?.type_name}</div>
+                        )}
+                      </td>
+                      <td className="text-secondary">{item.reason || '-'}</td>
+                      <td style={{ fontSize: '12px' }}>{getTechNames(item.technicians)}</td>
+                      {can(role, 'ont.delete') && (
+                        <td style={{ textAlign: 'right' }}>
+                          <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="mobile-only mobile-card-list">
+                {filtered.map(item => (
+                  <div key={item.id} className="mobile-card">
+                    <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
+                      <div>
+                        <div className="mobile-card-title">{item.customer_name}</div>
+                        <div className="mobile-card-subtitle">{item.customer_id}</div>
+                      </div>
+                      <div className="text-secondary" style={{ fontSize: '12px' }}>
+                        {format(new Date(item.replacement_date), 'dd MMM yyyy', { locale: id })}
+                      </div>
+                    </div>
+                    {expandedId === item.id && (
+                      <div className="mobile-card-body">
+                        <div className="mobile-info-row">
+                          <span className="mobile-info-label">SN Lama</span>
+                          <span className="mobile-info-value" style={{ fontFamily: 'monospace', color: 'var(--danger)' }}>{item.old_serial_number}</span>
+                        </div>
+                        <div className="mobile-info-row">
+                          <span className="mobile-info-label">SN Baru</span>
+                          <span className="mobile-info-value">
+                            <span style={{ fontFamily: 'monospace', color: 'var(--success)' }}>{item.new_sn?.serial_number || '-'}</span>
+                            {item.new_sn?.brand && <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{item.new_sn.brand.brand_name} {item.new_sn.type?.type_name}</div>}
+                          </span>
+                        </div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Alasan</span><span className="mobile-info-value">{item.reason || '-'}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(item.technicians)}</span></div>
+                        {can(role, 'ont.delete') && (
+                          <div className="mobile-card-actions">
+                            <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           ) : (
             <div className="empty-state"><RefreshCcw size={48} /><h3>Belum Ada Data</h3><p>Belum ada riwayat pergantian ONT.</p></div>
           )}

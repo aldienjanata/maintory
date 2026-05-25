@@ -27,6 +27,7 @@ export default function StokGudang() {
   const [editItem, setEditItem] = useState(null)
   const [form, setForm] = useState({ item_name: '', initial_stock: '', unit: 'unit', item_type: 'other' })
   const [saving, setSaving] = useState(false)
+  const [expandedId, setExpandedId] = useState(null)
 
   useEffect(() => { fetchItems() }, [])
 
@@ -341,48 +342,86 @@ export default function StokGudang() {
           {loading ? (
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : filtered.length > 0 ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Nama Item</th>
-                  <th>Tipe</th>
-                  <th>Stok Awal</th>
-                  <th>Stok Keluar</th>
-                  <th>Stok Saat Ini</th>
-                  <th>Satuan</th>
-                  {can(role, 'inventory.stok.manage') && <th style={{ textAlign: 'right' }}>Aksi</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(item => (
-                  <tr key={item.id}>
-                    <td className="font-semibold">{item.item_name}</td>
-                    <td>{getTypeBadge(item.item_type)}</td>
-                    <td>{item.item_type?.startsWith('dropcore') ? `${item.display_initial} Haspel` : item.display_initial}</td>
-                    <td>{item.item_type?.startsWith('dropcore') ? `${item.display_out} Haspel` : item.display_out}</td>
-                    <td>
-                      <span style={{ fontSize: '16px', fontWeight: 700, color: item.display_current <= 0 ? 'var(--danger)' : 'var(--accent)' }}>
-                        {item.item_type?.startsWith('dropcore') 
-                          ? `${item.display_current} Haspel (${Math.round(item.remaining_meters || 0)} m)` 
-                          : item.display_current
-                        }
-                      </span>
-                    </td>
-                    <td className="text-secondary">{item.unit}</td>
-                    {can(role, 'inventory.stok.manage') && (
-                      <td style={{ textAlign: 'right' }}>
-                        <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                          <button className="btn-icon" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
-                          {can(role, 'inventory.stok.manage') && (
-                            <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
-                          )}
-                        </div>
-                      </td>
-                    )}
+            <>
+              <table className="desktop-only">
+                <thead>
+                  <tr>
+                    <th>Nama Item</th>
+                    <th>Tipe</th>
+                    <th>Stok Awal</th>
+                    <th>Stok Keluar</th>
+                    <th>Stok Saat Ini</th>
+                    <th>Satuan</th>
+                    {can(role, 'inventory.stok.manage') && <th style={{ textAlign: 'right' }}>Aksi</th>}
                   </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(item => (
+                    <tr key={item.id}>
+                      <td className="font-semibold">{item.item_name}</td>
+                      <td>{getTypeBadge(item.item_type)}</td>
+                      <td>{item.item_type?.startsWith('dropcore') ? `${item.display_initial} Haspel` : item.display_initial}</td>
+                      <td>{item.item_type?.startsWith('dropcore') ? `${item.display_out} Haspel` : item.display_out}</td>
+                      <td>
+                        <span style={{ fontSize: '16px', fontWeight: 700, color: item.display_current <= 0 ? 'var(--danger)' : 'var(--accent)' }}>
+                          {item.item_type?.startsWith('dropcore') 
+                            ? `${item.display_current} Haspel (${Math.round(item.remaining_meters || 0)} m)` 
+                            : item.display_current
+                          }
+                        </span>
+                      </td>
+                      <td className="text-secondary">{item.unit}</td>
+                      {can(role, 'inventory.stok.manage') && (
+                        <td style={{ textAlign: 'right' }}>
+                          <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                            <button className="btn-icon" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
+                            {can(role, 'inventory.stok.manage') && (
+                              <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="mobile-only mobile-card-list">
+                {filtered.map(item => (
+                  <div key={item.id} className="mobile-card">
+                    <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
+                      <div>
+                        <div className="mobile-card-title">{item.item_name}</div>
+                        <div className="mobile-card-subtitle">{getTypeBadge(item.item_type)}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '15px', fontWeight: 'bold', color: item.display_current <= 0 ? 'var(--danger)' : 'var(--accent)' }}>
+                          {item.item_type?.startsWith('dropcore') ? `${item.display_current} Hsp` : item.display_current}
+                        </div>
+                      </div>
+                    </div>
+                    {expandedId === item.id && (
+                      <div className="mobile-card-body">
+                        <div className="mobile-info-row"><span className="mobile-info-label">Stok Awal</span><span className="mobile-info-value">{item.item_type?.startsWith('dropcore') ? `${item.display_initial} Haspel` : item.display_initial}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Stok Keluar</span><span className="mobile-info-value">{item.item_type?.startsWith('dropcore') ? `${item.display_out} Haspel` : item.display_out}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Satuan</span><span className="mobile-info-value">{item.unit}</span></div>
+                        {item.item_type?.startsWith('dropcore') && (
+                          <div className="mobile-info-row"><span className="mobile-info-label">Sisa Meter</span><span className="mobile-info-value">{Math.round(item.remaining_meters || 0)} m</span></div>
+                        )}
+                        {can(role, 'inventory.stok.manage') && (
+                          <div className="mobile-card-actions">
+                            <button className="btn btn-secondary btn-sm" onClick={() => openEdit(item)}><Edit2 size={14} /> Edit</button>
+                            {can(role, 'inventory.stok.manage') && (
+                              <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           ) : (
             <div className="empty-state"><Package size={48} /><h3>Stok Kosong</h3><p>Belum ada item tersimpan.</p></div>
           )}

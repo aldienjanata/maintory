@@ -38,6 +38,7 @@ export default function Pengeluaran() {
   
   const [activeTab, setActiveTab] = useState('pengeluaran')
   const [schedules, setSchedules] = useState([])
+  const [expandedId, setExpandedId] = useState(null)
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
   const [scheduleForm, setScheduleForm] = useState({ schedule_date: format(new Date(), 'yyyy-MM-dd'), site: 'banyumas', work_type: 'ikr_psb', technicians: [], note: '' })
   const [myPendingSchedules, setMyPendingSchedules] = useState([])
@@ -348,36 +349,66 @@ export default function Pengeluaran() {
           {loading ? (
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : filtered.length > 0 ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Tanggal</th>
-                  <th>Lokasi</th>
-                  <th>Jenis Pekerjaan</th>
-                  <th>Teknisi</th>
-                  <th>Jumlah Item</th>
-                  <th>Note</th>
-                  {can(role, 'pengeluaran.delete') && <th style={{ textAlign: 'right' }}>Aksi</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(exp => (
-                  <tr key={exp.id}>
-                    <td className="font-semibold">{format(new Date(exp.expense_date), 'dd MMM yyyy', { locale: id })}</td>
-                    <td><span className="badge badge-info">{SITES.find(s => s.value === exp.site)?.label || exp.site}</span></td>
-                    <td><span className="badge badge-accent">{WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type}</span></td>
-                    <td>{getTechNames(exp.technicians)}</td>
-                    <td>{exp.items?.length || 0} item</td>
-                    <td className="text-secondary">{exp.note || '-'}</td>
-                    {can(role, 'pengeluaran.delete') && (
-                      <td style={{ textAlign: 'right' }}>
-                        <button className="btn-icon text-danger" onClick={() => handleDelete(exp)}><Trash2 size={15} /></button>
-                      </td>
-                    )}
+            <>
+              <table className="desktop-only">
+                <thead>
+                  <tr>
+                    <th>Tanggal</th>
+                    <th>Lokasi</th>
+                    <th>Jenis Pekerjaan</th>
+                    <th>Teknisi</th>
+                    <th>Jumlah Item</th>
+                    <th>Note</th>
+                    {can(role, 'pengeluaran.delete') && <th style={{ textAlign: 'right' }}>Aksi</th>}
                   </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(exp => (
+                    <tr key={exp.id}>
+                      <td className="font-semibold">{format(new Date(exp.expense_date), 'dd MMM yyyy', { locale: id })}</td>
+                      <td><span className="badge badge-info">{SITES.find(s => s.value === exp.site)?.label || exp.site}</span></td>
+                      <td><span className="badge badge-accent">{WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type}</span></td>
+                      <td>{getTechNames(exp.technicians)}</td>
+                      <td>{exp.items?.length || 0} item</td>
+                      <td className="text-secondary">{exp.note || '-'}</td>
+                      {can(role, 'pengeluaran.delete') && (
+                        <td style={{ textAlign: 'right' }}>
+                          <button className="btn-icon text-danger" onClick={() => handleDelete(exp)}><Trash2 size={15} /></button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="mobile-only mobile-card-list">
+                {filtered.map(exp => (
+                  <div key={exp.id} className="mobile-card">
+                    <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === exp.id ? null : exp.id)}>
+                      <div>
+                        <div className="mobile-card-title">{format(new Date(exp.expense_date), 'dd MMM yyyy', { locale: id })}</div>
+                        <div className="mobile-card-subtitle">{SITES.find(s => s.value === exp.site)?.label || exp.site}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span className="badge badge-accent">{WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type}</span>
+                      </div>
+                    </div>
+                    {expandedId === exp.id && (
+                      <div className="mobile-card-body">
+                        <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(exp.technicians)}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Jumlah Item</span><span className="mobile-info-value">{exp.items?.length || 0} item</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Note</span><span className="mobile-info-value">{exp.note || '-'}</span></div>
+                        {can(role, 'pengeluaran.delete') && (
+                          <div className="mobile-card-actions">
+                            <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(exp)}><Trash2 size={14} /> Hapus</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </>
           ) : (
             <div className="empty-state"><Truck size={48} /><h3>Belum Ada Data</h3><p>Belum ada pengeluaran tercatat.</p></div>
           )}
