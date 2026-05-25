@@ -77,8 +77,17 @@ export default function Pengeluaran() {
       const allScheds = schedRes.data || []
       setSchedules(allScheds)
       const today = format(new Date(), 'yyyy-MM-dd')
-      setMyPendingSchedules(allScheds.filter(s => s.status === 'pending' && s.technicians?.includes(profile.id) && s.schedule_date < today))
-      setMyTodaySchedule(allScheds.find(s => s.schedule_date === today && s.technicians?.includes(profile.id)) || null)
+      // Jadwal pending = status bukan 'completed' (termasuk null/pending) untuk teknisi ini, SEBELUM hari ini
+      setMyPendingSchedules(allScheds.filter(s =>
+        s.status !== 'completed' &&
+        s.technicians?.includes(profile.id) &&
+        s.schedule_date < today
+      ))
+      // Jadwal hari ini untuk teknisi ini (belum selesai)
+      setMyTodaySchedule(allScheds.find(s =>
+        s.schedule_date === today &&
+        s.technicians?.includes(profile.id)
+      ) || null)
     }
     setLoading(false)
   }
@@ -93,7 +102,8 @@ export default function Pengeluaran() {
     if (scheduleForm.technicians.length === 0) { toast.error('Pilih minimal 1 teknisi'); return }
     setSaving(true)
     try {
-      const { error } = await supabase.from('technician_schedules').insert({ ...scheduleForm, created_by: profile.id })
+      // status: 'pending' wajib agar filter teknisi berjalan
+      const { error } = await supabase.from('technician_schedules').insert({ ...scheduleForm, status: 'pending', created_by: profile.id })
       if (error) throw error
       await logActivity({ userId: profile.id, username: profile.username, role, module: 'Jadwal Teknisi', action: 'Tambah Jadwal', detail: `${scheduleForm.schedule_date} - ${scheduleForm.site}` })
       toast.success('Jadwal berhasil ditambahkan')
@@ -306,8 +316,25 @@ export default function Pengeluaran() {
         </div>
       </div>
 
+      {/* Banner jadwal HARI INI untuk teknisi */}
+      {myTodaySchedule && myTodaySchedule.status !== 'completed' && (
+        <div style={{ padding: '16px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <AlertCircle size={24} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <h4 style={{ color: 'var(--accent)', margin: '0 0 4px 0', fontSize: '15px' }}>Jadwal Tugas Hari Ini</h4>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+              {SITES.find(s => s.value === myTodaySchedule.site)?.label || myTodaySchedule.site} — {WORK_TYPES.find(w => w.value === myTodaySchedule.work_type)?.label || myTodaySchedule.work_type}
+            </p>
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(myTodaySchedule)}>
+            <Plus size={14} /> Isi Pengeluaran Hari Ini
+          </button>
+        </div>
+      )}
+
+      {/* Banner tunggakan pengeluaran (jadwal masa lalu belum diisi) */}
       {myPendingSchedules.length > 0 && (
-        <div style={{ padding: '16px', background: 'var(--danger-dim)', border: '1px solid var(--danger)', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ padding: '16px', background: 'var(--danger-dim)', border: '1px solid var(--danger)', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
           <AlertCircle size={24} style={{ color: 'var(--danger)', flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <h4 style={{ color: 'var(--danger)', margin: '0 0 4px 0', fontSize: '15px' }}>Tunggakan Laporan Pengeluaran</h4>
