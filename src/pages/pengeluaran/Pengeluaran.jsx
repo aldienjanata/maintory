@@ -329,11 +329,6 @@ export default function Pengeluaran() {
           <button className="btn btn-secondary" onClick={handleExportExcel}>
             <Download size={16} /> Export
           </button>
-          {can(role, 'pengeluaran.input') && (
-            <button className="btn btn-primary" onClick={() => handleOpenAddExpense()}>
-              <Plus size={16} /> Tambah Pengeluaran
-            </button>
-          )}
         </div>
       </div>
 
