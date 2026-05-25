@@ -172,60 +172,92 @@ export default function SerialNumber() {
   const handleImportExcel = async (e) => {
     const file = e.target.files[0]
     if (!file) return
+    setSaving(true)
     const reader = new FileReader()
     reader.onload = async (evt) => {
       try {
         const wb = XLSX.read(evt.target.result, { type: 'binary' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const data = XLSX.utils.sheet_to_json(ws)
-        if (!data.length) { toast.error('File kosong'); return }
+        if (!data.length) { toast.error('File kosong'); setSaving(false); return }
         
+        // Step 1: Extract unique brands from excel
+        const uniqueBrands = [...new Set(data.map(r => String(r['Merk'] || '').trim()).filter(Boolean))]
+        const brandMap = {}
+        // Copy existing brands
+        brands.forEach(b => { brandMap[b.brand_name.toLowerCase()] = b.id })
+        
+        for (const bName of uniqueBrands) {
+          const lowerName = bName.toLowerCase()
+          if (!brandMap[lowerName] && bName !== '-') {
+            // Insert new brand
+            const { data: newBrand, error } = await supabase.from('ont_brands').insert([{ brand_name: bName }]).select().single()
+            if (!error && newBrand) {
+              brandMap[lowerName] = newBrand.id
+            }
+          }
+        }
+
+        // Step 2: Fetch all types to avoid duplicates
+        const { data: allTypes } = await supabase.from('ont_types').select('id, brand_id, type_name')
+        const typeMap = {} // key: brandId_typeNameLower -> value: typeId
+        if (allTypes) {
+          allTypes.forEach(t => { typeMap[`${t.brand_id}_${t.type_name.toLowerCase()}`] = t.id })
+        }
+
+        // Step 3: Insert missing types
+        const typesToInsert = []
+        data.forEach(r => {
+          const mName = String(r['Merk'] || '').trim().toLowerCase()
+          const bId = brandMap[mName]
+          const tName = String(r['Tipe'] || '').trim()
+          if (bId && tName && tName !== '-') {
+            const key = `${bId}_${tName.toLowerCase()}`
+            if (!typeMap[key] && !typesToInsert.find(t => t.brand_id === bId && t.type_name.toLowerCase() === tName.toLowerCase())) {
+              typesToInsert.push({ brand_id: bId, type_name: tName })
+            }
+          }
+        })
+
+        if (typesToInsert.length > 0) {
+          const { data: newTypes, error } = await supabase.from('ont_types').insert(typesToInsert).select()
+          if (!error && newTypes) {
+            newTypes.forEach(t => { typeMap[`${t.brand_id}_${t.type_name.toLowerCase()}`] = t.id })
+          }
+        }
+
+        // Step 4: Map data to insertion payload
         const toInsert = data.map(row => {
           const sn = String(row['Serial Number'] || '').trim()
           if (!sn) return null
           
-          const merkName = String(row['Merk'] || '').trim().toLowerCase()
-          const tipeName = String(row['Tipe'] || '').trim().toLowerCase()
+          const mName = String(row['Merk'] || '').trim().toLowerCase()
+          const tName = String(row['Tipe'] || '').trim().toLowerCase()
           
-          // Match brands case-insensitive
-          const matchedBrand = brands.find(b => b.brand_name.toLowerCase() === merkName)
-          // Find type that belongs to this brand (we'll fetch all types in bulk or rely on a global types list. Since types is populated based on selected brand, we need a better way. But for import, let's just match any type name if brand is matched)
-          // Actually, we don't have all types in `types` state, only the ones for the selected brand!
-          // We need to fetch all types or ignore type if not found. Let's just find by name if possible, or null.
-          
+          const bId = brandMap[mName] || null
+          const tId = bId && tName && tName !== '-' ? typeMap[`${bId}_${tName}`] || null : null
+
           return {
             serial_number: sn,
             date_in: row['Tanggal Masuk (yyyy-mm-dd)'] || row['Tanggal Masuk'] || format(new Date(), 'yyyy-MM-dd'),
             status: 'tersedia',
             note: String(row['Note'] || '').trim(),
-            brand_id: matchedBrand ? matchedBrand.id : null,
-            // Hack for type_id: we will skip it for now in bulk import unless we pre-fetch all types.
-            // Let's just leave type_id as null if we can't reliably resolve it without a massive query.
+            brand_id: bId,
+            type_id: tId,
             created_by: profile.id,
           }
         }).filter(r => r)
         
-        if (!toInsert.length) { toast.error('Tidak ada data valid'); return }
+        if (!toInsert.length) { toast.error('Tidak ada data valid'); setSaving(false); return }
         
-        // Wait, to be safe, I should just fetch all types once here to resolve type_ids.
-        const { data: allTypes } = await supabase.from('ont_types').select('id, brand_id, type_name')
-        if (allTypes) {
-          toInsert.forEach(item => {
-            const row = data.find(r => String(r['Serial Number'] || '').trim() === item.serial_number)
-            if (row) {
-              const tipeName = String(row['Tipe'] || '').trim().toLowerCase()
-              const matchedType = allTypes.find(t => t.brand_id === item.brand_id && t.type_name.toLowerCase() === tipeName)
-              if (matchedType) item.type_id = matchedType.id
-            }
-          })
-        }
-
         const { error } = await supabase.from('serial_numbers').insert(toInsert)
         if (error) throw error
         toast.success(`${toInsert.length} SN berhasil diimport`)
         fetchAll()
       } catch (err) {
         toast.error('Gagal import: ' + err.message)
+      } finally {
+        setSaving(false)
       }
     }
     reader.readAsBinaryString(file)
