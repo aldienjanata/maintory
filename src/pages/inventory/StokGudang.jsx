@@ -28,6 +28,8 @@ export default function StokGudang() {
   const [form, setForm] = useState({ item_name: '', initial_stock: '', unit: 'unit', item_type: 'other' })
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
 
   useEffect(() => { fetchItems() }, [])
 
@@ -170,6 +172,7 @@ export default function StokGudang() {
   )
 
   const totalStok = filtered.reduce((s, i) => s + (Number(i.display_current) || 0), 0)
+  const paginated = filtered.slice((page - 1) * perPage, page * perPage)
 
   const handleExportExcel = () => {
     const ws = XLSX.utils.json_to_sheet(filtered.map(i => ({
@@ -343,7 +346,7 @@ export default function StokGudang() {
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : filtered.length > 0 ? (
             <>
-              <table className="desktop-only">
+              <table>
                 <thead>
                   <tr>
                     <th>Nama Item</th>
@@ -356,7 +359,7 @@ export default function StokGudang() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(item => (
+                  {paginated.map(item => (
                     <tr key={item.id}>
                       <td className="font-semibold">{item.item_name}</td>
                       <td>{getTypeBadge(item.item_type)}</td>
@@ -364,8 +367,8 @@ export default function StokGudang() {
                       <td>{item.item_type?.startsWith('dropcore') ? `${item.display_out} Haspel` : item.display_out}</td>
                       <td>
                         <span style={{ fontSize: '16px', fontWeight: 700, color: item.display_current <= 0 ? 'var(--danger)' : 'var(--accent)' }}>
-                          {item.item_type?.startsWith('dropcore') 
-                            ? `${item.display_current} Haspel (${Math.round(item.remaining_meters || 0)} m)` 
+                          {item.item_type?.startsWith('dropcore')
+                            ? `${item.display_current} Haspel (${Math.round(item.remaining_meters || 0)} m)`
                             : item.display_current
                           }
                         </span>
@@ -375,9 +378,7 @@ export default function StokGudang() {
                         <td style={{ textAlign: 'right' }}>
                           <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
                             <button className="btn-icon" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
-                            {can(role, 'inventory.stok.manage') && (
-                              <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
-                            )}
+                            <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
                           </div>
                         </td>
                       )}
@@ -385,9 +386,8 @@ export default function StokGudang() {
                   ))}
                 </tbody>
               </table>
-
               <div className="mobile-only mobile-card-list">
-                {filtered.map(item => (
+                {paginated.map(item => (
                   <div key={item.id} className="mobile-card">
                     <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
                       <div>
@@ -411,15 +411,39 @@ export default function StokGudang() {
                         {can(role, 'inventory.stok.manage') && (
                           <div className="mobile-card-actions">
                             <button className="btn btn-secondary btn-sm" onClick={() => openEdit(item)}><Edit2 size={14} /> Edit</button>
-                            {can(role, 'inventory.stok.manage') && (
-                              <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
-                            )}
+                            <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
                           </div>
                         )}
                       </div>
                     )}
                   </div>
                 ))}
+              </div>
+              {/* Pagination */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', marginTop: '4px', borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    Showing {filtered.length === 0 ? 0 : (page-1)*perPage+1}–{Math.min(page*perPage, filtered.length)} of {filtered.length} entries
+                  </span>
+                  <select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(1) }} style={{ padding: '3px 8px', borderRadius: '6px', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer' }}>
+                    {[10,25,50,100].map(n => <option key={n} value={n}>{n} / hal</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  {(() => {
+                    const tp = Math.ceil(filtered.length / perPage)
+                    const btns = []
+                    btns.push(<button key="first" onClick={() => setPage(1)} disabled={page===1} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page===1?'var(--text-muted)':'var(--text-primary)', cursor: page===1?'default':'pointer', fontSize:'13px' }}>«</button>)
+                    btns.push(<button key="prev" onClick={() => setPage(p=>Math.max(1,p-1))} disabled={page===1} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page===1?'var(--text-muted)':'var(--text-primary)', cursor: page===1?'default':'pointer', fontSize:'13px' }}>‹</button>)
+                    let s=Math.max(1,page-2), e=Math.min(tp,page+2)
+                    if(s>1) btns.push(<span key="se" style={{padding:'4px 4px',color:'var(--text-muted)',fontSize:'13px'}}>...</span>)
+                    for(let i=s;i<=e;i++) btns.push(<button key={i} onClick={()=>setPage(i)} style={{ padding:'4px 10px', borderRadius:'6px', background: i===page?'var(--accent)':'var(--bg-card)', border:'1px solid var(--border)', color: i===page?'#000':'var(--text-primary)', cursor:'pointer', fontWeight: i===page?700:400, fontSize:'13px' }}>{i}</button>)
+                    if(e<tp) btns.push(<span key="ee" style={{padding:'4px 4px',color:'var(--text-muted)',fontSize:'13px'}}>...</span>)
+                    btns.push(<button key="next" onClick={() => setPage(p=>Math.min(tp,p+1))} disabled={page>=tp} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page>=tp?'var(--text-muted)':'var(--text-primary)', cursor: page>=tp?'default':'pointer', fontSize:'13px' }}>›</button>)
+                    btns.push(<button key="last" onClick={() => setPage(tp)} disabled={page>=tp} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page>=tp?'var(--text-muted)':'var(--text-primary)', cursor: page>=tp?'default':'pointer', fontSize:'13px' }}>»</button>)
+                    return btns
+                  })()}
+                </div>
               </div>
             </>
           ) : (

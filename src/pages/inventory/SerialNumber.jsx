@@ -27,8 +27,11 @@ export default function SerialNumber() {
   const [editItem, setEditItem] = useState(null)
   const [form, setForm] = useState({ brand_id: '', type_id: '', serial_number: '', date_in: format(new Date(), 'yyyy-MM-dd'), note: '', status: 'tersedia' })
   const [saving, setSaving] = useState(false)
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
 
   useEffect(() => { fetchAll() }, [])
+  useEffect(() => { setPage(1) }, [searchTerm, statusFilter, brandFilter])
 
   const fetchAll = async () => {
     setLoading(true)
@@ -131,6 +134,8 @@ export default function SerialNumber() {
     const matchBrand = brandFilter === 'all' || i.brand_id === brandFilter
     return matchSearch && matchStatus && matchBrand
   })
+
+  const paginated = filtered.slice((page - 1) * perPage, page * perPage)
 
   const statsData = {
     total: items.length,
@@ -310,7 +315,7 @@ export default function SerialNumber() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(item => (
+                  {paginated.map(item => (
                     <tr key={item.id}>
                       <td><span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '13px' }}>{item.serial_number}</span></td>
                       <td>{item.brand?.brand_name || '-'}</td>
@@ -353,7 +358,7 @@ export default function SerialNumber() {
               </table>
 
               <div className="mobile-only mobile-card-list">
-                {filtered.map(item => (
+                {paginated.map(item => (
                   <div key={item.id} className="mobile-card">
                     <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
                       <div>
@@ -397,6 +402,32 @@ export default function SerialNumber() {
                     )}
                   </div>
                 ))}
+              </div>
+              {/* Pagination */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', marginTop: '4px', borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    Showing {filtered.length === 0 ? 0 : (page-1)*perPage+1}–{Math.min(page*perPage, filtered.length)} of {filtered.length} entries
+                  </span>
+                  <select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(1) }} style={{ padding: '3px 8px', borderRadius: '6px', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer' }}>
+                    {[10,25,50,100].map(n => <option key={n} value={n}>{n} / hal</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  {(() => {
+                    const tp = Math.ceil(filtered.length / perPage)
+                    const btns = []
+                    btns.push(<button key="first" onClick={() => setPage(1)} disabled={page===1} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page===1?'var(--text-muted)':'var(--text-primary)', cursor: page===1?'default':'pointer', fontSize:'13px' }}>«</button>)
+                    btns.push(<button key="prev" onClick={() => setPage(p=>Math.max(1,p-1))} disabled={page===1} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page===1?'var(--text-muted)':'var(--text-primary)', cursor: page===1?'default':'pointer', fontSize:'13px' }}>‹</button>)
+                    let s=Math.max(1,page-2), e=Math.min(tp,page+2)
+                    if(s>1) btns.push(<span key="se" style={{padding:'4px 4px',color:'var(--text-muted)',fontSize:'13px'}}>...</span>)
+                    for(let i=s;i<=e;i++) btns.push(<button key={i} onClick={()=>setPage(i)} style={{ padding:'4px 10px', borderRadius:'6px', background: i===page?'var(--accent)':'var(--bg-card)', border:'1px solid var(--border)', color: i===page?'#000':'var(--text-primary)', cursor:'pointer', fontWeight: i===page?700:400, fontSize:'13px' }}>{i}</button>)
+                    if(e<tp) btns.push(<span key="ee" style={{padding:'4px 4px',color:'var(--text-muted)',fontSize:'13px'}}>...</span>)
+                    btns.push(<button key="next" onClick={() => setPage(p=>Math.min(tp,p+1))} disabled={page>=tp} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page>=tp?'var(--text-muted)':'var(--text-primary)', cursor: page>=tp?'default':'pointer', fontSize:'13px' }}>›</button>)
+                    btns.push(<button key="last" onClick={() => setPage(tp)} disabled={page>=tp} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page>=tp?'var(--text-muted)':'var(--text-primary)', cursor: page>=tp?'default':'pointer', fontSize:'13px' }}>»</button>)
+                    return btns
+                  })()}
+                </div>
               </div>
             </>
           ) : (

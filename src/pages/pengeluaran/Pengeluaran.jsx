@@ -37,6 +37,10 @@ export default function Pengeluaran() {
   const [saving, setSaving] = useState(false)
   
   const [activeTab, setActiveTab] = useState('pengeluaran')
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
+  const [schedPage, setSchedPage] = useState(1)
+  const [schedPerPage, setSchedPerPage] = useState(10)
   const [schedules, setSchedules] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
@@ -424,8 +428,66 @@ export default function Pengeluaran() {
           {loading ? (
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : combinedData.length > 0 ? (
-            <div className="mobile-card-list">
-              {combinedData.map(item => {
+            <>
+              <table className="desktop-only">
+                <thead>
+                  <tr>
+                    <th>Tanggal</th>
+                    <th>Teknisi</th>
+                    <th>Lokasi</th>
+                    <th>Pekerjaan</th>
+                    <th>Status</th>
+                    <th>Rincian</th>
+                    <th style={{ textAlign: 'right' }}>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedCombined.map(item => (
+                    <tr key={item.isSchedule ? `sched-${item.id}` : `exp-${item.id}`}>
+                      <td>{format(new Date(item.expense_date), 'dd MMM yyyy', { locale: id })}</td>
+                      <td>{getTechNames(item.technicians)}</td>
+                      <td>{SITES.find(s => s.value === item.site)?.label || item.site}</td>
+                      <td>{WORK_TYPES.find(w => w.value === item.work_type)?.label || item.work_type}</td>
+                      <td>
+                        {item.isSchedule 
+                          ? <span className="badge badge-warning">Belum Isi</span>
+                          : <span className="badge badge-success">Sudah Terisi</span>}
+                      </td>
+                      <td>
+                        {item.isSchedule ? (
+                          <span className="text-secondary" style={{ fontSize: '13px' }}>Belum ada rincian</span>
+                        ) : (
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                            {item.items?.map((it, i) => {
+                              let label = ''
+                              if (it.item_type === 'ont') label = `ONT: ${it.sn?.serial_number || '-'}`
+                              else if (it.item_type === 'dropcore') label = `DC: ${it.haspel?.haspel_code || '-'} (${it.meters_used}m)`
+                              else if (it.item_type === 'other') label = `${it.warehouse_item?.item_name || 'Barang'} (${it.quantity})`
+                              return <div key={i}>• {label}</div>
+                            })}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        {item.isSchedule ? (
+                           (item.technicians?.includes(profile.id) || ['admin', 'superadmin'].includes(role)) && (
+                            <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(item)}>
+                              Isi
+                            </button>
+                           )
+                        ) : (
+                          can(role, 'pengeluaran.delete') && (
+                            <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
+                          )
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="mobile-only mobile-card-list">
+                {paginatedCombined.map(item => {
                 if (item.isSchedule) {
                   return (
                     <div key={`sched-${item.id}`} className="mobile-card" style={{ borderLeft: '4px solid var(--warning)' }}>
@@ -501,6 +563,33 @@ export default function Pengeluaran() {
                 )
               })}
             </div>
+            {/* Pagination Pengeluaran */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', marginTop: '4px', borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  Showing {combinedData.length === 0 ? 0 : (page-1)*perPage+1}–{Math.min(page*perPage, combinedData.length)} of {combinedData.length} entries
+                </span>
+                <select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(1) }} style={{ padding: '3px 8px', borderRadius: '6px', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer' }}>
+                  {[10,25,50,100].map(n => <option key={n} value={n}>{n} / hal</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                {(() => {
+                  const tp = Math.ceil(combinedData.length / perPage)
+                  const btns = []
+                  btns.push(<button key="first" onClick={() => setPage(1)} disabled={page===1} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page===1?'var(--text-muted)':'var(--text-primary)', cursor: page===1?'default':'pointer', fontSize:'13px' }}>«</button>)
+                  btns.push(<button key="prev" onClick={() => setPage(p=>Math.max(1,p-1))} disabled={page===1} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page===1?'var(--text-muted)':'var(--text-primary)', cursor: page===1?'default':'pointer', fontSize:'13px' }}>‹</button>)
+                  let s=Math.max(1,page-2), e=Math.min(tp,page+2)
+                  if(s>1) btns.push(<span key="se" style={{padding:'4px 4px',color:'var(--text-muted)',fontSize:'13px'}}>...</span>)
+                  for(let i=s;i<=e;i++) btns.push(<button key={i} onClick={()=>setPage(i)} style={{ padding:'4px 10px', borderRadius:'6px', background: i===page?'var(--accent)':'var(--bg-card)', border:'1px solid var(--border)', color: i===page?'#000':'var(--text-primary)', cursor:'pointer', fontWeight: i===page?700:400, fontSize:'13px' }}>{i}</button>)
+                  if(e<tp) btns.push(<span key="ee" style={{padding:'4px 4px',color:'var(--text-muted)',fontSize:'13px'}}>...</span>)
+                  btns.push(<button key="next" onClick={() => setPage(p=>Math.min(tp,p+1))} disabled={page>=tp} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page>=tp?'var(--text-muted)':'var(--text-primary)', cursor: page>=tp?'default':'pointer', fontSize:'13px' }}>›</button>)
+                  btns.push(<button key="last" onClick={() => setPage(tp)} disabled={page>=tp} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page>=tp?'var(--text-muted)':'var(--text-primary)', cursor: page>=tp?'default':'pointer', fontSize:'13px' }}>»</button>)
+                  return btns
+                })()}
+              </div>
+            </div>
+            </>
           ) : (
             <div className="empty-state"><Truck size={48} /><h3>Belum Ada Data</h3><p>Tidak ada data sesuai filter yang dipilih.</p></div>
           )}
@@ -523,8 +612,39 @@ export default function Pengeluaran() {
               </button>
             </div>
           </div>
-          <div className="mobile-card-list">
-            {filteredSchedules.length > 0 ? filteredSchedules.map(t => (
+          <div className="table-container">
+            {filteredSchedules.length > 0 ? (
+              <>
+                <table className="desktop-only">
+                  <thead>
+                    <tr>
+                      <th>Tanggal</th>
+                      <th>Teknisi</th>
+                      <th>Lokasi</th>
+                      <th>Pekerjaan</th>
+                      <th>Status</th>
+                      <th>Note</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedSchedules.map(t => (
+                      <tr key={t.id}>
+                        <td>{format(new Date(t.schedule_date), 'dd MMM yyyy', { locale: id })}</td>
+                        <td>{t.technicians?.length ? getTechNames(t.technicians) : <span className="badge badge-danger">Kosong</span>}</td>
+                        <td>{SITES.find(s => s.value === t.site)?.label || t.site}</td>
+                        <td>{WORK_TYPES.find(w => w.value === t.work_type)?.label || t.work_type}</td>
+                        <td>
+                          {t.isFilled
+                            ? <span className="badge badge-success">Sudah Terisi</span>
+                            : <span className="badge badge-warning">Belum Isi</span>}
+                        </td>
+                        <td className="text-secondary">{t.note || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="mobile-only mobile-card-list">
+                  {paginatedSchedules.map(t => (
               <div key={t.id} className="mobile-card" style={{ borderLeft: `4px solid ${t.isFilled ? 'var(--success)' : 'var(--warning)'}` }}>
                 <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === `jadwal-${t.id}` ? null : `jadwal-${t.id}`)}
                   style={{ cursor: 'pointer' }}>
@@ -546,8 +666,37 @@ export default function Pengeluaran() {
                     {t.note && <div className="mobile-info-row"><span className="mobile-info-label">Note</span><span className="mobile-info-value">{t.note}</span></div>}
                   </div>
                 )}
+                  </div>
+                ))}
               </div>
-            )) : (
+              {/* Pagination Jadwal */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', marginTop: '4px', borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    Showing {filteredSchedules.length === 0 ? 0 : (schedPage-1)*schedPerPage+1}–{Math.min(schedPage*schedPerPage, filteredSchedules.length)} of {filteredSchedules.length} entries
+                  </span>
+                  <select value={schedPerPage} onChange={e => { setSchedPerPage(Number(e.target.value)); setSchedPage(1) }} style={{ padding: '3px 8px', borderRadius: '6px', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer' }}>
+                    {[10,25,50,100].map(n => <option key={n} value={n}>{n} / hal</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  {(() => {
+                    const tp = Math.ceil(filteredSchedules.length / schedPerPage)
+                    const btns = []
+                    btns.push(<button key="first" onClick={() => setSchedPage(1)} disabled={schedPage===1} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: schedPage===1?'var(--text-muted)':'var(--text-primary)', cursor: schedPage===1?'default':'pointer', fontSize:'13px' }}>«</button>)
+                    btns.push(<button key="prev" onClick={() => setSchedPage(p=>Math.max(1,p-1))} disabled={schedPage===1} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: schedPage===1?'var(--text-muted)':'var(--text-primary)', cursor: schedPage===1?'default':'pointer', fontSize:'13px' }}>‹</button>)
+                    let s=Math.max(1,schedPage-2), e=Math.min(tp,schedPage+2)
+                    if(s>1) btns.push(<span key="se" style={{padding:'4px 4px',color:'var(--text-muted)',fontSize:'13px'}}>...</span>)
+                    for(let i=s;i<=e;i++) btns.push(<button key={i} onClick={()=>setSchedPage(i)} style={{ padding:'4px 10px', borderRadius:'6px', background: i===schedPage?'var(--accent)':'var(--bg-card)', border:'1px solid var(--border)', color: i===schedPage?'#000':'var(--text-primary)', cursor:'pointer', fontWeight: i===schedPage?700:400, fontSize:'13px' }}>{i}</button>)
+                    if(e<tp) btns.push(<span key="ee" style={{padding:'4px 4px',color:'var(--text-muted)',fontSize:'13px'}}>...</span>)
+                    btns.push(<button key="next" onClick={() => setSchedPage(p=>Math.min(tp,p+1))} disabled={schedPage>=tp} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: schedPage>=tp?'var(--text-muted)':'var(--text-primary)', cursor: schedPage>=tp?'default':'pointer', fontSize:'13px' }}>›</button>)
+                    btns.push(<button key="last" onClick={() => setSchedPage(tp)} disabled={schedPage>=tp} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: schedPage>=tp?'var(--text-muted)':'var(--text-primary)', cursor: schedPage>=tp?'default':'pointer', fontSize:'13px' }}>»</button>)
+                    return btns
+                  })()}
+                </div>
+              </div>
+            </>
+            ) : (
               <div className="empty-state"><CalendarDays size={40} /><h3>Tidak Ada Jadwal</h3><p>Tidak ada jadwal sesuai filter.</p></div>
             )}
           </div>
