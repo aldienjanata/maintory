@@ -460,7 +460,7 @@ export default function Pengeluaran() {
                   <th>Pekerjaan</th>
                   <th>Tim Teknisi</th>
                   <th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Akses Ekstra</th>
+                  <th style={{ textAlign: 'right' }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -476,15 +476,21 @@ export default function Pengeluaran() {
                         : <span className="badge badge-warning">Belum Isi</span>}
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      {t.status === 'completed' && (
-                        <button 
-                          className={`btn-icon ${t.allow_extra_expense ? 'text-success' : 'text-secondary'}`} 
-                          title={t.allow_extra_expense ? 'Tutup Akses Ekstra' : 'Buka Akses Pengeluaran Tambahan'}
-                          onClick={() => toggleScheduleExtraAccess(t)}
-                        >
-                          {t.allow_extra_expense ? <Unlock size={16} /> : <Lock size={16} />}
-                        </button>
-                      )}
+                      <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                        {t.status !== 'completed' ? (
+                          <button className="btn btn-secondary btn-sm" onClick={() => handleOpenAddExpense(t)}>
+                            <Plus size={14} /> Isi Pengeluaran
+                          </button>
+                        ) : (
+                          <button 
+                            className={`btn-icon ${t.allow_extra_expense ? 'text-success' : 'text-secondary'}`} 
+                            title={t.allow_extra_expense ? 'Tutup Akses Ekstra' : 'Buka Akses Pengeluaran Tambahan'}
+                            onClick={() => toggleScheduleExtraAccess(t)}
+                          >
+                            {t.allow_extra_expense ? <Unlock size={16} /> : <Lock size={16} />}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )) : (
