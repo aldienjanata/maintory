@@ -40,7 +40,13 @@ export default function UpdatePrompt() {
         Ada <strong style={{ color: 'var(--accent)' }}>versi baru</strong>! Perbarui agar aplikasi berjalan lancar.
       </span>
       <button
-        onClick={() => updateServiceWorker(true)}
+        onClick={() => {
+          updateServiceWorker(true).then(() => {
+            // Force hard reload
+            window.location.href = window.location.href
+            window.location.reload(true)
+          })
+        }}
         style={{
           background: 'var(--accent)',
           color: '#0d1117',
