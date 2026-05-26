@@ -259,3 +259,54 @@ CREATE POLICY "Everyone can read their own logs" ON public.activity_logs FOR SEL
 CREATE POLICY "Superadmin can delete logs" ON public.activity_logs FOR DELETE TO authenticated USING (
     (SELECT role FROM public.users WHERE id = auth.uid()) = 'superadmin'
 );
+
+-- ==========================================
+-- RLS POLICIES FOR NEW TABLES (Fixes)
+-- ==========================================
+
+-- 1. activity_logs INSERT
+CREATE POLICY "Anyone can insert logs" ON public.activity_logs FOR INSERT TO authenticated WITH CHECK (true);
+
+-- 2. ont_replacements
+ALTER TABLE public.ont_replacements ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Everyone can read ont_replacements" ON public.ont_replacements FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admin and teknisi can insert ont_replacements" ON public.ont_replacements FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Admin can delete ont_replacements" ON public.ont_replacements FOR DELETE TO authenticated USING (
+    (SELECT role FROM public.users WHERE id = auth.uid()) IN ('superadmin', 'admin')
+);
+
+-- 3. dismantles
+ALTER TABLE public.dismantles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Everyone can read dismantles" ON public.dismantles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admin and teknisi can insert dismantles" ON public.dismantles FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Admin and teknisi can update dismantles" ON public.dismantles FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "Admin can delete dismantles" ON public.dismantles FOR DELETE TO authenticated USING (
+    (SELECT role FROM public.users WHERE id = auth.uid()) IN ('superadmin', 'admin')
+);
+
+-- 4. daily_expenses
+ALTER TABLE public.daily_expenses ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Everyone can read expenses" ON public.daily_expenses FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admin and teknisi can insert expenses" ON public.daily_expenses FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Admin can delete expenses" ON public.daily_expenses FOR DELETE TO authenticated USING (
+    (SELECT role FROM public.users WHERE id = auth.uid()) IN ('superadmin', 'admin', 'teknisi')
+);
+
+-- 5. expense_items
+ALTER TABLE public.expense_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Everyone can read expense_items" ON public.expense_items FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admin and teknisi can insert expense_items" ON public.expense_items FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Admin can delete expense_items" ON public.expense_items FOR DELETE TO authenticated USING (
+    (SELECT role FROM public.users WHERE id = auth.uid()) IN ('superadmin', 'admin', 'teknisi')
+);
+
+-- 6. technician_schedules
+ALTER TABLE public.technician_schedules ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Everyone can read schedules" ON public.technician_schedules FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Admin can manage schedules" ON public.technician_schedules FOR ALL TO authenticated USING (
+    (SELECT role FROM public.users WHERE id = auth.uid()) IN ('superadmin', 'admin')
+);
+CREATE POLICY "Teknisi can update schedule status" ON public.technician_schedules FOR UPDATE TO authenticated USING (
+    (SELECT role FROM public.users WHERE id = auth.uid()) = 'teknisi'
+);
+
