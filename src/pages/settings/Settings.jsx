@@ -69,38 +69,26 @@ export default function Settings() {
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Settings', action: 'Edit User', detail: `User: ${form.username}` })
         toast.success('User berhasil diperbarui')
       } else {
-        // Simpan session admin aktif terlebih dahulu
-        const { data: sessionData } = await supabase.auth.getSession()
-        const adminSession = sessionData?.session
-
-        // Daftarkan user baru menggunakan signUp (tidak perlu service role key)
+        // Buat user baru melalui Vercel API
         const email = `${form.username}@maintory.com`
-        const { data: authData, error: authErr } = await supabase.auth.signUp({
-          email,
-          password: form.password,
-          options: {
-            data: { username: form.username, full_name: form.full_name, role: form.role }
-          }
-        })
-        if (authErr) throw authErr
-        if (!authData?.user) throw new Error('Gagal membuat akun auth')
-
-        // Insert profil user baru ke tabel public.users
-        const { error: dbErr } = await supabase.from('users').insert({
-          id: authData.user.id,
-          username: form.username,
-          full_name: form.full_name,
-          role: form.role,
-          is_active: true
-        })
-        if (dbErr) throw dbErr
-
-        // Restore session admin agar superadmin tidak ter-logout
-        if (adminSession) {
-          await supabase.auth.setSession({
-            access_token: adminSession.access_token,
-            refresh_token: adminSession.refresh_token,
+        const response = await fetch('/api/createUser', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            password: form.password,
+            username: form.username,
+            full_name: form.full_name,
+            role: form.role
           })
+        })
+
+        const result = await response.json()
+        
+        if (!response.ok) {
+          throw new Error(result.error || 'Gagal membuat user')
         }
 
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Settings', action: 'Tambah User', detail: `User baru: ${form.username} (${form.role})` })
