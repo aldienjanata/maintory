@@ -347,7 +347,7 @@ export default function Maintenance() {
                         ) : ticket.status === 'pending' ? (
                           <span className="badge" style={{ background: 'rgba(255,170,0,0.15)', color: '#ffaa00', border: '1px solid rgba(255,170,0,0.3)' }}><Clock size={12} /> Pending</span>
                         ) : (
-                          <span className="badge badge-warning"><AlertCircle size={12} /> Aktif</span>
+                          <span className="badge badge-danger"><AlertCircle size={12} /> Aktif</span>
                         )}
                       </td>
                       <td style={{ textAlign: 'right' }}>
@@ -389,7 +389,7 @@ export default function Maintenance() {
                         ) : ticket.status === 'pending' ? (
                           <span className="badge" style={{ background: 'rgba(255,170,0,0.15)', color: '#ffaa00', border: '1px solid rgba(255,170,0,0.3)' }}><Clock size={10} /> Pending</span>
                         ) : (
-                          <span className="badge badge-warning"><AlertCircle size={10} /> Aktif</span>
+                          <span className="badge badge-danger"><AlertCircle size={10} /> Aktif</span>
                         )}
                       </div>
                     </div>

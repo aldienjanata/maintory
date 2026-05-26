@@ -102,7 +102,7 @@ export default function Dashboard() {
         setMaintenanceChartData(last7Days)
 
         setMaintenanceByStatus([
-          { name: 'Aktif', value: openTickets.length, color: 'var(--warning)' },
+          { name: 'Aktif', value: openTickets.length, color: 'var(--danger)' },
           { name: 'Pending', value: allTickets.filter(t => t.status === 'pending').length, color: '#ffaa00' },
           { name: 'Close', value: allTickets.filter(t => t.status === 'close').length, color: 'var(--success)' },
         ])
@@ -221,11 +221,11 @@ export default function Dashboard() {
 
       {/* ===== ALERT: Maintenance Belum Close ===== */}
       {overdueTickets.length > 0 && (
-        <div className="card mb-3" style={{ borderColor: 'rgba(210, 153, 34, 0.4)', background: 'rgba(210, 153, 34, 0.04)', padding: '12px 14px' }}>
+        <div className="card mb-3" style={{ borderColor: 'rgba(248, 81, 73, 0.4)', background: 'rgba(248, 81, 73, 0.04)', padding: '12px 14px' }}>
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
-              <AlertTriangle size={18} style={{ color: 'var(--warning)' }} />
-              <span className="font-semibold" style={{ color: 'var(--warning)', fontSize: '13.5px' }}>
+              <AlertTriangle size={18} style={{ color: 'var(--danger)' }} />
+              <span className="font-semibold" style={{ color: 'var(--danger)', fontSize: '13.5px' }}>
                 {overdueTickets.length} Tiket Kemarin Belum Selesai
               </span>
             </div>
@@ -233,7 +233,7 @@ export default function Dashboard() {
               <button
                 className="btn btn-ghost btn-sm"
                 onClick={() => setShowAllAlerts(!showAllAlerts)}
-                style={{ color: 'var(--warning)', flexShrink: 0, padding: '2px 6px', fontSize: '11px' }}
+                style={{ color: 'var(--danger)', flexShrink: 0, padding: '2px 6px', fontSize: '11px' }}
               >
                 {showAllAlerts ? <ChevronUp size={14} /> : <><ChevronDown size={14} /> +{overdueTickets.length - 3}</>}
               </button>
@@ -244,8 +244,8 @@ export default function Dashboard() {
             {visibleAlerts.map((ticket) => (
               <div key={ticket.id} className="alert-ticket-row">
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1, minWidth: 0 }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ticket.status === 'pending' ? 'rgba(255,170,0,0.1)' : 'var(--warning-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: ticket.status === 'pending' ? '#ffaa00' : 'var(--warning)' }}>#{ticket.ticket_number}</span>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ticket.status === 'pending' ? 'rgba(255,170,0,0.1)' : 'var(--danger-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: ticket.status === 'pending' ? '#ffaa00' : 'var(--danger)' }}>#{ticket.ticket_number}</span>
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -257,10 +257,10 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                  <span className={`badge ${ticket.status === 'pending' ? '' : 'badge-warning'}`} style={{ fontSize: '10px', ...(ticket.status === 'pending' ? { background: 'rgba(255,170,0,0.15)', color: '#ffaa00', border: '1px solid rgba(255,170,0,0.3)' } : {}) }}>
+                  <span className={`badge ${ticket.status === 'pending' ? '' : 'badge-danger'}`} style={{ fontSize: '10px', ...(ticket.status === 'pending' ? { background: 'rgba(255,170,0,0.15)', color: '#ffaa00', border: '1px solid rgba(255,170,0,0.3)' } : {}) }}>
                     {ticket.status === 'pending' ? <Clock size={9} /> : <AlertTriangle size={9} />} {ticket.status === 'pending' ? 'Pending' : 'Aktif'}
                   </span>
-                  <Link to="/maintenance" className="btn btn-warning btn-sm" style={{ padding: '4px 10px', fontSize: '11px', background: ticket.status === 'pending' ? '#ffaa00' : 'var(--warning)', borderColor: ticket.status === 'pending' ? '#ffaa00' : 'var(--warning)', color: 'black' }}>
+                  <Link to="/maintenance" className="btn btn-danger btn-sm" style={{ padding: '4px 10px', fontSize: '11px', background: ticket.status === 'pending' ? '#ffaa00' : 'var(--danger)', borderColor: ticket.status === 'pending' ? '#ffaa00' : 'var(--danger)', color: ticket.status === 'pending' ? 'black' : 'white' }}>
                     Selesai
                   </Link>
                 </div>
@@ -317,7 +317,7 @@ export default function Dashboard() {
       {/* ===== STATS GRID ===== */}
       <div className="stats-grid mb-4">
         <StatCard title="Masuk Hari Ini" value={stats.maintenanceToday} icon={Wrench} colorVar="var(--accent)" />
-        <StatCard title="Tiket Aktif" value={stats.maintenanceOpen} icon={AlertTriangle} colorVar="var(--warning)" />
+        <StatCard title="Tiket Aktif" value={stats.maintenanceOpen} icon={AlertTriangle} colorVar="var(--danger)" />
         <StatCard title="Stok ONT" value={stats.stockOnt} icon={Package} colorVar="var(--success)" />
         <StatCard title="Dismantle Aktif" value={stats.dismantleActive} icon={ArrowDownToLine} colorVar="var(--danger)" />
       </div>
@@ -344,7 +344,7 @@ export default function Dashboard() {
                 <Tooltip content={<CustomTooltip />} />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px', color: 'var(--text-secondary)' }} />
                 <Bar dataKey="Masuk" fill="var(--accent)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Aktif" fill="var(--warning)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Aktif" fill="var(--danger)" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Pending" fill="#ffaa00" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Close" fill="var(--success)" radius={[4, 4, 0, 0]} />
               </BarChart>
