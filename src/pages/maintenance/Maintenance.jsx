@@ -28,6 +28,7 @@ export default function Maintenance() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [waText, setWaText] = useState('')
   const [parsedTickets, setParsedTickets] = useState([])
+  const [globalTechnicians, setGlobalTechnicians] = useState([]) // Teknisi hari ini, berlaku ke semua tiket
 
   useEffect(() => {
     fetchTickets()
@@ -111,16 +112,11 @@ export default function Maintenance() {
     parseWaText(e.target.value)
   }
 
-  const handleTechnicianChange = (tempId, techId) => {
-    setParsedTickets(prev => prev.map(t => {
-      if (t._id === tempId) {
-        const techs = t.technicians.includes(techId)
-          ? t.technicians.filter(id => id !== techId)
-          : [...t.technicians, techId]
-        return { ...t, technicians: techs }
-      }
-      return t
-    }))
+  // Toggle teknisi global (berlaku untuk semua tiket hari ini)
+  const handleGlobalTechnicianChange = (techId) => {
+    setGlobalTechnicians(prev =>
+      prev.includes(techId) ? prev.filter(id => id !== techId) : [...prev, techId]
+    )
   }
 
   const handleSaveParsed = async () => {
@@ -134,8 +130,10 @@ export default function Maintenance() {
     }
 
     try {
+      // Gunakan globalTechnicians untuk semua tiket
       const toInsert = parsedTickets.map(({ _id, ...rest }) => ({
         ...rest,
+        technicians: globalTechnicians,
         status: 'aktif',
         created_by: profile.id
       }))
@@ -143,19 +141,21 @@ export default function Maintenance() {
       const { error } = await supabase.from('maintenance_tickets').insert(toInsert)
       if (error) throw error
 
+      const techNames = globalTechnicians.map(id => technicians.find(t => t.id === id)?.full_name || '').filter(Boolean).join(', ')
       await logActivity({
         userId: profile.id,
         username: profile.username,
         role: profile.role,
         module: 'Maintenance',
         action: 'Tambah Tiket Massal',
-        detail: `Menambahkan ${toInsert.length} tiket baru`
+        detail: `Menambahkan ${toInsert.length} tiket baru — Teknisi: ${techNames || '-'}`
       })
 
       toast.success(`${toInsert.length} tiket berhasil ditambahkan`)
       setIsAddModalOpen(false)
       setWaText('')
       setParsedTickets([])
+      setGlobalTechnicians([])
       fetchTickets()
     } catch (err) {
       toast.error('Gagal menyimpan data: ' + err.message)
@@ -486,8 +486,35 @@ export default function Maintenance() {
 
               {parsedTickets.length > 0 && (
                 <div>
+                  {/* === PILIH TEKNISI SEKALI UNTUK SEMUA TIKET === */}
+                  <div style={{ background: 'var(--bg-hover)', borderRadius: '10px', padding: '14px 16px', marginBottom: '16px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                      <Wrench size={15} style={{ color: 'var(--accent)' }} />
+                      <span className="font-semibold" style={{ fontSize: '14px' }}>Teknisi Hari Ini</span>
+                      <span className="text-secondary" style={{ fontSize: '12px' }}>— pilihan ini berlaku untuk semua {parsedTickets.length} tiket</span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {technicians.map(tech => (
+                        <button
+                          key={tech.id}
+                          type="button"
+                          onClick={() => handleGlobalTechnicianChange(tech.id)}
+                          className={`badge ${globalTechnicians.includes(tech.id) ? 'badge-accent' : 'badge-muted'}`}
+                          style={{ border: 'none', cursor: 'pointer', padding: '6px 12px', fontSize: '13px' }}
+                        >
+                          {globalTechnicians.includes(tech.id) ? '✓ ' : ''}{tech.full_name}
+                        </button>
+                      ))}
+                    </div>
+                    {globalTechnicians.length === 0 && (
+                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px', marginBottom: 0 }}>
+                        ⚠️ Belum ada teknisi dipilih. Tiket akan disimpan tanpa teknisi.
+                      </p>
+                    )}
+                  </div>
+
                   <h4 className="mb-4 font-semibold text-accent">Preview Hasil Parsing ({parsedTickets.length} Tiket)</h4>
-                  <div className="table-container" style={{ maxHeight: '300px' }}>
+                  <div className="table-container" style={{ maxHeight: '260px' }}>
                     <table>
                       <thead>
                         <tr>
@@ -495,7 +522,6 @@ export default function Maintenance() {
                           <th>Desa</th>
                           <th>Nama / ID Pelanggan</th>
                           <th>Keluhan</th>
-                          <th>Pilih Teknisi</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -508,21 +534,6 @@ export default function Maintenance() {
                               <div className="text-secondary" style={{ fontSize: '11px' }}>{t.customer_id}</div>
                             </td>
                             <td>{t.complaint}</td>
-                            <td>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                {technicians.map(tech => (
-                                  <button
-                                    key={tech.id}
-                                    type="button"
-                                    onClick={() => handleTechnicianChange(t._id, tech.id)}
-                                    className={`badge ${t.technicians.includes(tech.id) ? 'badge-accent' : 'badge-muted'}`}
-                                    style={{ border: 'none', cursor: 'pointer' }}
-                                  >
-                                    {tech.full_name}
-                                  </button>
-                                ))}
-                              </div>
-                            </td>
                           </tr>
                         ))}
                       </tbody>
