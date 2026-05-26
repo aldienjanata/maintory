@@ -67,11 +67,11 @@ export default function Dashboard() {
       if (allTickets) {
         const todayTickets = allTickets.filter(t => isToday(new Date(t.created_at)))
         const openTickets = allTickets.filter(t => t.status === 'aktif')
+        const unresolvedTickets = allTickets.filter(t => t.status === 'aktif' || t.status === 'pending')
 
-        // Tiket Overdue: aktif dan masuk lebih dari 1 hari yang lalu
-        let overdue = openTickets.filter(t => {
-          const days = differenceInDays(new Date(), new Date(t.date_input))
-          return days >= 1
+        // Tiket Alert: aktif atau pending yang masuk TEPAT kemarin (H-1)
+        let overdue = unresolvedTickets.filter(t => {
+          return isYesterday(new Date(t.date_input))
         }).sort((a, b) => new Date(a.date_input) - new Date(b.date_input))
 
         // Untuk teknisi: hanya tampilkan tiket yang melibatkan mereka
@@ -83,7 +83,7 @@ export default function Dashboard() {
         setStats(prev => ({
           ...prev,
           maintenanceToday: todayTickets.length,
-          maintenanceOpen: openTickets.length,
+          maintenanceOpen: unresolvedTickets.length, // total aktif & pending
         }))
 
         // Chart data: maintenance 7 hari terakhir
@@ -96,13 +96,15 @@ export default function Dashboard() {
             Masuk: dayTickets.length,
             Close: dayTickets.filter(t => t.status === 'close').length,
             Aktif: dayTickets.filter(t => t.status === 'aktif').length,
+            Pending: dayTickets.filter(t => t.status === 'pending').length,
           }
         })
         setMaintenanceChartData(last7Days)
 
         setMaintenanceByStatus([
-          { name: 'Aktif', value: openTickets.length },
-          { name: 'Close', value: allTickets.filter(t => t.status === 'close').length },
+          { name: 'Aktif', value: openTickets.length, color: 'var(--warning)' },
+          { name: 'Pending', value: allTickets.filter(t => t.status === 'pending').length, color: '#ffaa00' },
+          { name: 'Close', value: allTickets.filter(t => t.status === 'close').length, color: 'var(--success)' },
         ])
       }
 
@@ -242,8 +244,8 @@ export default function Dashboard() {
             {visibleAlerts.map((ticket) => (
               <div key={ticket.id} className="alert-ticket-row">
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1, minWidth: 0 }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--warning-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--warning)' }}>#{ticket.ticket_number}</span>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ticket.status === 'pending' ? 'rgba(255,170,0,0.1)' : 'var(--warning-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: ticket.status === 'pending' ? '#ffaa00' : 'var(--warning)' }}>#{ticket.ticket_number}</span>
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -255,10 +257,10 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                  <span className="badge badge-warning" style={{ fontSize: '10px' }}>
-                    <Clock size={9} /> {getDateLabel(ticket.date_input)}
+                  <span className={`badge ${ticket.status === 'pending' ? '' : 'badge-warning'}`} style={{ fontSize: '10px', ...(ticket.status === 'pending' ? { background: 'rgba(255,170,0,0.15)', color: '#ffaa00', border: '1px solid rgba(255,170,0,0.3)' } : {}) }}>
+                    {ticket.status === 'pending' ? <Clock size={9} /> : <AlertTriangle size={9} />} {ticket.status === 'pending' ? 'Pending' : 'Aktif'}
                   </span>
-                  <Link to="/maintenance" className="btn btn-warning btn-sm" style={{ padding: '4px 10px', fontSize: '11px' }}>
+                  <Link to="/maintenance" className="btn btn-warning btn-sm" style={{ padding: '4px 10px', fontSize: '11px', background: ticket.status === 'pending' ? '#ffaa00' : 'var(--warning)', borderColor: ticket.status === 'pending' ? '#ffaa00' : 'var(--warning)', color: 'black' }}>
                     Selesai
                   </Link>
                 </div>
@@ -342,8 +344,9 @@ export default function Dashboard() {
                 <Tooltip content={<CustomTooltip />} />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px', color: 'var(--text-secondary)' }} />
                 <Bar dataKey="Masuk" fill="var(--accent)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Close" fill="var(--success)" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Aktif" fill="var(--warning)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Pending" fill="#ffaa00" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Close" fill="var(--success)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -370,8 +373,9 @@ export default function Dashboard() {
                     dataKey="value"
                     strokeWidth={0}
                   >
-                    <Cell fill="var(--warning)" />
-                    <Cell fill="var(--success)" />
+                    {maintenanceByStatus.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
                   </Pie>
                   <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} />
                 </PieChart>
@@ -381,7 +385,7 @@ export default function Dashboard() {
               {maintenanceByStatus.map((item, i) => (
                 <div key={item.name} className="flex items-center justify-between" style={{ marginBottom: '10px' }}>
                   <div className="flex items-center gap-2">
-                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: i === 0 ? 'var(--warning)' : 'var(--success)', flexShrink: 0 }} />
+                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: item.color, flexShrink: 0 }} />
                     <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{item.name}</span>
                   </div>
                   <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>{item.value}</span>
