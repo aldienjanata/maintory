@@ -6,7 +6,7 @@ import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
 import { 
   Search, Filter, Plus, Trash2, Edit2, CheckCircle, Clock,
-  MapPin, Phone, MessageCircle, AlertCircle, X, Download, Wrench
+  MapPin, Phone, MessageCircle, AlertCircle, X, Download, Wrench, Calendar
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
@@ -23,6 +23,7 @@ export default function Maintenance() {
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [dateFilter, setDateFilter] = useState(format(new Date(), 'yyyy-MM-dd'))
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -228,17 +229,28 @@ export default function Maintenance() {
   }
 
   // Filters
-  const filteredTickets = tickets.filter(t => {
-    const matchSearch = 
-      t.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.customer_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.ticket_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.village?.toLowerCase().includes(searchTerm.toLowerCase())
-      
-    const matchStatus = statusFilter === 'all' || t.status === statusFilter
-    
-    return matchSearch && matchStatus
-  })
+  const filteredTickets = tickets
+    .filter(t => {
+      const matchSearch = 
+        t.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        t.customer_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        t.ticket_number?.toString().includes(searchTerm) ||
+        t.village?.toLowerCase().includes(searchTerm.toLowerCase())
+
+      const matchStatus = statusFilter === 'all' || t.status === statusFilter
+
+      // Filter tanggal: cocokkan dengan tanggal yang dipilih
+      const ticketDate = t.created_at ? t.created_at.split('T')[0] : ''
+      const matchDate = !dateFilter || ticketDate === dateFilter
+
+      return matchSearch && matchStatus && matchDate
+    })
+    // Selalu urutkan nomor tiket ascending (terkecil di atas)
+    .sort((a, b) => {
+      const na = parseInt(a.ticket_number) || 0
+      const nb = parseInt(b.ticket_number) || 0
+      return na - nb
+    })
 
   // Export (dummy implementation for now)
   const handleExport = () => {
@@ -272,16 +284,44 @@ export default function Maintenance() {
       </div>
 
       <div className="card mb-4">
-        <div className="filter-bar">
-          <div className="search-box" style={{ maxWidth: '250px' }}>
+        <div className="filter-bar" style={{ flexWrap: 'wrap', gap: '10px' }}>
+          {/* Filter Tanggal */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Calendar size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            <input
+              type="date"
+              className="filter-select"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              style={{ padding: '7px 10px', minWidth: '140px' }}
+            />
+            {dateFilter && (
+              <button
+                onClick={() => setDateFilter('')}
+                title="Tampilkan semua tanggal"
+                style={{
+                  background: 'var(--bg-hover)', border: '1px solid var(--border)',
+                  borderRadius: '6px', padding: '5px 8px', cursor: 'pointer',
+                  color: 'var(--text-muted)', fontSize: '11px', whiteSpace: 'nowrap'
+                }}
+              >
+                Semua Tgl
+              </button>
+            )}
+          </div>
+
+          {/* Search */}
+          <div className="search-box" style={{ maxWidth: '220px' }}>
             <Search size={16} className="search-icon" />
             <input 
               type="text" 
-              placeholder="Cari nama, ID, desa, tiket..." 
+              placeholder="Cari nama, ID, no tiket..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+
+          {/* Filter Status */}
           <select 
             className="filter-select"
             value={statusFilter}
@@ -292,6 +332,12 @@ export default function Maintenance() {
             <option value="pending">Pending</option>
             <option value="close">Close</option>
           </select>
+
+          {/* Info jumlah tiket */}
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+            {filteredTickets.length} tiket
+            {dateFilter ? ` · ${format(new Date(dateFilter + 'T00:00:00'), 'dd MMM yyyy', { locale: id })}` : ' · Semua tanggal'}
+          </span>
         </div>
 
         <div className="table-container">
