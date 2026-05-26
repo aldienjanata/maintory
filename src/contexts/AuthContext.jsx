@@ -11,12 +11,20 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('getSession error', error)
+        setLoading(false)
+        return
+      }
       if (session?.user) {
         fetchProfile(session.user.id)
       } else {
         setLoading(false)
       }
+    }).catch(err => {
+      console.error('getSession caught error', err)
+      setLoading(false)
     })
 
     // Listen for auth changes
@@ -34,28 +42,34 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function fetchProfile(userId) {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single()
 
-    // Selalu set user agar tidak mental kembali ke halaman login, 
-    // meskipun profil tidak ditemukan (bisa pakai data default)
-    setUser({ id: userId })
-    
-    if (data && !error) {
-      setProfile(data)
-    } else {
-      console.warn('Profile not found in public.users, using fallback', error)
-      setProfile({
-        id: userId,
-        username: 'superadmin',
-        full_name: 'Superadmin (Fallback)',
-        role: 'superadmin'
-      })
+      // Selalu set user agar tidak mental kembali ke halaman login, 
+      // meskipun profil tidak ditemukan (bisa pakai data default)
+      setUser({ id: userId })
+      
+      if (data && !error) {
+        setProfile(data)
+      } else {
+        console.warn('Profile not found in public.users, using fallback', error)
+        setProfile({
+          id: userId,
+          username: 'superadmin',
+          full_name: 'Superadmin (Fallback)',
+          role: 'superadmin'
+        })
+      }
+    } catch (err) {
+      console.error('Error fetching profile:', err)
+      setUser({ id: userId })
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   async function login(username, password) {
