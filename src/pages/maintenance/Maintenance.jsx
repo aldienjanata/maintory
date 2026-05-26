@@ -310,21 +310,25 @@ export default function Maintenance() {
           </div>
 
           {/* Filter Tanggal */}
-          <div className="date-filter-group">
-            <Calendar size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} className="hide-on-mobile" />
+          <div className="date-filter-group" style={{ position: 'relative' }}>
             <input
-              type="date"
+              type={dateFilter ? 'date' : 'text'}
+              placeholder="Semua Tanggal"
+              onFocus={(e) => e.target.type = 'date'}
+              onBlur={(e) => { if (!e.target.value) e.target.type = 'text' }}
               className="filter-select date-input"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
+              style={{ width: '100%', paddingRight: dateFilter ? '30px' : '12px' }}
             />
             {dateFilter && (
               <button
                 className="btn-clear-date"
                 onClick={() => setDateFilter('')}
                 title="Tampilkan semua tanggal"
+                style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', padding: '4px' }}
               >
-                <X size={14} />
+                <X size={16} />
               </button>
             )}
           </div>

@@ -1398,40 +1398,26 @@ tbody tr:hover td { background: var(--bg-hover); }
 
   /* --- Search & Filter --- */
   .filter-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
   }
   .search-box {
-    width: 100%;
+    grid-column: 1 / -1;
     max-width: 100% !important;
   }
   .date-filter-group {
-    flex: 1;
-    min-width: 120px;
-    gap: 4px;
+    grid-column: 1 / 2;
   }
   .date-input {
-    flex: 1;
-    min-width: 0;
-    padding: 8px; /* Slightly less padding on mobile */
-  }
-  .hide-on-mobile {
-    display: none !important;
-  }
-  .btn-clear-date {
-    padding: 8px 10px; /* Make it a square icon button */
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 100%;
   }
   .filter-select.status-select {
-    flex: 1;
-    min-width: 100px;
+    grid-column: 2 / 3;
+    width: 100%;
   }
   .filter-info {
-    width: 100%;
+    grid-column: 1 / -1;
     text-align: right;
     margin-top: 2px;
   }
