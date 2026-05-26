@@ -12,8 +12,8 @@ BEGIN
         SELECT * FROM (
             VALUES 
             ('superadmin', 'Super Administrator', 'superadmin', 'super1234'),
-            ('hendri', 'Hendri', 'admin', 'ws1234'),
-            ('lihun', 'Lihun', 'admin', 'ws1234'),
+            ('hendri', 'Hendri', 'admin', 'WS1234'),
+            ('lihun', 'Lihun', 'admin', 'WS1234'),
             ('aji', 'Aji', 'teknisi', 'WS1234'),
             ('aldo', 'Aldo', 'teknisi', 'WS1234'),
             ('anjar', 'Anjar', 'teknisi', 'WS1234'),
