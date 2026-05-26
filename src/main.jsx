@@ -4,13 +4,20 @@ import { Toaster } from 'react-hot-toast'
 import App from './App.jsx'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import { ThemeProvider } from './contexts/ThemeContext.jsx'
+import UpdatePrompt from './components/UpdatePrompt.jsx'
 import './index.css'
+
+// Animasi slide-up untuk banner update
+const style = document.createElement('style')
+style.textContent = `@keyframes slideUp { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }`
+document.head.appendChild(style)
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ThemeProvider>
       <AuthProvider>
         <App />
+        <UpdatePrompt />
         <Toaster 
           position="top-right"
           toastOptions={{

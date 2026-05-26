@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['logo.png', 'favicon.ico'],
       manifest: {
         name: 'Maintory',
@@ -19,6 +19,11 @@ export default defineConfig({
           { src: '/logo.png', sizes: '192x192', type: 'image/png' },
           { src: '/logo.png', sizes: '512x512', type: 'image/png' },
         ],
+      },
+      workbox: {
+        skipWaiting: false,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
       },
     }),
   ],
