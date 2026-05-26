@@ -721,25 +721,12 @@ tbody tr:hover td { background: var(--bg-hover); }
 }
 
 /* ========== SEARCH & FILTER BAR ========== */
-.filter-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.filter-row {
+.filter-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.top-row {
-  justify-content: space-between;
-}
-
-.bottom-row {
-  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
 .date-filter-group {
@@ -770,25 +757,21 @@ tbody tr:hover td { background: var(--bg-hover); }
   color: var(--text-primary);
 }
 
-.status-select {
-  min-width: 130px;
-}
-
-.filter-info {
-  font-size: 12.5px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  font-weight: 500;
-}
-
 .search-box {
   position: relative;
   flex: 1;
-  min-width: 200px;
+  max-width: 250px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
 }
 
 .search-box input {
-  padding-left: 38px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1413,25 +1396,26 @@ tbody tr:hover td { background: var(--bg-hover); }
   .page-header-right .btn { font-size: 12px; padding: 6px 12px; }
 
   /* --- Search & Filter --- */
-  .filter-wrapper {
-    gap: 10px;
-  }
-  .filter-row {
+  .filter-bar {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
   }
-  .top-row {
-    flex-direction: column-reverse; /* Info di atas, search di bawah */
+  .date-filter-group {
+    justify-content: space-between;
   }
-  .bottom-row {
-    flex-direction: column; /* Tanggal di atas, status di bawah */
+  .date-input {
+    flex: 1;
   }
-  .search-box { min-width: unset; width: 100%; max-width: 100% !important; }
-  .status-select { width: 100%; }
-  .date-filter-group { width: 100%; justify-content: space-between; }
-  .date-input { flex: 1; }
-  .filter-info { align-self: flex-end; margin-bottom: -4px; }
+  .search-box {
+    max-width: 100% !important;
+  }
+  .filter-select {
+    width: 100%;
+  }
+  .filter-info {
+    text-align: right;
+  }
 
   /* --- Cards --- */
   .card { padding: 14px; }
