@@ -128,6 +128,9 @@ CREATE POLICY "Everyone can read sn" ON public.serial_numbers FOR SELECT TO auth
 CREATE POLICY "Admin can manage sn" ON public.serial_numbers FOR ALL TO authenticated USING (
     (SELECT role FROM public.users WHERE id = auth.uid()) IN ('superadmin', 'admin')
 );
+CREATE POLICY "Teknisi can update sn status" ON public.serial_numbers FOR UPDATE TO authenticated USING (
+    (SELECT role FROM public.users WHERE id = auth.uid()) = 'teknisi'
+);
 
 
 -- 7. Tabel dropcore_haspels
