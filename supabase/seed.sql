@@ -7,23 +7,24 @@ BEGIN
     CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
     -- Daftar semua user yang akan di-generate (termasuk superadmin, admin, dan teknisi)
-    FOR user_record IN (
-        VALUES 
-        ('superadmin', 'Super Administrator', 'superadmin', 'super1234'),
-        ('hendri', 'Hendri', 'admin', 'ws1234'),
-        ('lihun', 'Lihun', 'admin', 'ws1234'),
-        ('aji', 'Aji', 'teknisi', 'WS1234'),
-        ('aldo', 'Aldo', 'teknisi', 'WS1234'),
-        ('anjar', 'Anjar', 'teknisi', 'WS1234'),
-        ('arif', 'Arif', 'teknisi', 'WS1234'),
-        ('dika', 'Dika', 'teknisi', 'WS1234'),
-        ('hanif', 'Hanif', 'teknisi', 'WS1234'),
-        ('ikin', 'Ikin', 'teknisi', 'WS1234'),
-        ('novan', 'Novan', 'teknisi', 'WS1234'),
-        ('sigit', 'Sigit', 'teknisi', 'WS1234'),
-        ('wisnu', 'Wisnu', 'teknisi', 'WS1234'),
-        ('pandu', 'Pandu', 'teknisi', 'WS1234')
-    ) AS t(username, full_name, role, password)
+    FOR user_record IN 
+        SELECT * FROM (
+            VALUES 
+            ('superadmin', 'Super Administrator', 'superadmin', 'super1234'),
+            ('hendri', 'Hendri', 'admin', 'ws1234'),
+            ('lihun', 'Lihun', 'admin', 'ws1234'),
+            ('aji', 'Aji', 'teknisi', 'WS1234'),
+            ('aldo', 'Aldo', 'teknisi', 'WS1234'),
+            ('anjar', 'Anjar', 'teknisi', 'WS1234'),
+            ('arif', 'Arif', 'teknisi', 'WS1234'),
+            ('dika', 'Dika', 'teknisi', 'WS1234'),
+            ('hanif', 'Hanif', 'teknisi', 'WS1234'),
+            ('ikin', 'Ikin', 'teknisi', 'WS1234'),
+            ('novan', 'Novan', 'teknisi', 'WS1234'),
+            ('sigit', 'Sigit', 'teknisi', 'WS1234'),
+            ('wisnu', 'Wisnu', 'teknisi', 'WS1234'),
+            ('pandu', 'Pandu', 'teknisi', 'WS1234')
+        ) AS t(username, full_name, role, password)
     LOOP
         -- 1. Cari ID user lama agar relasi dengan Gudang/Tiket tidak putus
         SELECT id INTO new_user_id FROM public.users WHERE username = user_record.username;
