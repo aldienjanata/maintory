@@ -20,6 +20,8 @@ export default function OntReplacement() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
+  const [snSearch, setSnSearch] = useState('')
+  const [snDropdownOpen, setSnDropdownOpen] = useState(false)
 
   const emptyForm = {
     replacement_date: format(new Date(), 'yyyy-MM-dd'),
@@ -49,8 +51,8 @@ export default function OntReplacement() {
   }
 
   const handleSave = async () => {
-    if (!form.customer_name || !form.old_serial_number || !form.new_serial_number_id) {
-      toast.error('Nama pelanggan, SN lama, dan SN baru wajib diisi')
+    if (!form.customer_name || !form.customer_id || !form.old_serial_number || !form.new_serial_number_id) {
+      toast.error('Nama pelanggan, ID pelanggan, SN lama, dan SN baru wajib diisi')
       return
     }
     setSaving(true)
@@ -70,6 +72,8 @@ export default function OntReplacement() {
       toast.success('Data pergantian ONT berhasil disimpan')
       setIsModalOpen(false)
       setForm(emptyForm)
+      setSnSearch('')
+      setSnDropdownOpen(false)
       fetchAll()
     } catch (err) {
       toast.error('Gagal: ' + err.message)
@@ -104,7 +108,7 @@ export default function OntReplacement() {
         </div>
         <div className="page-header-right">
           {can(role, 'ont.input') && (
-            <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setIsModalOpen(true) }}>
+            <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setSnSearch(''); setSnDropdownOpen(false); setIsModalOpen(true) }}>
               <Plus size={16} /> Tambah Pergantian
             </button>
           )}
@@ -224,13 +228,10 @@ export default function OntReplacement() {
                   <label className="form-label">Tanggal</label>
                   <input type="date" className="form-input" value={form.replacement_date} onChange={e => setForm(f => ({ ...f, replacement_date: e.target.value }))} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">ID Pelanggan</label>
-                  <input className="form-input" placeholder="ID" value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))} />
-                </div>
-              </div>
               <div className="form-group">
-                <label className="form-label">Nama Pelanggan <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <label className="form-label">ID Pelanggan <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <input className="form-input" placeholder="ID Pelanggan" value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))} />
+              </div>
                 <input className="form-input" placeholder="Nama lengkap pelanggan" value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} />
               </div>
               <div className="grid-2">
@@ -238,12 +239,78 @@ export default function OntReplacement() {
                   <label className="form-label">SN Lama <span style={{ color: 'var(--danger)' }}>*</span></label>
                   <input className="form-input" placeholder="Serial number ONT lama" style={{ fontFamily: 'monospace' }} value={form.old_serial_number} onChange={e => setForm(f => ({ ...f, old_serial_number: e.target.value }))} />
                 </div>
-                <div className="form-group">
+                <div className="form-group" style={{ position: 'relative' }}>
                   <label className="form-label">SN Baru <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <select className="form-input" style={{ height: 'auto' }} value={form.new_serial_number_id} onChange={e => setForm(f => ({ ...f, new_serial_number_id: e.target.value }))}>
-                    <option value="">-- Pilih SN Baru (Tersedia) --</option>
-                    {snList.map(s => <option key={s.id} value={s.id}>{s.serial_number} ({s.brand?.brand_name} {s.type?.type_name})</option>)}
-                  </select>
+                  {/* Jika sudah dipilih, tampilkan chip dengan tombol X */}
+                  {form.new_serial_number_id ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', background: 'rgba(0,200,83,0.08)', border: '1px solid var(--success)', borderRadius: '8px' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: '12px', flex: 1, wordBreak: 'break-all' }}>
+                        {snList.find(s => s.id === form.new_serial_number_id)?.serial_number}
+                      </span>
+                      <span className="text-secondary" style={{ fontSize: '10px', whiteSpace: 'nowrap' }}>
+                        {snList.find(s => s.id === form.new_serial_number_id)?.brand?.brand_name}
+                      </span>
+                      <button type="button" onClick={() => { setForm(f => ({ ...f, new_serial_number_id: '' })); setSnSearch('') }} className="btn-icon" style={{ width: '18px', height: '18px', minWidth: 'unset', flexShrink: 0 }}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ position: 'relative' }}>
+                      <div style={{ position: 'relative' }}>
+                        <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                        <input
+                          className="form-input"
+                          style={{ paddingLeft: '30px', fontFamily: 'monospace', fontSize: '12px' }}
+                          placeholder="Cari SN..."
+                          value={snSearch}
+                          onChange={e => { setSnSearch(e.target.value); setSnDropdownOpen(true) }}
+                          onFocus={() => setSnDropdownOpen(true)}
+                          onBlur={() => setTimeout(() => setSnDropdownOpen(false), 200)}
+                        />
+                      </div>
+                      {snDropdownOpen && (
+                        <div style={{
+                          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 300,
+                          background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                          borderRadius: '8px', maxHeight: '180px', overflowY: 'auto',
+                          marginTop: '4px', boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
+                        }}>
+                          {snList
+                            .filter(s =>
+                              s.serial_number.toLowerCase().includes(snSearch.toLowerCase()) ||
+                              s.brand?.brand_name?.toLowerCase().includes(snSearch.toLowerCase()) ||
+                              s.type?.type_name?.toLowerCase().includes(snSearch.toLowerCase())
+                            )
+                            .slice(0, 50)
+                            .map(s => (
+                              <div
+                                key={s.id}
+                                onMouseDown={() => { setForm(f => ({ ...f, new_serial_number_id: s.id })); setSnDropdownOpen(false); setSnSearch('') }}
+                                style={{
+                                  padding: '9px 12px', cursor: 'pointer',
+                                  borderBottom: '1px solid var(--border-color)',
+                                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                  gap: '8px'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                              >
+                                <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{s.serial_number}</span>
+                                <span className="text-secondary" style={{ fontSize: '10px', whiteSpace: 'nowrap' }}>
+                                  {s.brand?.brand_name} {s.type?.type_name}
+                                </span>
+                              </div>
+                            ))}
+                          {snList.filter(s =>
+                            s.serial_number.toLowerCase().includes(snSearch.toLowerCase()) ||
+                            s.brand?.brand_name?.toLowerCase().includes(snSearch.toLowerCase())
+                          ).length === 0 && (
+                            <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>Tidak ditemukan</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="form-group">

@@ -5,7 +5,7 @@ import { can, isAdmin } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
 import { 
-  Search, Filter, Plus, Trash2, Edit2, CheckCircle, 
+  Search, Filter, Plus, Trash2, Edit2, CheckCircle, Clock,
   MapPin, Phone, MessageCircle, AlertCircle, X, Download, Wrench
 } from 'lucide-react'
 import { format } from 'date-fns'
@@ -29,6 +29,7 @@ export default function Maintenance() {
   const [waText, setWaText] = useState('')
   const [parsedTickets, setParsedTickets] = useState([])
   const [globalTechnicians, setGlobalTechnicians] = useState([]) // Teknisi hari ini, berlaku ke semua tiket
+  const [actionModal, setActionModal] = useState({ open: false, ticket: null, type: 'close', note: '' })
 
   useEffect(() => {
     fetchTickets()
@@ -162,17 +163,22 @@ export default function Maintenance() {
     }
   }
 
-  // --- Close Ticket ---
-  const handleCloseTicket = async (ticket) => {
-    if (!window.confirm(`Selesaikan tiket #${ticket.ticket_number} - ${ticket.customer_name}?`)) return
+  // --- Action Modal (Pending / Close) ---
+  const handleOpenAction = (ticket) => {
+    setActionModal({ open: true, ticket, type: 'close', note: '' })
+  }
 
+  const handleConfirmAction = async () => {
+    const { ticket, type, note } = actionModal
     try {
+      const updateData = {
+        status: type,
+        action_note: note || null,
+        ...(type === 'close' ? { completed_at: new Date().toISOString() } : { completed_at: null })
+      }
       const { error } = await supabase
         .from('maintenance_tickets')
-        .update({ 
-          status: 'close', 
-          completed_at: new Date().toISOString() 
-        })
+        .update(updateData)
         .eq('id', ticket.id)
 
       if (error) throw error
@@ -182,14 +188,15 @@ export default function Maintenance() {
         username: profile.username,
         role: profile.role,
         module: 'Maintenance',
-        action: 'Close Tiket',
-        detail: `Menutup tiket #${ticket.ticket_number} - ${ticket.customer_name}`
+        action: type === 'close' ? 'Close Tiket' : 'Pending Tiket',
+        detail: `Tiket #${ticket.ticket_number} - ${ticket.customer_name}${note ? ' | Catatan: ' + note : ''}`
       })
 
-      toast.success('Tiket berhasil diselesaikan')
+      toast.success(type === 'close' ? 'Tiket berhasil diselesaikan' : 'Tiket ditandai pending')
+      setActionModal({ open: false, ticket: null, type: 'close', note: '' })
       fetchTickets()
     } catch (err) {
-      toast.error('Gagal menyelesaikan tiket: ' + err.message)
+      toast.error('Gagal: ' + err.message)
     }
   }
 
@@ -282,6 +289,7 @@ export default function Maintenance() {
           >
             <option value="all">Semua Status</option>
             <option value="aktif">Aktif</option>
+            <option value="pending">Pending</option>
             <option value="close">Close</option>
           </select>
         </div>
@@ -336,6 +344,8 @@ export default function Maintenance() {
                       <td>
                         {ticket.status === 'close' ? (
                           <span className="badge badge-success"><CheckCircle size={12} /> Close</span>
+                        ) : ticket.status === 'pending' ? (
+                          <span className="badge" style={{ background: 'rgba(255,170,0,0.15)', color: '#ffaa00', border: '1px solid rgba(255,170,0,0.3)' }}><Clock size={12} /> Pending</span>
                         ) : (
                           <span className="badge badge-warning"><AlertCircle size={12} /> Aktif</span>
                         )}
@@ -345,8 +355,8 @@ export default function Maintenance() {
                           {ticket.status === 'aktif' && (
                             <button 
                               className="btn-icon text-success" 
-                              title="Close Tiket"
-                              onClick={() => handleCloseTicket(ticket)}
+                              title="Update Status Tiket"
+                              onClick={() => handleOpenAction(ticket)}
                             >
                               <CheckCircle size={16} />
                             </button>
@@ -376,6 +386,8 @@ export default function Maintenance() {
                       <div>
                         {ticket.status === 'close' ? (
                           <span className="badge badge-success"><CheckCircle size={10} /> Close</span>
+                        ) : ticket.status === 'pending' ? (
+                          <span className="badge" style={{ background: 'rgba(255,170,0,0.15)', color: '#ffaa00', border: '1px solid rgba(255,170,0,0.3)' }}><Clock size={10} /> Pending</span>
                         ) : (
                           <span className="badge badge-warning"><AlertCircle size={10} /> Aktif</span>
                         )}
@@ -424,8 +436,8 @@ export default function Maintenance() {
 
                         <div className="mobile-card-actions">
                           {ticket.status === 'aktif' && (
-                            <button className="btn btn-secondary btn-sm text-success" onClick={() => handleCloseTicket(ticket)}>
-                              <CheckCircle size={14} /> Close Tiket
+                            <button className="btn btn-secondary btn-sm text-success" onClick={() => handleOpenAction(ticket)}>
+                              <CheckCircle size={14} /> Update Status
                             </button>
                           )}
                           {isAdmin(role) && (
@@ -550,6 +562,105 @@ export default function Maintenance() {
                 disabled={parsedTickets.length === 0}
               >
                 Simpan {parsedTickets.length} Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === CUSTOM ACTION MODAL === */}
+      {actionModal.open && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal" style={{ maxWidth: '420px', width: '90%' }}>
+            <div className="modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px' }}>
+                <CheckCircle size={18} style={{ color: 'var(--accent)' }} />
+                Update Status Tiket
+              </h3>
+              <button className="btn-icon" onClick={() => setActionModal({ open: false, ticket: null, type: 'close', note: '' })}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Info Tiket */}
+              <div style={{ background: 'var(--bg-hover)', borderRadius: '10px', padding: '12px 14px', borderLeft: '3px solid var(--accent)' }}>
+                <div className="font-semibold">{actionModal.ticket?.customer_name}</div>
+                <div className="text-secondary" style={{ fontSize: '12px', marginTop: '2px' }}>
+                  Tiket #{actionModal.ticket?.ticket_number} &nbsp;·&nbsp; {actionModal.ticket?.village}
+                </div>
+                {actionModal.ticket?.complaint && (
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Keluhan: {actionModal.ticket.complaint}</div>
+                )}
+              </div>
+
+              {/* Pilih Status */}
+              <div>
+                <label className="form-label" style={{ marginBottom: '10px' }}>Pilih Aksi</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setActionModal(m => ({ ...m, type: 'pending' }))}
+                    style={{
+                      flex: 1, padding: '14px 10px', borderRadius: '12px', border: '2px solid',
+                      borderColor: actionModal.type === 'pending' ? '#ffaa00' : 'var(--border-color)',
+                      background: actionModal.type === 'pending' ? 'rgba(255,170,0,0.1)' : 'transparent',
+                      cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <Clock size={22} style={{ color: '#ffaa00' }} />
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#ffaa00' }}>Pending</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center' }}>Ditunda sementara</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActionModal(m => ({ ...m, type: 'close' }))}
+                    style={{
+                      flex: 1, padding: '14px 10px', borderRadius: '12px', border: '2px solid',
+                      borderColor: actionModal.type === 'close' ? 'var(--success)' : 'var(--border-color)',
+                      background: actionModal.type === 'close' ? 'rgba(0,200,83,0.1)' : 'transparent',
+                      cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <CheckCircle size={22} style={{ color: 'var(--success)' }} />
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--success)' }}>Selesai</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center' }}>Tiket ditutup</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Catatan */}
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">
+                  {actionModal.type === 'pending' ? 'Alasan Pending' : 'Catatan Penyelesaian'}
+                  <span className="text-secondary" style={{ fontSize: '11px', fontWeight: 400, marginLeft: '6px' }}>(opsional)</span>
+                </label>
+                <textarea
+                  className="form-input"
+                  rows={3}
+                  value={actionModal.note}
+                  onChange={e => setActionModal(m => ({ ...m, note: e.target.value }))}
+                  placeholder={actionModal.type === 'pending'
+                    ? 'Contoh: Menunggu spare part, customer tidak di rumah...'
+                    : 'Contoh: Sudah diperbaiki, sinyal normal kembali...'}
+                  style={{ resize: 'none' }}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setActionModal({ open: false, ticket: null, type: 'close', note: '' })}>Batal</button>
+              <button
+                className="btn"
+                style={{
+                  background: actionModal.type === 'close' ? 'var(--success)' : '#ffaa00',
+                  color: '#fff', display: 'flex', alignItems: 'center', gap: '6px'
+                }}
+                onClick={handleConfirmAction}
+              >
+                {actionModal.type === 'close'
+                  ? <><CheckCircle size={15} /> Selesaikan Tiket</>
+                  : <><Clock size={15} /> Tandai Pending</>}
               </button>
             </div>
           </div>
