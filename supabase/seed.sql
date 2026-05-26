@@ -2,6 +2,7 @@ DO $$
 DECLARE
     user_record record;
     new_user_id uuid;
+    user_email text;
 BEGIN
     -- Aktifkan ekstensi enkripsi
     CREATE EXTENSION IF NOT EXISTS pgcrypto;
