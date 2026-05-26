@@ -74,7 +74,7 @@ export default function Settings() {
         const adminSession = sessionData?.session
 
         // Daftarkan user baru menggunakan signUp (tidak perlu service role key)
-        const email = `${form.username}@maintory.local`
+        const email = `${form.username}@maintory.com`
         const { data: authData, error: authErr } = await supabase.auth.signUp({
           email,
           password: form.password,
