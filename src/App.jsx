@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import Layout from './components/layout/Layout'
@@ -17,9 +18,9 @@ import Settings from './pages/settings/Settings'
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth()
-  const [showRetry, setShowRetry] = React.useState(false)
+  const [showRetry, setShowRetry] = useState(false)
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (loading) {
       const t = setTimeout(() => setShowRetry(true), 8000)
       return () => clearTimeout(t)
