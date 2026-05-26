@@ -17,11 +17,40 @@ import Settings from './pages/settings/Settings'
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth()
+  const [showRetry, setShowRetry] = React.useState(false)
+
+  React.useEffect(() => {
+    if (loading) {
+      const t = setTimeout(() => setShowRetry(true), 8000)
+      return () => clearTimeout(t)
+    } else {
+      setShowRetry(false)
+    }
+  }, [loading])
+
   if (loading) {
     return (
       <div className="loading-screen">
         <div className="spinner"></div>
         <p className="text-secondary mt-2">Memuat sesi...</p>
+        {showRetry && (
+          <div style={{ marginTop: '20px', textAlign: 'center' }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '10px' }}>
+              Koneksi lambat atau sesi bermasalah.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                background: 'var(--accent)', color: '#0d1117',
+                border: 'none', borderRadius: '8px',
+                padding: '10px 24px', fontWeight: 700,
+                fontSize: '14px', cursor: 'pointer',
+              }}
+            >
+              🔄 Muat Ulang
+            </button>
+          </div>
+        )}
       </div>
     )
   }
