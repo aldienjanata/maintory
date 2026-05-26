@@ -25,13 +25,22 @@ BEGIN
         ('pandu', 'Pandu', 'teknisi', 'WS1234')
     ) AS t(username, full_name, role, password)
     LOOP
-        -- 1. Cek apakah email/username sudah ada di auth.users
-        SELECT id INTO new_user_id FROM auth.users WHERE email = user_record.username || '@maintory.local';
+        -- 1. Cari ID user lama agar relasi dengan Gudang/Tiket tidak putus
+        SELECT id INTO new_user_id FROM public.users WHERE username = user_record.username;
         
+        -- 2. Jika teknisi benar-benar baru, generate ID baru
         IF new_user_id IS NULL THEN
-            -- Jika user BELUM ADA, buat UUID baru dan insert ke auth.users
             new_user_id := gen_random_uuid();
-            
+            INSERT INTO public.users (id, username, full_name, role, is_active) 
+            VALUES (new_user_id, user_record.username, user_record.full_name, user_record.role, true);
+        ELSE
+            UPDATE public.users 
+            SET full_name = user_record.full_name, role = user_record.role, is_active = true
+            WHERE id = new_user_id;
+        END IF;
+
+        -- 3. Cek apakah akses loginnya sudah ada di auth.users
+        IF NOT EXISTS (SELECT 1 FROM auth.users WHERE id = new_user_id) THEN
             INSERT INTO auth.users (
                 id, instance_id, email, encrypted_password, email_confirmed_at, 
                 raw_app_meta_data, raw_user_meta_data, created_at, updated_at, 
@@ -44,7 +53,6 @@ BEGIN
                 now(), now(), 'authenticated', '', '', '', ''
             );
             
-            -- Insert ke auth.identities
             INSERT INTO auth.identities (
                 id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at
             ) VALUES (
@@ -52,18 +60,12 @@ BEGIN
                 'email', user_record.username || '@maintory.local', null, now(), now()
             );
         ELSE
-            -- Jika user SUDAH ADA, update saja password-nya agar sinkron dengan script ini
+            -- Jika akses login lama masih ada, reset paksa sandinya
             UPDATE auth.users 
             SET encrypted_password = crypt(user_record.password, gen_salt('bf')),
                 raw_user_meta_data = jsonb_build_object('full_name', user_record.full_name, 'username', user_record.username, 'role', user_record.role)
             WHERE id = new_user_id;
         END IF;
-
-        -- 2. Insert atau Update data profil di public.users
-        INSERT INTO public.users (id, username, full_name, role, is_active) 
-        VALUES (new_user_id, user_record.username, user_record.full_name, user_record.role, true)
-        ON CONFLICT (id) DO UPDATE 
-        SET full_name = EXCLUDED.full_name, role = EXCLUDED.role, is_active = EXCLUDED.is_active;
 
     END LOOP;
 
