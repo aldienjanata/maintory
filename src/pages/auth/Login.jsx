@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import toast from 'react-hot-toast'
-import { Eye, EyeOff, Lock, User, Zap } from 'lucide-react'
+import { Eye, EyeOff, Lock, User, LogIn } from 'lucide-react'
 
 export default function Login() {
   const [username, setUsername] = useState('')
@@ -77,8 +77,8 @@ export default function Login() {
 
         {/* Logo area */}
         <div className="login-logo-wrap">
-          <div className="login-logo-icon" style={{ background: 'var(--bg-card)', boxShadow: '0 8px 32px rgba(0, 163, 255, 0.2)', border: '1px solid rgba(0, 163, 255, 0.3)', padding: '12px', borderRadius: '16px' }}>
-            <img src="/logo.png" alt="Maintory" style={{ width: '56px', height: '56px', objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(0, 163, 255, 0.5))' }} />
+          <div className="login-logo-icon" style={{ background: 'transparent', boxShadow: 'none', padding: '0' }}>
+            <img src="/logo.png" alt="Maintory" style={{ width: '80px', height: '80px', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(0, 163, 255, 0.4))' }} />
           </div>
           <div>
             <h1 className="login-title">Maintory</h1>
@@ -154,7 +154,7 @@ export default function Login() {
               <span className="spinner" style={{ width: '18px', height: '18px', borderWidth: '2px', borderTopColor: '#000' }} />
             ) : (
               <>
-                <Zap size={16} />
+                <LogIn size={18} />
                 Masuk
               </>
             )}
