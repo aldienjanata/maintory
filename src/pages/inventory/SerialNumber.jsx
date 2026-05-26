@@ -192,6 +192,10 @@ export default function SerialNumber() {
           if (!brandMap[lowerName] && bName !== '-') {
             // Insert new brand
             const { data: newBrand, error } = await supabase.from('ont_brands').insert([{ brand_name: bName }]).select().single()
+            if (error) {
+              console.error('Error inserting brand:', bName, error)
+              toast.error(`Gagal membuat Merk baru (${bName}): ${error.message}`)
+            }
             if (!error && newBrand) {
               brandMap[lowerName] = newBrand.id
             }
@@ -221,6 +225,10 @@ export default function SerialNumber() {
 
         if (typesToInsert.length > 0) {
           const { data: newTypes, error } = await supabase.from('ont_types').insert(typesToInsert).select()
+          if (error) {
+            console.error('Error inserting types:', error)
+            toast.error(`Gagal membuat Tipe baru: ${error.message}`)
+          }
           if (!error && newTypes) {
             newTypes.forEach(t => { typeMap[`${t.brand_id}_${t.type_name.toLowerCase()}`] = t.id })
           }

@@ -77,8 +77,8 @@ export default function Login() {
 
         {/* Logo area */}
         <div className="login-logo-wrap">
-          <div className="login-logo-icon" style={{ background: 'transparent', boxShadow: 'none' }}>
-            <img src="/logo.png" alt="Maintory" style={{ width: '48px', height: '48px', objectFit: 'contain' }} />
+          <div className="login-logo-icon" style={{ background: 'var(--bg-card)', boxShadow: '0 8px 32px rgba(0, 163, 255, 0.2)', border: '1px solid rgba(0, 163, 255, 0.3)', padding: '12px', borderRadius: '16px' }}>
+            <img src="/logo.png" alt="Maintory" style={{ width: '56px', height: '56px', objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(0, 163, 255, 0.5))' }} />
           </div>
           <div>
             <h1 className="login-title">Maintory</h1>
@@ -155,7 +155,7 @@ export default function Login() {
             ) : (
               <>
                 <Zap size={16} />
-                Masuk ke Sistem
+                Masuk
               </>
             )}
           </button>
