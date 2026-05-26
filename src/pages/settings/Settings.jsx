@@ -69,15 +69,23 @@ export default function Settings() {
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Settings', action: 'Edit User', detail: `User: ${form.username}` })
         toast.success('User berhasil diperbarui')
       } else {
-        // Register new user via Supabase Auth
+        // Simpan session admin aktif terlebih dahulu
+        const { data: sessionData } = await supabase.auth.getSession()
+        const adminSession = sessionData?.session
+
+        // Daftarkan user baru menggunakan signUp (tidak perlu service role key)
         const email = `${form.username}@maintory.local`
-        const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
-          email, password: form.password, email_confirm: true,
-          user_metadata: { username: form.username, full_name: form.full_name, role: form.role }
+        const { data: authData, error: authErr } = await supabase.auth.signUp({
+          email,
+          password: form.password,
+          options: {
+            data: { username: form.username, full_name: form.full_name, role: form.role }
+          }
         })
         if (authErr) throw authErr
+        if (!authData?.user) throw new Error('Gagal membuat akun auth')
 
-        // Insert into public.users
+        // Insert profil user baru ke tabel public.users
         const { error: dbErr } = await supabase.from('users').insert({
           id: authData.user.id,
           username: form.username,
@@ -86,6 +94,14 @@ export default function Settings() {
           is_active: true
         })
         if (dbErr) throw dbErr
+
+        // Restore session admin agar superadmin tidak ter-logout
+        if (adminSession) {
+          await supabase.auth.setSession({
+            access_token: adminSession.access_token,
+            refresh_token: adminSession.refresh_token,
+          })
+        }
 
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Settings', action: 'Tambah User', detail: `User baru: ${form.username} (${form.role})` })
         toast.success('User berhasil ditambahkan')
