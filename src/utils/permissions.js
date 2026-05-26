@@ -73,7 +73,6 @@ export const can = (role, action) => {
     'settings.avatar': ['superadmin', 'admin', 'teknisi'],
     'settings.branch': ['superadmin'],
     'settings.users': ['superadmin'],
-    'settings.adduser': ['superadmin'],
     'settings.notif': ['superadmin', 'admin', 'teknisi'],
   }
 
