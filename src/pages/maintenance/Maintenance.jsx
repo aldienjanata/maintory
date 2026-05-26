@@ -298,9 +298,20 @@ export default function Maintenance() {
 
       <div className="card mb-4">
         <div className="filter-bar">
+          {/* Search */}
+          <div className="search-box">
+            <Search size={16} className="search-icon" />
+            <input 
+              type="text" 
+              placeholder="Cari nama, ID, no tiket..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
           {/* Filter Tanggal */}
           <div className="date-filter-group">
-            <Calendar size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            <Calendar size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} className="hide-on-mobile" />
             <input
               type="date"
               className="filter-select date-input"
@@ -313,20 +324,9 @@ export default function Maintenance() {
                 onClick={() => setDateFilter('')}
                 title="Tampilkan semua tanggal"
               >
-                Semua Tgl
+                <X size={14} />
               </button>
             )}
-          </div>
-
-          {/* Search */}
-          <div className="search-box">
-            <Search size={16} className="search-icon" />
-            <input 
-              type="text" 
-              placeholder="Cari nama, ID, no tiket..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
           </div>
 
           {/* Filter Status */}
