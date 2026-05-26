@@ -721,12 +721,64 @@ tbody tr:hover td { background: var(--bg-hover); }
 }
 
 /* ========== SEARCH & FILTER BAR ========== */
-.filter-bar {
+.filter-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.filter-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
+}
+
+.top-row {
+  justify-content: space-between;
+}
+
+.bottom-row {
+  justify-content: space-between;
+}
+
+.date-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-input {
+  padding: 8px 12px;
+  min-width: 140px;
+}
+
+.btn-clear-date {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+  transition: var(--transition);
+}
+
+.btn-clear-date:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.status-select {
+  min-width: 130px;
+}
+
+.filter-info {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-weight: 500;
 }
 
 .search-box {
@@ -1360,16 +1412,26 @@ tbody tr:hover td { background: var(--bg-hover); }
   }
   .page-header-right .btn { font-size: 12px; padding: 6px 12px; }
 
-  /* --- Filter bar --- */
-  .filter-bar {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
+  /* --- Search & Filter --- */
+  .filter-wrapper {
+    gap: 10px;
+  }
+  .filter-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .top-row {
+    flex-direction: column-reverse; /* Info di atas, search di bawah */
+  }
+  .bottom-row {
+    flex-direction: column; /* Tanggal di atas, status di bawah */
   }
   .search-box { min-width: unset; width: 100%; max-width: 100% !important; }
-  .filter-select { flex: 1; min-width: 100px; width: auto; }
-  .filter-bar > div:last-child { width: 100%; justify-content: flex-start; margin-top: 4px; }
+  .status-select { width: 100%; }
+  .date-filter-group { width: 100%; justify-content: space-between; }
+  .date-input { flex: 1; }
+  .filter-info { align-self: flex-end; margin-bottom: -4px; }
 
   /* --- Cards --- */
   .card { padding: 14px; }

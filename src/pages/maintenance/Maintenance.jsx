@@ -35,10 +35,23 @@ export default function Maintenance() {
   useEffect(() => {
     fetchTickets()
     fetchTechnicians()
+
+    // Supabase Realtime untuk auto-update data
+    const channel = supabase
+      .channel('maintenance_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maintenance_tickets' }, () => {
+        // Refresh data secara senyap (tanpa loading screen)
+        fetchTickets(true)
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
-  const fetchTickets = async () => {
-    setLoading(true)
+  const fetchTickets = async (isQuiet = false) => {
+    if (!isQuiet) setLoading(true)
     const { data, error } = await supabase
       .from('maintenance_tickets')
       .select('*')
@@ -49,7 +62,7 @@ export default function Maintenance() {
     } else {
       setTickets(data || [])
     }
-    setLoading(false)
+    if (!isQuiet) setLoading(false)
   }
 
   const fetchTechnicians = async () => {
@@ -284,60 +297,54 @@ export default function Maintenance() {
       </div>
 
       <div className="card mb-4">
-        <div className="filter-bar" style={{ flexWrap: 'wrap', gap: '10px' }}>
-          {/* Filter Tanggal */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Calendar size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-            <input
-              type="date"
-              className="filter-select"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              style={{ padding: '7px 10px', minWidth: '140px' }}
-            />
-            {dateFilter && (
-              <button
-                onClick={() => setDateFilter('')}
-                title="Tampilkan semua tanggal"
-                style={{
-                  background: 'var(--bg-hover)', border: '1px solid var(--border)',
-                  borderRadius: '6px', padding: '5px 8px', cursor: 'pointer',
-                  color: 'var(--text-muted)', fontSize: '11px', whiteSpace: 'nowrap'
-                }}
-              >
-                Semua Tgl
-              </button>
-            )}
+        <div className="filter-wrapper">
+          {/* Baris Atas: Pencarian & Info */}
+          <div className="filter-row top-row">
+            <div className="search-box">
+              <Search size={16} className="search-icon" />
+              <input 
+                type="text" 
+                placeholder="Cari nama, ID, desa, no tiket..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="filter-info">
+              <span>{filteredTickets.length} tiket</span>
+            </div>
           </div>
 
-          {/* Search */}
-          <div className="search-box" style={{ maxWidth: '220px' }}>
-            <Search size={16} className="search-icon" />
-            <input 
-              type="text" 
-              placeholder="Cari nama, ID, no tiket..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          {/* Baris Bawah: Filter Tanggal & Status */}
+          <div className="filter-row bottom-row">
+            <div className="date-filter-group">
+              <Calendar size={15} style={{ color: 'var(--text-muted)' }} />
+              <input
+                type="date"
+                className="filter-select date-input"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+              />
+              {dateFilter && (
+                <button
+                  className="btn-clear-date"
+                  onClick={() => setDateFilter('')}
+                  title="Tampilkan semua tanggal"
+                >
+                  Semua Tgl
+                </button>
+              )}
+            </div>
+            <select 
+              className="filter-select status-select"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="all">Semua Status</option>
+              <option value="aktif">Aktif</option>
+              <option value="pending">Pending</option>
+              <option value="close">Close</option>
+            </select>
           </div>
-
-          {/* Filter Status */}
-          <select 
-            className="filter-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="all">Semua Status</option>
-            <option value="aktif">Aktif</option>
-            <option value="pending">Pending</option>
-            <option value="close">Close</option>
-          </select>
-
-          {/* Info jumlah tiket */}
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: 'auto' }}>
-            {filteredTickets.length} tiket
-            {dateFilter ? ` · ${format(new Date(dateFilter + 'T00:00:00'), 'dd MMM yyyy', { locale: id })}` : ' · Semua tanggal'}
-          </span>
         </div>
 
         <div className="table-container">
