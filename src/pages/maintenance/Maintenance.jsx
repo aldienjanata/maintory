@@ -232,10 +232,10 @@ export default function Maintenance() {
   const filteredTickets = tickets
     .filter(t => {
       const matchSearch = 
-        t.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.customer_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.ticket_number?.toString().includes(searchTerm) ||
-        t.village?.toLowerCase().includes(searchTerm.toLowerCase())
+        (t.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.customer_id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.ticket_number?.toString() || '').includes(searchTerm) ||
+        (t.village || '').toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchStatus = statusFilter === 'all' || t.status === statusFilter
 
