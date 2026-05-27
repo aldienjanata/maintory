@@ -25,7 +25,7 @@ export default function SerialNumber() {
   const [bulkText, setBulkText] = useState('')
   const [expandedId, setExpandedId] = useState(null)
   const [editItem, setEditItem] = useState(null)
-  const [form, setForm] = useState({ brand_id: '', type_id: '', serial_number: '', date_in: format(new Date(), 'yyyy-MM-dd'), note: '', status: 'tersedia' })
+  const [form, setForm] = useState({ brand_id: '', brand_name: '', type_id: '', type_name: '', serial_number: '', date_in: format(new Date(), 'yyyy-MM-dd'), note: '', status: 'tersedia' })
   const [saving, setSaving] = useState(false)
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
@@ -50,19 +50,59 @@ export default function SerialNumber() {
     setTypes(data || [])
   }
 
-  const handleBrandChange = (brandId) => {
-    setForm(f => ({ ...f, brand_id: brandId, type_id: '' }))
-    fetchTypes(brandId)
+  const handleBrandInput = async (brandName) => {
+    setForm(f => ({ ...f, brand_name: brandName, brand_id: '', type_id: '', type_name: '' }))
+    setTypes([])
+    // Cari brand yang match persis (case insensitive)
+    const matched = brands.find(b => b.brand_name.toLowerCase() === brandName.toLowerCase())
+    if (matched) {
+      setForm(f => ({ ...f, brand_id: matched.id }))
+      fetchTypes(matched.id)
+    }
+  }
+
+  const handleTypeInput = (typeName) => {
+    setForm(f => ({ ...f, type_name: typeName, type_id: '' }))
+    const matched = types.find(t => t.type_name.toLowerCase() === typeName.toLowerCase())
+    if (matched) {
+      setForm(f => ({ ...f, type_id: matched.id }))
+    }
   }
 
   const handleSaveSingle = async () => {
     if (!form.serial_number) { toast.error('Serial Number wajib diisi'); return }
     setSaving(true)
     try {
+      let brandId = form.brand_id || null
+      let typeId = form.type_id || null
+
+      // Buat merk baru jika diketik manual dan belum ada
+      if (form.brand_name && !brandId) {
+        const { data: newBrand, error } = await supabase.from('ont_brands').insert([{ brand_name: form.brand_name.trim() }]).select().single()
+        if (error && error.code !== '23505') throw error
+        if (newBrand) brandId = newBrand.id
+        else {
+          // Sudah ada, fetch id-nya
+          const { data: ex } = await supabase.from('ont_brands').select('id').ilike('brand_name', form.brand_name.trim()).single()
+          if (ex) brandId = ex.id
+        }
+      }
+
+      // Buat tipe baru jika diketik manual dan belum ada
+      if (form.type_name && !typeId && brandId) {
+        const { data: newType, error } = await supabase.from('ont_types').insert([{ type_name: form.type_name.trim(), brand_id: brandId }]).select().single()
+        if (error && error.code !== '23505') throw error
+        if (newType) typeId = newType.id
+        else {
+          const { data: ex } = await supabase.from('ont_types').select('id').ilike('type_name', form.type_name.trim()).eq('brand_id', brandId).single()
+          if (ex) typeId = ex.id
+        }
+      }
+
       if (editItem) {
         const { error } = await supabase.from('serial_numbers').update({
-          brand_id: form.brand_id || null,
-          type_id: form.type_id || null,
+          brand_id: brandId,
+          type_id: typeId,
           serial_number: form.serial_number,
           date_in: form.date_in,
           note: form.note,
@@ -74,8 +114,8 @@ export default function SerialNumber() {
         toast.success('Serial Number berhasil diperbarui')
       } else {
         const { error } = await supabase.from('serial_numbers').insert({
-          brand_id: form.brand_id || null,
-          type_id: form.type_id || null,
+          brand_id: brandId,
+          type_id: typeId,
           serial_number: form.serial_number,
           date_in: form.date_in,
           note: form.note,
@@ -96,12 +136,34 @@ export default function SerialNumber() {
   const handleSaveBulk = async () => {
     const lines = bulkText.split('\n').map(l => l.trim()).filter(Boolean)
     if (!lines.length) { toast.error('Masukkan minimal 1 serial number'); return }
-    if (!form.brand_id) { toast.error('Pilih merk terlebih dahulu'); return }
+    if (!form.brand_name && !form.brand_id) { toast.error('Pilih atau ketik merk terlebih dahulu'); return }
     setSaving(true)
     try {
+      let brandId = form.brand_id || null
+      let typeId = form.type_id || null
+
+      if (form.brand_name && !brandId) {
+        const { data: newBrand, error } = await supabase.from('ont_brands').insert([{ brand_name: form.brand_name.trim() }]).select().single()
+        if (error && error.code !== '23505') throw error
+        if (newBrand) brandId = newBrand.id
+        else {
+          const { data: ex } = await supabase.from('ont_brands').select('id').ilike('brand_name', form.brand_name.trim()).single()
+          if (ex) brandId = ex.id
+        }
+      }
+      if (form.type_name && !typeId && brandId) {
+        const { data: newType, error } = await supabase.from('ont_types').insert([{ type_name: form.type_name.trim(), brand_id: brandId }]).select().single()
+        if (error && error.code !== '23505') throw error
+        if (newType) typeId = newType.id
+        else {
+          const { data: ex } = await supabase.from('ont_types').select('id').ilike('type_name', form.type_name.trim()).eq('brand_id', brandId).single()
+          if (ex) typeId = ex.id
+        }
+      }
+
       const inserts = lines.map(sn => ({
-        brand_id: form.brand_id || null,
-        type_id: form.type_id || null,
+        brand_id: brandId,
+        type_id: typeId,
         serial_number: sn,
         date_in: form.date_in,
         status: 'tersedia',
@@ -281,7 +343,7 @@ export default function SerialNumber() {
         </div>
         <div className="page-header-right">
           {can(role, 'inventory.sn.add') && (
-            <button className="btn btn-primary" onClick={() => { setIsModalOpen(true); setIsBulkMode(false); setEditItem(null); setForm(f => ({ ...f, serial_number: '', note: '' })) }}>
+            <button className="btn btn-primary" onClick={() => { setIsModalOpen(true); setIsBulkMode(false); setEditItem(null); setForm({ brand_id: '', brand_name: '', type_id: '', type_name: '', serial_number: '', date_in: format(new Date(), 'yyyy-MM-dd'), note: '', status: 'tersedia' }); setTypes([]) }}>
               <Plus size={16} /> Tambah SN
             </button>
           )}
@@ -376,12 +438,15 @@ export default function SerialNumber() {
                                 setEditItem(item)
                                 setForm({
                                   brand_id: item.brand_id || '',
+                                  brand_name: item.brand?.brand_name || '',
                                   type_id: item.type_id || '',
+                                  type_name: item.type?.type_name || '',
                                   serial_number: item.serial_number,
                                   date_in: item.date_in ? item.date_in.slice(0, 10) : format(new Date(), 'yyyy-MM-dd'),
                                   note: item.note || '',
                                   status: item.status || 'tersedia'
                                 })
+                                if (item.brand_id) fetchTypes(item.brand_id)
                                 setIsBulkMode(false)
                                 setIsModalOpen(true)
                               }}><Edit2 size={15} /></button>
@@ -423,12 +488,15 @@ export default function SerialNumber() {
                                 setEditItem(item)
                                 setForm({
                                   brand_id: item.brand_id || '',
+                                  brand_name: item.brand?.brand_name || '',
                                   type_id: item.type_id || '',
+                                  type_name: item.type?.type_name || '',
                                   serial_number: item.serial_number,
                                   date_in: item.date_in ? item.date_in.slice(0, 10) : format(new Date(), 'yyyy-MM-dd'),
                                   note: item.note || '',
                                   status: item.status || 'tersedia'
                                 })
+                                if (item.brand_id) fetchTypes(item.brand_id)
                                 setIsBulkMode(false)
                                 setIsModalOpen(true)
                               }}><Edit2 size={14} /> Edit</button>
@@ -492,19 +560,40 @@ export default function SerialNumber() {
                 </div>
               )}
               <div className="grid-2">
+                {/* Merk ONT — combobox: pilih atau ketik baru */}
                 <div className="form-group">
                   <label className="form-label">Merk ONT</label>
-                  <select className="form-input" style={{ height: 'auto' }} value={form.brand_id} onChange={e => handleBrandChange(e.target.value)}>
-                    <option value="">-- Pilih Merk --</option>
-                    {brands.map(b => <option key={b.id} value={b.id}>{b.brand_name}</option>)}
-                  </select>
+                  <input
+                    className="form-input"
+                    list="brand-list"
+                    placeholder="Pilih atau ketik merk..."
+                    value={form.brand_name}
+                    onChange={e => handleBrandInput(e.target.value)}
+                    autoComplete="off"
+                  />
+                  <datalist id="brand-list">
+                    {brands.map(b => <option key={b.id} value={b.brand_name} />)}
+                  </datalist>
                 </div>
+                {/* Tipe ONT — combobox: pilih dari daftar atau ketik baru */}
                 <div className="form-group">
                   <label className="form-label">Tipe</label>
-                  <select className="form-input" style={{ height: 'auto' }} value={form.type_id} onChange={e => setForm(f => ({ ...f, type_id: e.target.value }))} disabled={!types.length}>
-                    <option value="">-- Pilih Tipe --</option>
-                    {types.map(t => <option key={t.id} value={t.id}>{t.type_name}</option>)}
-                  </select>
+                  <input
+                    className="form-input"
+                    list="type-list"
+                    placeholder="Pilih atau ketik tipe..."
+                    value={form.type_name}
+                    onChange={e => handleTypeInput(e.target.value)}
+                    autoComplete="off"
+                  />
+                  <datalist id="type-list">
+                    {types.map(t => <option key={t.id} value={t.type_name} />)}
+                  </datalist>
+                  {form.brand_name && types.length === 0 && (
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                      Tipe baru akan dibuat otomatis
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="form-group">
