@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [logs, setLogs] = useState([])
   const [overdueTickets, setOverdueTickets] = useState([])
+  const [recentActiveTickets, setRecentActiveTickets] = useState([])
   const [showAllAlerts, setShowAllAlerts] = useState(false)
   const [pendingSchedules, setPendingSchedules] = useState([])
   const [maintenanceChartData, setMaintenanceChartData] = useState([])
@@ -80,6 +81,7 @@ export default function Dashboard() {
         }
 
         setOverdueTickets(overdue)
+        setRecentActiveTickets(openTickets.slice(0, 5))
         setStats(prev => ({
           ...prev,
           maintenanceToday: todayTickets.length,
@@ -402,50 +404,84 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ===== RECENT ACTIVITY ===== */}
-      <div className="card">
-        <div className="flex justify-between items-center mb-3">
-          <h3 style={{ fontSize: '15px', fontWeight: 700 }}>Log Aktivitas Terbaru</h3>
-          <Link to="/logs" className="btn btn-ghost btn-sm text-accent">Lihat Semua</Link>
+      {/* ===== BOTTOM SECTION (LOGS & TICKETS) ===== */}
+      <div className="grid-2">
+        {/* RECENT ACTIVITY */}
+        <div className="card">
+          <div className="flex justify-between items-center mb-3">
+            <h3 style={{ fontSize: '15px', fontWeight: 700 }}>Log Aktivitas Terbaru</h3>
+            <Link to="/logs" className="btn btn-ghost btn-sm text-accent">Lihat Semua</Link>
+          </div>
+
+          {logs.length > 0 ? (
+            logs.map(log => (
+              <div key={log.id} className="log-item">
+                <div className="log-avatar" style={{
+                  background: 'var(--accent-dim)',
+                  color: 'var(--accent)',
+                  width: '34px',
+                  height: '34px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  {(log.username || 'U').charAt(0).toUpperCase()}
+                </div>
+                <div className="log-content">
+                  <div className="log-name">{log.full_name || log.username}</div>
+                  <div className="log-action">
+                    <span className="badge badge-muted" style={{ fontSize: '10px', marginRight: '6px' }}>{log.module}</span>
+                    {log.action}
+                  </div>
+                  <div className="log-time">
+                    {format(new Date(log.created_at), 'dd MMM yyyy, HH:mm', { locale: id })}
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state" style={{ padding: '30px 10px' }}>
+              <History size={32} />
+              <p>Belum ada aktivitas tercatat</p>
+            </div>
+          )}
         </div>
 
-        {logs.length > 0 ? (
-          logs.map(log => (
-            <div key={log.id} className="log-item">
-              <div className="log-avatar" style={{
-                background: 'var(--accent-dim)',
-                color: 'var(--accent)',
-                width: '34px',
-                height: '34px',
-                fontSize: '13px',
-                fontWeight: 700,
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}>
-                {(log.username || 'U').charAt(0).toUpperCase()}
-              </div>
-              <div className="log-content">
-                <div className="log-name">{log.full_name || log.username}</div>
-                <div className="log-action">
-                  <span className="badge badge-muted" style={{ fontSize: '10px', marginRight: '6px' }}>{log.module}</span>
-                  {log.action}
-                </div>
-                <div className="log-time">
-                  {format(new Date(log.created_at), 'dd MMM yyyy, HH:mm', { locale: id })}
-                </div>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="empty-state" style={{ padding: '30px 10px' }}>
-            <History size={32} />
-            <p>Belum ada aktivitas tercatat</p>
+        {/* TIKET AKTIF TERBARU */}
+        <div className="card">
+          <div className="flex justify-between items-center mb-3">
+            <h3 style={{ fontSize: '15px', fontWeight: 700 }}>Tiket Aktif Terbaru</h3>
+            <Link to="/maintenance" className="btn btn-ghost btn-sm text-accent">Lihat Semua</Link>
           </div>
-        )}
+          {recentActiveTickets.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {recentActiveTickets.map(ticket => (
+                <div key={ticket.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: 'var(--bg-primary)', borderRadius: '10px', border: '1px solid var(--border)' }}>
+                  <div style={{ overflow: 'hidden' }}>
+                    <div style={{ fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {ticket.full_name || ticket.customer_id}
+                    </div>
+                    <div className="text-secondary" style={{ fontSize: '11px', marginTop: '4px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.4' }}>
+                      {ticket.complaint}
+                    </div>
+                  </div>
+                  <span className="badge badge-danger" style={{ fontSize: '10px', marginLeft: '12px', flexShrink: 0 }}>Aktif</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state" style={{ padding: '30px 10px' }}>
+              <CheckCircle size={32} style={{ color: 'var(--success)' }} />
+              <p>Semua tiket sudah terselesaikan!</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
 }
+
