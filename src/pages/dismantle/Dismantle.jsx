@@ -17,6 +17,7 @@ export default function Dismantle() {
   const [technicians, setTechnicians] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [dateFilter, setDateFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editItem, setEditItem] = useState(null)
@@ -34,7 +35,7 @@ export default function Dismantle() {
   const [form, setForm] = useState(emptyForm)
 
   useEffect(() => { fetchAll() }, [])
-  useEffect(() => { setPage(1) }, [searchTerm, statusFilter])
+  useEffect(() => { setPage(1) }, [searchTerm, statusFilter, dateFilter])
 
   const fetchAll = async () => {
     setLoading(true)
@@ -111,7 +112,8 @@ export default function Dismantle() {
   const filtered = items.filter(i => {
     const matchSearch = i.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || i.customer_id?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchStatus = statusFilter === 'all' || i.aksi === statusFilter
-    return matchSearch && matchStatus
+    const matchDate = !dateFilter || i.date_input === dateFilter
+    return matchSearch && matchStatus && matchDate
   })
 
   const paginated = filtered.slice((page - 1) * perPage, page * perPage)
@@ -212,16 +214,41 @@ export default function Dismantle() {
 
       <div className="card">
         <div className="filter-bar">
-          <div className="search-box" style={{ maxWidth: '200px' }}>
+          <div className="search-box">
             <Search size={16} className="search-icon" />
             <input type="text" placeholder="Cari nama/ID..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
-          <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+
+          <div className="date-filter-group" style={{ position: 'relative' }}>
+            <input
+              type={dateFilter ? 'date' : 'text'}
+              placeholder="Semua Tanggal"
+              onFocus={(e) => e.target.type = 'date'}
+              onBlur={(e) => { if (!e.target.value) e.target.type = 'text' }}
+              className="filter-select date-input"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              style={{ width: '100%', paddingRight: dateFilter ? '30px' : '12px' }}
+            />
+            {dateFilter && (
+              <button
+                className="btn-clear-date"
+                onClick={() => setDateFilter('')}
+                title="Tampilkan semua tanggal"
+                style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', padding: '4px' }}
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+
+          <select className="filter-select status-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="all">Semua Status</option>
             <option value="aktif">Aktif</option>
             <option value="close">Close</option>
           </select>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+
+          <div className="filter-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate}><FileDown size={14} /> Template</button>
             <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', marginBottom: 0 }}>
               <Upload size={14} /> Import
