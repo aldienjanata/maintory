@@ -300,6 +300,18 @@ export default function Pengeluaran() {
     fetchAll()
   }
 
+  const handleDeleteSchedule = async (sched) => {
+    if (!window.confirm('Hapus jadwal teknisi ini?')) return
+    const { error } = await supabase.from('technician_schedules').delete().eq('id', sched.id)
+    if (error) {
+      toast.error('Gagal menghapus jadwal: ' + error.message)
+      return
+    }
+    await logActivity({ userId: profile.id, username: profile.username, role, module: 'Jadwal Teknisi', action: 'Hapus Jadwal', detail: `Tanggal: ${sched.schedule_date} - ${sched.site}` })
+    toast.success('Jadwal berhasil dihapus')
+    fetchAll()
+  }
+
   const getTechNames = (ids) => {
     if (!ids?.length) return '-'
     return ids.map(id => technicians.find(t => t.id === id)?.full_name || '?').join(', ')
@@ -583,6 +595,14 @@ export default function Pengeluaran() {
                     <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === t.site)?.label || t.site}</span></div>
                     <div className="mobile-info-row"><span className="mobile-info-label">Pekerjaan</span><span className="mobile-info-value">{WORK_TYPES.find(w => w.value === t.work_type)?.label || t.work_type}</span></div>
                     {t.note && <div className="mobile-info-row"><span className="mobile-info-label">Note</span><span className="mobile-info-value">{t.note}</span></div>}
+                    
+                    {role === 'superadmin' && (
+                      <div className="mobile-card-actions">
+                        <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDeleteSchedule(t)}>
+                          <Trash2 size={14} /> Hapus Jadwal
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
