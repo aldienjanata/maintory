@@ -442,15 +442,15 @@ export default function StokGudang() {
                           }
                         </span>
                       </td>
-                      <td className="text-secondary">{i.unit}</td>
+                      <td className="text-secondary">{item.unit}</td>
                       {can(role, 'inventory.stok.manage') && (
                         <td style={{ textAlign: 'right' }}>
                           <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                            {i.item_type === 'other' && (
-                              <button className="btn-icon" title="Riwayat" onClick={() => fetchHistory(i)}><History size={15} /></button>
+                            {item.item_type === 'other' && (
+                              <button className="btn-icon" title="Riwayat" onClick={() => fetchHistory(item)}><History size={15} /></button>
                             )}
-                            <button className="btn-icon" onClick={() => openEdit(i)}><Edit2 size={15} /></button>
-                            <button className="btn-icon text-danger" onClick={() => handleDelete(i)}><Trash2 size={15} /></button>
+                            <button className="btn-icon" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
+                            <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
                           </div>
                         </td>
                       )}
