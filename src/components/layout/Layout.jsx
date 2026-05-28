@@ -1,13 +1,21 @@
 import { useState, useEffect } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const location = useLocation()
+  const [isNavigating, setIsNavigating] = useState(false)
   
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen)
   
+  useEffect(() => {
+    setIsNavigating(true)
+    const t = setTimeout(() => setIsNavigating(false), 600)
+    return () => clearTimeout(t)
+  }, [location.pathname])
+
   // Close sidebar when window resizes to desktop
   useEffect(() => {
     const handleResize = () => {
@@ -21,6 +29,8 @@ export default function Layout() {
 
   return (
     <div className="app-layout">
+      {isNavigating && <div className="page-progress-bar" />}
+      
       {/* Mobile Overlay */}
       <div 
         className={`sidebar-overlay ${sidebarOpen ? 'active' : ''}`}
@@ -31,8 +41,10 @@ export default function Layout() {
       
       <div className="main-content">
         <Header onMenuClick={toggleSidebar} />
-        <main className="page-content">
-          <Outlet />
+        <main className="page-content" key={location.pathname}>
+          <div className="page-transition-enter">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
