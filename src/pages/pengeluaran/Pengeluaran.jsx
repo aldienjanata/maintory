@@ -180,8 +180,6 @@ export default function Pengeluaran() {
     setForm(f => ({ ...f, items: f.items.filter(i => i.id !== itemId) }))
   }
 
-  }
-
   const revertExpenseItems = async (itemsToRevert) => {
     // 1. Revert ONT Status
     const ontIds = itemsToRevert.filter(i => i.item_type === 'ont').map(i => i.serial_number_id)
