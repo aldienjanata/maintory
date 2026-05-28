@@ -190,10 +190,11 @@ export default function Pengeluaran() {
     // 2. Revert Dropcore
     const dcItems = itemsToRevert.filter(i => i.item_type === 'dropcore')
     for (const dc of dcItems) {
-      const { data: haspel } = await supabase.from('dropcore_haspels').select('id, used_meters').eq('id', dc.haspel_id).single()
+      const { data: haspel } = await supabase.from('dropcore_haspels').select('id, initial_meters, used_meters').eq('id', dc.haspel_id).single()
       if (haspel) {
         const newUsed = Math.max(0, Number(haspel.used_meters || 0) - Number(dc.meters_used))
-        await supabase.from('dropcore_haspels').update({ used_meters: newUsed }).eq('id', dc.haspel_id)
+        const newStatus = newUsed >= Number(haspel.initial_meters) ? 'habis' : 'tersedia'
+        await supabase.from('dropcore_haspels').update({ used_meters: newUsed, status: newStatus }).eq('id', dc.haspel_id)
       }
     }
 
@@ -270,6 +271,56 @@ export default function Pengeluaran() {
     }))
   }
 
+  const validateStock = async (itemsToInsert, editItem) => {
+    const oldOnts = new Set(editItem?.items?.filter(i => i.item_type === 'ont').map(i => i.serial_number_id) || [])
+    const oldDropcores = {}
+    editItem?.items?.filter(i => i.item_type === 'dropcore').forEach(i => {
+      oldDropcores[i.haspel_id] = (oldDropcores[i.haspel_id] || 0) + Number(i.meters_used)
+    })
+    const oldOthers = {}
+    editItem?.items?.filter(i => i.item_type === 'other').forEach(i => {
+      oldOthers[i.warehouse_item_id] = (oldOthers[i.warehouse_item_id] || 0) + Number(i.quantity)
+    })
+
+    const ontIds = itemsToInsert.filter(i => i.item_type === 'ont').map(i => i.serial_number_id)
+    if (ontIds.length > 0) {
+      const { data: snData } = await supabase.from('serial_numbers').select('id, status, serial_number').in('id', ontIds)
+      for (const sn of (snData || [])) {
+        if (sn.status !== 'tersedia' && !oldOnts.has(sn.id)) {
+          return `ONT ${sn.serial_number} sudah terpakai!`
+        }
+      }
+    }
+
+    const dcItems = itemsToInsert.filter(i => i.item_type === 'dropcore')
+    for (const dc of dcItems) {
+      const { data: haspel } = await supabase.from('dropcore_haspels').select('haspel_code, initial_meters, used_meters').eq('id', dc.haspel_id).single()
+      if (haspel) {
+        const capacity = Number(haspel.initial_meters || 0)
+        const currentUsed = Number(haspel.used_meters || 0)
+        const returned = oldDropcores[dc.haspel_id] || 0
+        const available = capacity - currentUsed + returned
+        if (Number(dc.meters_used) > available) {
+          return `Sisa dropcore ${haspel.haspel_code} tidak cukup! (Tersedia: ${available}m)`
+        }
+      }
+    }
+
+    const otherItemsList = itemsToInsert.filter(i => i.item_type === 'other')
+    for (const other of otherItemsList) {
+      const { data: wItem } = await supabase.from('warehouses').select('item_name, initial_stock').eq('id', other.warehouse_item_id).single()
+      if (wItem) {
+        const currentStock = Number(wItem.initial_stock || 0)
+        const returned = oldOthers[other.warehouse_item_id] || 0
+        const available = currentStock + returned
+        if (Number(other.quantity) > available) {
+          return `Stok ${wItem.item_name} tidak cukup! (Tersedia: ${available})`
+        }
+      }
+    }
+    return null
+  }
+
   const handleSave = async () => {
     if (!form.expense_date || !form.site) { toast.error('Tanggal dan lokasi wajib diisi'); return }
     if (form.technicians.length === 0) { toast.error('Pilih minimal 1 teknisi'); return }
@@ -279,6 +330,36 @@ export default function Pengeluaran() {
     }
     setSaving(true)
     try {
+      // Build items to insert for validation
+      const itemsToInsert = []
+      for (const item of form.items) {
+        if (item.item_type === 'ont') {
+          (item.selected_onts || []).forEach(opt => {
+            itemsToInsert.push({ item_type: 'ont', serial_number_id: opt.value, quantity: 1 })
+          })
+        } else if (item.item_type === 'dropcore') {
+          (item.selected_haspels || []).forEach(opt => {
+            const meters = item.haspel_meters?.[opt.value] || 0
+            if (meters > 0) itemsToInsert.push({ item_type: 'dropcore', haspel_id: opt.value, meters_used: meters, quantity: 1 })
+          })
+        } else if (item.item_type === 'other') {
+          (item.selected_others || []).forEach(opt => {
+             const qty = item.other_quantities?.[opt.value] || 1
+             itemsToInsert.push({ item_type: 'other', warehouse_item_id: opt.value, quantity: qty })
+          })
+        }
+      }
+
+      // Validate stock before doing any DB updates
+      if (itemsToInsert.length > 0) {
+        const errorMsg = await validateStock(itemsToInsert, editItem)
+        if (errorMsg) {
+          toast.error(errorMsg)
+          setSaving(false)
+          return
+        }
+      }
+
       let expId = null
       
       if (editItem) {
@@ -287,7 +368,8 @@ export default function Pengeluaran() {
         if (editItem.items && editItem.items.length > 0) {
           await revertExpenseItems(editItem.items)
           // Delete old items
-          await supabase.from('expense_items').delete().eq('expense_id', editItem.id)
+          const { error: delError } = await supabase.from('expense_items').delete().eq('expense_id', editItem.id)
+          if (delError) throw delError
         }
         
         // 2. Update daily_expenses record
@@ -353,11 +435,12 @@ export default function Pengeluaran() {
           // Update dropcore haspels
           const dcItems = itemsToInsert.filter(i => i.item_type === 'dropcore')
           for (const dc of dcItems) {
-            const haspel = haspelList.find(h => h.id === dc.haspel_id)
+            const { data: haspel } = await supabase.from('dropcore_haspels').select('id, initial_meters, used_meters').eq('id', dc.haspel_id).single()
             if (haspel) {
               const newUsed = Number(haspel.used_meters || 0) + Number(dc.meters_used)
+              const newStatus = newUsed >= Number(haspel.initial_meters) ? 'habis' : 'tersedia'
               const { error: dcError } = await supabase.from('dropcore_haspels')
-                .update({ used_meters: newUsed })
+                .update({ used_meters: newUsed, status: newStatus })
                 .eq('id', dc.haspel_id)
               if (dcError) console.error("Gagal update dropcore:", dcError)
             }
@@ -366,7 +449,7 @@ export default function Pengeluaran() {
           // Update warehouses for 'other' items
           const otherItemsList = itemsToInsert.filter(i => i.item_type === 'other')
           for (const other of otherItemsList) {
-            const wItem = otherItems.find(w => w.id === other.warehouse_item_id)
+            const { data: wItem } = await supabase.from('warehouses').select('id, initial_stock').eq('id', other.warehouse_item_id).single()
             if (wItem) {
               const newStock = Number(wItem.initial_stock || 0) - Number(other.quantity)
               const { error: whError } = await supabase.from('warehouses')
