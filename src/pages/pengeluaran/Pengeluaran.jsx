@@ -35,6 +35,7 @@ export default function Pengeluaran() {
   const [dateFilter, setDateFilter] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [editItem, setEditItem] = useState(null)
   
   const [activeTab, setActiveTab] = useState('pengeluaran')
   const [schedules, setSchedules] = useState([])
@@ -179,6 +180,91 @@ export default function Pengeluaran() {
     setForm(f => ({ ...f, items: f.items.filter(i => i.id !== itemId) }))
   }
 
+  }
+
+  const revertExpenseItems = async (itemsToRevert) => {
+    // 1. Revert ONT Status
+    const ontIds = itemsToRevert.filter(i => i.item_type === 'ont').map(i => i.serial_number_id)
+    if (ontIds.length > 0) {
+      await supabase.from('serial_numbers').update({ status: 'tersedia' }).in('id', ontIds)
+    }
+
+    // 2. Revert Dropcore
+    const dcItems = itemsToRevert.filter(i => i.item_type === 'dropcore')
+    for (const dc of dcItems) {
+      const { data: haspel } = await supabase.from('dropcore_haspels').select('id, used_meters').eq('id', dc.haspel_id).single()
+      if (haspel) {
+        const newUsed = Math.max(0, Number(haspel.used_meters || 0) - Number(dc.meters_used))
+        await supabase.from('dropcore_haspels').update({ used_meters: newUsed }).eq('id', dc.haspel_id)
+      }
+    }
+
+    // 3. Revert Warehouse
+    const otherItemsList = itemsToRevert.filter(i => i.item_type === 'other')
+    for (const other of otherItemsList) {
+      const { data: wItem } = await supabase.from('warehouses').select('id, initial_stock').eq('id', other.warehouse_item_id).single()
+      if (wItem) {
+        const newStock = Number(wItem.initial_stock || 0) + Number(other.quantity)
+        await supabase.from('warehouses').update({ initial_stock: newStock }).eq('id', other.warehouse_item_id)
+      }
+    }
+  }
+
+  const openEdit = (exp) => {
+    setEditItem(exp)
+    const formItems = []
+    
+    const onts = exp.items.filter(i => i.item_type === 'ont')
+    if (onts.length > 0) {
+      formItems.push({
+        id: 'ont_edit',
+        item_type: 'ont',
+        selected_onts: onts.map(o => ({ value: o.serial_number_id, label: o.sn?.serial_number || 'Unknown' }))
+      })
+    }
+
+    const dropcores = exp.items.filter(i => i.item_type === 'dropcore')
+    if (dropcores.length > 0) {
+      const selected_haspels = dropcores.map(d => ({ value: d.haspel_id, label: d.haspel?.haspel_code || 'Unknown' }))
+      const haspel_meters = {}
+      dropcores.forEach(d => {
+        haspel_meters[d.haspel_id] = d.meters_used
+      })
+      formItems.push({
+        id: 'dropcore_edit',
+        item_type: 'dropcore',
+        selected_haspels,
+        haspel_meters
+      })
+    }
+
+    const others = exp.items.filter(i => i.item_type === 'other')
+    if (others.length > 0) {
+      const selected_others = others.map(o => ({ value: o.warehouse_item_id, label: o.warehouse_item?.item_name || 'Unknown' }))
+      const other_quantities = {}
+      others.forEach(o => {
+        other_quantities[o.warehouse_item_id] = o.quantity
+      })
+      formItems.push({
+        id: 'other_edit',
+        item_type: 'other',
+        selected_others,
+        other_quantities
+      })
+    }
+
+    setForm({
+      expense_date: exp.expense_date,
+      site: exp.site,
+      work_type: exp.work_type,
+      technicians: exp.technicians || [],
+      note: exp.note || '',
+      items: formItems
+    })
+    setSelectedScheduleId(exp.schedule_id || '')
+    setIsModalOpen(true)
+  }
+
   const updateItem = (itemId, key, value) => {
     setForm(f => ({
       ...f,
@@ -195,16 +281,42 @@ export default function Pengeluaran() {
     }
     setSaving(true)
     try {
-      const { data: expData, error: expError } = await supabase.from('daily_expenses').insert({
-        expense_date: form.expense_date,
-        site: form.site,
-        work_type: form.work_type,
-        technicians: form.technicians,
-        note: form.note,
-        schedule_id: selectedScheduleId || null,
-        created_by: profile.id,
-      }).select().single()
-      if (expError) throw expError
+      let expId = null
+      
+      if (editItem) {
+        expId = editItem.id
+        // 1. Revert old items stock
+        if (editItem.items && editItem.items.length > 0) {
+          await revertExpenseItems(editItem.items)
+          // Delete old items
+          await supabase.from('expense_items').delete().eq('expense_id', editItem.id)
+        }
+        
+        // 2. Update daily_expenses record
+        const { error: expError } = await supabase.from('daily_expenses').update({
+          expense_date: form.expense_date,
+          site: form.site,
+          work_type: form.work_type,
+          technicians: form.technicians,
+          note: form.note,
+          schedule_id: selectedScheduleId || null,
+          updated_at: new Date().toISOString()
+        }).eq('id', editItem.id)
+        if (expError) throw expError
+
+      } else {
+        const { data: expData, error: expError } = await supabase.from('daily_expenses').insert({
+          expense_date: form.expense_date,
+          site: form.site,
+          work_type: form.work_type,
+          technicians: form.technicians,
+          note: form.note,
+          schedule_id: selectedScheduleId || null,
+          created_by: profile.id,
+        }).select().single()
+        if (expError) throw expError
+        expId = expData.id
+      }
 
       // Insert items
       if (form.items.length > 0) {
@@ -212,19 +324,19 @@ export default function Pengeluaran() {
         for (const item of form.items) {
           if (item.item_type === 'ont') {
             (item.selected_onts || []).forEach(opt => {
-              itemsToInsert.push({ expense_id: expData.id, item_type: 'ont', serial_number_id: opt.value, quantity: 1 })
+              itemsToInsert.push({ expense_id: expId, item_type: 'ont', serial_number_id: opt.value, quantity: 1 })
             })
           } else if (item.item_type === 'dropcore') {
             (item.selected_haspels || []).forEach(opt => {
               const meters = item.haspel_meters?.[opt.value] || 0
               if (meters > 0) {
-                 itemsToInsert.push({ expense_id: expData.id, item_type: 'dropcore', haspel_id: opt.value, meters_used: meters, quantity: 1 })
+                 itemsToInsert.push({ expense_id: expId, item_type: 'dropcore', haspel_id: opt.value, meters_used: meters, quantity: 1 })
               }
             })
           } else if (item.item_type === 'other') {
             (item.selected_others || []).forEach(opt => {
                const qty = item.other_quantities?.[opt.value] || 1
-               itemsToInsert.push({ expense_id: expData.id, item_type: 'other', warehouse_item_id: opt.value, quantity: qty })
+               itemsToInsert.push({ expense_id: expId, item_type: 'other', warehouse_item_id: opt.value, quantity: qty })
             })
           }
         }
@@ -274,7 +386,7 @@ export default function Pengeluaran() {
 
       await logActivity({
         userId: profile.id, username: profile.username, role,
-        module: 'Pengeluaran', action: 'Tambah Pengeluaran',
+        module: 'Pengeluaran', action: editItem ? 'Edit Pengeluaran' : 'Tambah Pengeluaran',
         detail: `Pengeluaran ${form.expense_date} - ${form.site} - ${form.work_type}`
       })
 
@@ -290,13 +402,26 @@ export default function Pengeluaran() {
   const resetForm = () => {
     setForm({ expense_date: format(new Date(), 'yyyy-MM-dd'), site: 'banyumas', work_type: 'ikr_psb', technicians: [], note: '', items: [] })
     setSelectedScheduleId('')
+    setEditItem(null)
   }
 
   const handleDelete = async (exp) => {
-    if (!window.confirm('Hapus data pengeluaran ini?')) return
+    if (!window.confirm('Hapus data pengeluaran ini dan kembalikan stok terkait?')) return
+    
+    // Revert items before deleting
+    if (exp.items && exp.items.length > 0) {
+      await revertExpenseItems(exp.items)
+    }
+
     await supabase.from('daily_expenses').delete().eq('id', exp.id)
+    
+    // If it was linked to a schedule, revert schedule status to pending
+    if (exp.schedule_id) {
+       await supabase.from('technician_schedules').update({ status: 'pending' }).eq('id', exp.schedule_id)
+    }
+
     await logActivity({ userId: profile.id, username: profile.username, role, module: 'Pengeluaran', action: 'Hapus Pengeluaran', detail: `Tanggal: ${exp.expense_date}` })
-    toast.success('Data dihapus')
+    toast.success('Data dihapus dan stok dikembalikan')
     fetchAll()
   }
 
@@ -514,9 +639,14 @@ export default function Pengeluaran() {
                           </div>
                         )}
                         <div className="mobile-info-row"><span className="mobile-info-label">Note</span><span className="mobile-info-value">{item.note || '-'}</span></div>
-                        {can(role, 'pengeluaran.delete') && (
+                        {(can(role, 'pengeluaran.edit') || can(role, 'pengeluaran.delete') || role === 'superadmin') && (
                           <div className="mobile-card-actions">
-                            <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
+                            {(can(role, 'pengeluaran.edit') || role === 'superadmin') && (
+                              <button className="btn btn-secondary btn-sm" onClick={() => openEdit(item)}><Edit2 size={14} /> Edit</button>
+                            )}
+                            {(can(role, 'pengeluaran.delete') || role === 'superadmin') && (
+                              <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
+                            )}
                           </div>
                         )}
                       </div>
