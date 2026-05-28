@@ -4,8 +4,9 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, Edit2, X, Package, TrendingDown, TrendingUp, FileDown, Upload, Download } from 'lucide-react'
-import * as XLSX from 'xlsx'
+import { Search, Plus, Trash2, Edit2, X, Package, TrendingDown, TrendingUp, FileDown, Upload, Download, History } from 'lucide-react'
+import { format } from 'date-fns'
+import { id } from 'date-fns/locale'
 
 const UNITS = ['unit', 'buah', 'pcs', 'meter', 'roll', 'set', 'dus', 'kg', 'haspel']
 const ITEM_TYPES = [
@@ -30,6 +31,11 @@ export default function StokGudang() {
   const [expandedId, setExpandedId] = useState(null)
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
+
+  const [historyItem, setHistoryItem] = useState(null)
+  const [historyData, setHistoryData] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
 
   useEffect(() => { fetchItems() }, [])
 
@@ -110,6 +116,31 @@ export default function StokGudang() {
     setLoading(false)
   }
 
+  const fetchHistory = async (item) => {
+    if (item.item_type !== 'other') {
+      toast.error('Riwayat hanya tersedia untuk Material Gudang')
+      return
+    }
+    setHistoryItem(item)
+    setIsHistoryOpen(true)
+    setHistoryLoading(true)
+
+    const { data: logs } = await supabase.from('inventory_log').select('*, user:users(full_name)').eq('item_type', 'stok_gudang').eq('item_id', item.id).order('log_date', { ascending: true })
+    const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians)').eq('item_type', 'other').eq('warehouse_item_id', item.id).order('created_at', { ascending: true })
+
+    const combined = []
+    ;(logs || []).forEach(l => {
+      combined.push({ date: l.log_date, action: l.action === 'masuk' ? 'Masuk' : 'Koreksi', note: l.note || '', user: l.user?.full_name, qty: l.quantity, type: 'in' })
+    })
+    ;(expItems || []).forEach(ei => {
+      combined.push({ date: ei.expense?.expense_date || '-', action: 'Keluar', note: `Lokasi: ${ei.expense?.site || '-'}`, qty: ei.quantity, type: 'out' })
+    })
+    combined.sort((a, b) => (a.date < b.date ? -1 : 1))
+
+    setHistoryData(combined)
+    setHistoryLoading(false)
+  }
+
   const openAdd = () => {
     setEditItem(null)
     setForm({ item_name: '', initial_stock: '', unit: 'unit', item_type: 'other' })
@@ -136,8 +167,11 @@ export default function StokGudang() {
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Edit Stok', detail: `Edit item: ${form.item_name}` })
         toast.success('Data stok berhasil diperbarui')
       } else {
-        const { error } = await supabase.from('warehouses').insert({ ...finalForm, created_by: profile.id })
+        const { data: newWh, error } = await supabase.from('warehouses').insert({ ...finalForm, created_by: profile.id }).select().single()
         if (error) throw error
+        if (form.item_type === 'other') {
+          await supabase.from('inventory_log').insert({ log_date: format(new Date(), 'yyyy-MM-dd'), item_type: 'stok_gudang', item_id: newWh.id, action: 'masuk', quantity: Number(form.initial_stock), note: 'Stok awal', created_by: profile.id })
+        }
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Tambah Stok', detail: `Tambah item: ${form.item_name}` })
         toast.success('Item stok berhasil ditambahkan')
       }
@@ -174,32 +208,65 @@ export default function StokGudang() {
   const totalStok = filtered.reduce((s, i) => s + (Number(i.display_current) || 0), 0)
   const paginated = filtered.slice((page - 1) * perPage, page * perPage)
 
-  const handleExportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(filtered.map(i => ({
-      'Nama Item': i.item_name,
-      'Tipe': ITEM_TYPES.find(t => t.value === i.item_type)?.label || i.item_type,
-      'Stok Awal': i.display_initial,
-      'Stok Keluar': i.display_out,
-      'Stok Saat Ini': i.display_current,
-      'Satuan': i.unit,
-    })))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Stok Gudang')
-    XLSX.writeFile(wb, `stok_gudang_${new Date().toISOString().slice(0,10)}.xlsx`)
-    toast.success('Export berhasil')
+  const handleExportExcel = async () => {
+    try {
+      const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      
+      const ws1 = workbook.addWorksheet('Stok Gudang')
+      const headers1 = ['Nama Item', 'Tipe', 'Satuan', 'Stok Awal', 'Stok Keluar', 'Stok Saat Ini']
+      setColumnWidths(ws1, [30, 20, 12, 14, 14, 16])
+      applyHeaderStyle(ws1, headers1)
+      items.forEach(i => {
+        ws1.addRow([i.item_name, ITEM_TYPES.find(t => t.value === i.item_type)?.label || i.item_type, i.unit, i.display_initial, i.display_out, i.display_current])
+      })
+      applyDataRowStyles(ws1)
+
+      const ws2 = workbook.addWorksheet('Riwayat Transaksi')
+      const headers2 = ['Nama Item', 'Tanggal', 'Jenis Transaksi', 'Jumlah', 'Lokasi/Note']
+      setColumnWidths(ws2, [30, 16, 18, 12, 30])
+      applyHeaderStyle(ws2, headers2, '065F46')
+      
+      const { data: allExpItems } = await supabase.from('expense_items').select('*, item:warehouses(item_name), expense:daily_expenses(expense_date, site)').eq('item_type','other').order('created_at', {ascending: true})
+      const { data: allLogs } = await supabase.from('inventory_log').select('*, item:warehouses(item_name)').eq('item_type','stok_gudang').order('log_date', {ascending: true})
+      
+      const rows2 = []
+      ;(allLogs || []).forEach(l => {
+        rows2.push({ name: l.item?.item_name || '-', date: l.log_date, action: l.action === 'masuk' ? 'Masuk' : 'Koreksi', qty: l.quantity || 0, note: l.note || '' })
+      })
+      ;(allExpItems || []).forEach(ei => {
+        rows2.push({ name: ei.item?.item_name || '-', date: ei.expense?.expense_date || '-', action: 'Keluar', qty: ei.quantity || 0, note: `Lokasi: ${ei.expense?.site || '-'}` })
+      })
+      rows2.sort((a,b) => a.date < b.date ? -1 : 1)
+      rows2.forEach(r => ws2.addRow([r.name, r.date, r.action, r.qty, r.note]))
+      applyDataRowStyles(ws2)
+
+      await downloadWorkbook(workbook, `stok_gudang_${new Date().toISOString().slice(0,10)}.xlsx`)
+      toast.success('Export berhasil!')
+    } catch (err) {
+      console.error(err)
+      toast.error('Gagal export: ' + err.message)
+    }
   }
 
-  const handleDownloadTemplate = () => {
-    const ws = XLSX.utils.aoa_to_sheet([
-      ['Nama Item', 'Tipe', 'Stok Awal', 'Satuan'],
-      ['ONT ZTE F670L', 'ont', '0', 'unit'],
-      ['Dropcore 1C Haspel A', 'dropcore_1c', '0', 'haspel'],
-      ['Dropcore 4C Haspel B', 'dropcore_4c', '0', 'haspel'],
-      ['Kabel UTP CAT6', 'other', '10', 'roll'],
-    ])
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Template')
-    XLSX.writeFile(wb, 'template_stok_gudang.xlsx')
+  const handleDownloadTemplate = async () => {
+    try {
+      const { applyHeaderStyle, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      const ws = workbook.addWorksheet('Template')
+      const headers = ['Nama Item', 'Tipe', 'Stok Awal', 'Satuan']
+      setColumnWidths(ws, [30, 20, 14, 14])
+      applyHeaderStyle(ws, headers)
+      ws.addRow(['ONT ZTE F670L', 'ont', 0, 'unit'])
+      ws.addRow(['Dropcore 1C Haspel A', 'dropcore_1c', 0, 'haspel'])
+      ws.addRow(['Dropcore 4C Haspel B', 'dropcore_4c', 0, 'haspel'])
+      ws.addRow(['Kabel UTP CAT6', 'other', 10, 'roll'])
+      await downloadWorkbook(workbook, 'Template_Import_Stok.xlsx')
+    } catch(err) {
+      toast.error('Gagal download template')
+    }
   }
 
   const handleImportExcel = async (e) => {
@@ -253,7 +320,9 @@ export default function StokGudang() {
         toast.error('Gagal import: ' + err.message)
       }
     }
-    reader.readAsBinaryString(file)
+    // Handle both old xlsx and new exceljs imports if we ever use xlsx for reading
+    // For now we assume xlsx is still used for reading since exceljs reading requires Buffer/ArrayBuffer parsing differently
+    reader.readAsArrayBuffer(file)
     e.target.value = ''
   }
 
@@ -373,12 +442,15 @@ export default function StokGudang() {
                           }
                         </span>
                       </td>
-                      <td className="text-secondary">{item.unit}</td>
+                      <td className="text-secondary">{i.unit}</td>
                       {can(role, 'inventory.stok.manage') && (
                         <td style={{ textAlign: 'right' }}>
                           <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                            <button className="btn-icon" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
-                            <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
+                            {i.item_type === 'other' && (
+                              <button className="btn-icon" title="Riwayat" onClick={() => fetchHistory(i)}><History size={15} /></button>
+                            )}
+                            <button className="btn-icon" onClick={() => openEdit(i)}><Edit2 size={15} /></button>
+                            <button className="btn-icon text-danger" onClick={() => handleDelete(i)}><Trash2 size={15} /></button>
                           </div>
                         </td>
                       )}
@@ -410,6 +482,9 @@ export default function StokGudang() {
                         )}
                         {can(role, 'inventory.stok.manage') && (
                           <div className="mobile-card-actions">
+                            {item.item_type === 'other' && (
+                              <button className="btn btn-secondary btn-sm" onClick={() => fetchHistory(item)}><History size={14} /> Riwayat</button>
+                            )}
                             <button className="btn btn-secondary btn-sm" onClick={() => openEdit(item)}><Edit2 size={14} /> Edit</button>
                             <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
                           </div>
@@ -494,6 +569,37 @@ export default function StokGudang() {
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : (editItem ? 'Simpan Perubahan' : 'Tambah Item')}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isHistoryOpen && historyItem && (
+        <div className="modal-overlay">
+          <div className="modal modal-lg">
+            <div className="modal-header">
+              <h3>Riwayat Material: {historyItem.item_name}</h3>
+              <button className="btn-icon" onClick={() => setIsHistoryOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              {historyLoading ? (
+                <div className="flex-center" style={{height:'120px'}}><div className="spinner"/></div>
+              ) : historyData.length === 0 ? (
+                <div className="empty-state"><History size={32}/><p>Belum ada riwayat transaksi</p></div>
+              ) : (
+                <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                  {historyData.map((r, i) => (
+                    <div key={i} style={{display:'flex',alignItems:'center',gap:'12px',padding:'10px 14px',background: r.type==='in'?'var(--accent-dim)':'var(--bg-primary)',border:`1px solid ${r.type==='in'?'var(--accent)':'var(--border)'}`,borderRadius:'8px'}}>
+                      <div style={{width:'8px',height:'8px',borderRadius:'50%',background:r.type==='in'?'var(--accent)':'var(--warning)',flexShrink:0}}/>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:600,fontSize:'13px'}}>{r.date} — {r.action}</div>
+                        <div className="text-secondary" style={{fontSize:'12px'}}>{r.note}</div>
+                        {r.user && <div className="text-secondary" style={{fontSize:'11px'}}>oleh {r.user}</div>}
+                      </div>
+                      <span className={`badge ${r.type==='in'?'badge-accent':'badge-warning'}`}>{r.type==='in'?`+${r.qty}`:`-${r.qty}`} {historyItem.unit}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -4,10 +4,9 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, Edit2, X, Hash, UploadCloud, CheckCircle, Clock, FileDown, Upload, Download } from 'lucide-react'
+import { Search, Plus, Trash2, Edit2, X, Hash, UploadCloud, CheckCircle, Clock, FileDown, Upload, Download, History } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
-import * as XLSX from 'xlsx'
 
 export default function SerialNumber() {
   const { profile } = useAuth()
@@ -29,6 +28,11 @@ export default function SerialNumber() {
   const [saving, setSaving] = useState(false)
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
+  
+  const [historyItem, setHistoryItem] = useState(null)
+  const [historyData, setHistoryData] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
 
   useEffect(() => { fetchAll() }, [])
   useEffect(() => { setPage(1) }, [searchTerm, statusFilter, brandFilter])
@@ -48,6 +52,46 @@ export default function SerialNumber() {
     if (!brandId) { setTypes([]); return }
     const { data } = await supabase.from('ont_types').select('*').eq('brand_id', brandId).order('type_name')
     setTypes(data || [])
+  }
+
+  const fetchHistory = async (item) => {
+    setHistoryItem(item)
+    setIsHistoryOpen(true)
+    setHistoryLoading(true)
+    
+    // Fetch riwayat masuk/koreksi
+    const { data: logs } = await supabase.from('inventory_log').select('*, user:users(full_name)').eq('item_type', 'sn').eq('item_id', item.id).order('log_date', { ascending: true })
+    // Fetch riwayat pengeluaran
+    const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians)').eq('item_type', 'sn').eq('serial_number_id', item.id).order('created_at', { ascending: true })
+    
+    const combined = []
+    ;(logs || []).forEach(l => {
+      combined.push({ date: l.log_date, action: l.action === 'masuk' ? 'Masuk' : 'Koreksi', note: l.note || '', user: l.user?.full_name, type: 'in' })
+    })
+    ;(expItems || []).forEach(ei => {
+      combined.push({ date: ei.expense?.expense_date || '-', action: 'Keluar', note: `Lokasi: ${ei.expense?.site || '-'}`, type: 'out' })
+    })
+    combined.sort((a, b) => (a.date < b.date ? -1 : 1))
+    
+    setHistoryData(combined)
+    setHistoryLoading(false)
+  }
+
+  const openEdit = (item) => {
+    setEditItem(item)
+    setForm({
+      brand_id: item.brand_id || '',
+      brand_name: item.brand?.brand_name || '',
+      type_id: item.type_id || '',
+      type_name: item.type?.type_name || '',
+      serial_number: item.serial_number,
+      date_in: item.date_in ? item.date_in.slice(0, 10) : format(new Date(), 'yyyy-MM-dd'),
+      note: item.note || '',
+      status: item.status || 'tersedia'
+    })
+    if (item.brand_id) fetchTypes(item.brand_id)
+    setIsBulkMode(false)
+    setIsModalOpen(true)
   }
 
   const handleBrandInput = async (brandName) => {
@@ -113,7 +157,7 @@ export default function SerialNumber() {
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Edit SN', detail: `SN: ${form.serial_number}` })
         toast.success('Serial Number berhasil diperbarui')
       } else {
-        const { error } = await supabase.from('serial_numbers').insert({
+        const { data: newSn, error } = await supabase.from('serial_numbers').insert({
           brand_id: brandId,
           type_id: typeId,
           serial_number: form.serial_number,
@@ -121,8 +165,11 @@ export default function SerialNumber() {
           note: form.note,
           status: 'tersedia',
           created_by: profile.id
-        })
+        }).select().single()
         if (error) throw error
+        
+        await supabase.from('inventory_log').insert({ log_date: form.date_in, item_type: 'sn', item_id: newSn.id, action: 'masuk', quantity: 1, note: form.note || null, created_by: profile.id })
+        
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Tambah SN', detail: `SN: ${form.serial_number}` })
         toast.success('Serial Number berhasil ditambahkan')
       }
@@ -169,8 +216,20 @@ export default function SerialNumber() {
         status: 'tersedia',
         created_by: profile.id
       }))
-      const { error } = await supabase.from('serial_numbers').insert(inserts)
+      const { data: insertedSns, error } = await supabase.from('serial_numbers').insert(inserts).select()
       if (error) throw error
+      
+      const logInserts = insertedSns.map(sn => ({
+        log_date: form.date_in,
+        item_type: 'sn',
+        item_id: sn.id,
+        action: 'masuk',
+        quantity: 1,
+        note: 'Input massal via text',
+        created_by: profile.id
+      }))
+      await supabase.from('inventory_log').insert(logInserts)
+      
       await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Input Massal SN', detail: `${lines.length} SN ditambahkan` })
       toast.success(`${lines.length} Serial Number berhasil ditambahkan`)
       setIsModalOpen(false)
@@ -205,30 +264,65 @@ export default function SerialNumber() {
     terpakai: items.filter(i => i.status === 'terpakai').length,
   }
 
-  const handleExportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(filtered.map(i => ({
-      'Serial Number': i.serial_number,
-      'Merk': i.brand?.brand_name || '-',
-      'Tipe': i.type?.type_name || '-',
-      'Tanggal Masuk': i.date_in,
-      'Status': i.status,
-      'Note': i.note || '',
-    })))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Serial Number')
-    XLSX.writeFile(wb, `serial_number_${new Date().toISOString().slice(0,10)}.xlsx`)
-    toast.success('Export berhasil')
+  const handleExportExcel = async () => {
+    try {
+      const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      
+      // Sheet 1: Stok
+      const ws1 = workbook.addWorksheet('Stok Serial Number')
+      const headers1 = ['Serial Number', 'Merk', 'Tipe', 'Tanggal Masuk', 'Status', 'Catatan']
+      setColumnWidths(ws1, [24, 18, 18, 16, 14, 30])
+      applyHeaderStyle(ws1, headers1)
+      items.forEach(i => {
+        ws1.addRow([i.serial_number, i.brand?.brand_name || '-', i.type?.type_name || '-', i.date_in, i.status === 'terpakai' ? 'Terpakai' : 'Tersedia', i.note || ''])
+      })
+      applyDataRowStyles(ws1)
+
+      // Sheet 2: Riwayat
+      const ws2 = workbook.addWorksheet('Riwayat Penggunaan')
+      const headers2 = ['Serial Number', 'Merk', 'Tipe', 'Tanggal', 'Jenis Transaksi', 'Lokasi/Note']
+      setColumnWidths(ws2, [24, 18, 18, 16, 18, 30])
+      applyHeaderStyle(ws2, headers2, '065F46')
+      
+      const { data: allExpItems } = await supabase.from('expense_items').select('*, sn:serial_numbers(serial_number, brand:ont_brands(brand_name), type:ont_types(type_name)), expense:daily_expenses(expense_date, site)').eq('item_type','ont').order('created_at', {ascending: true})
+      const { data: allLogs } = await supabase.from('inventory_log').select('*, sn:serial_numbers(serial_number, brand:ont_brands(brand_name), type:ont_types(type_name))').eq('item_type','sn').order('log_date', {ascending: true})
+      
+      const rows2 = []
+      ;(allLogs || []).forEach(l => {
+        rows2.push({ sn: l.sn?.serial_number || '-', brand: l.sn?.brand?.brand_name || '-', type: l.sn?.type?.type_name || '-', date: l.log_date, action: l.action === 'masuk' ? 'Masuk' : 'Koreksi', note: l.note || '' })
+      })
+      ;(allExpItems || []).forEach(ei => {
+        rows2.push({ sn: ei.sn?.serial_number || '-', brand: ei.sn?.brand?.brand_name || '-', type: ei.sn?.type?.type_name || '-', date: ei.expense?.expense_date || '-', action: 'Keluar', note: `Lokasi: ${ei.expense?.site || '-'}` })
+      })
+      rows2.sort((a,b) => a.date < b.date ? -1 : 1)
+      rows2.forEach(r => ws2.addRow([r.sn, r.brand, r.type, r.date, r.action, r.note]))
+      applyDataRowStyles(ws2)
+
+      await downloadWorkbook(workbook, `serial_number_${new Date().toISOString().slice(0,10)}.xlsx`)
+      toast.success('Export berhasil!')
+    } catch (err) {
+      console.error(err)
+      toast.error('Gagal export: ' + err.message)
+    }
   }
 
-  const handleDownloadTemplate = () => {
-    const ws = XLSX.utils.aoa_to_sheet([
-      ['Serial Number', 'Merk', 'Tipe', 'Tanggal Masuk (yyyy-mm-dd)', 'Note'],
-      ['ZTE123456', 'ZTE', 'F670L', '2024-01-01', 'Baru'],
-      ['HUAWEI789', 'Huawei', 'HG8245H5', '2024-01-01', '']
-    ])
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Template')
-    XLSX.writeFile(wb, 'template_serial_number.xlsx')
+  const handleDownloadTemplate = async () => {
+    try {
+      const { applyHeaderStyle, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      const ws = workbook.addWorksheet('Template')
+      const headers = ['Serial Number', 'Merk', 'Tipe', 'Tanggal Masuk (yyyy-mm-dd)', 'Note']
+      setColumnWidths(ws, [24, 18, 18, 26, 30])
+      applyHeaderStyle(ws, headers)
+      ws.addRow(['ZTE123456', 'ZTE', 'F670L', '2026-01-01', 'Baru'])
+      ws.addRow(['HUAWEI789', 'Huawei', 'HG8245H5', '2026-01-01', ''])
+      await downloadWorkbook(workbook, 'Template_Import_SN.xlsx')
+    } catch(err) {
+      toast.error('Gagal download template')
+    }
   }
 
   const handleImportExcel = async (e) => {
@@ -433,23 +527,9 @@ export default function SerialNumber() {
                       {(can(role, 'inventory.sn.edit') || can(role, 'inventory.sn.delete')) && (
                         <td style={{ textAlign: 'right' }}>
                           <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                            <button className="btn-icon" title="Riwayat" onClick={() => fetchHistory(item)}><History size={15} /></button>
                             {can(role, 'inventory.sn.edit') && (
-                              <button className="btn-icon" onClick={() => {
-                                setEditItem(item)
-                                setForm({
-                                  brand_id: item.brand_id || '',
-                                  brand_name: item.brand?.brand_name || '',
-                                  type_id: item.type_id || '',
-                                  type_name: item.type?.type_name || '',
-                                  serial_number: item.serial_number,
-                                  date_in: item.date_in ? item.date_in.slice(0, 10) : format(new Date(), 'yyyy-MM-dd'),
-                                  note: item.note || '',
-                                  status: item.status || 'tersedia'
-                                })
-                                if (item.brand_id) fetchTypes(item.brand_id)
-                                setIsBulkMode(false)
-                                setIsModalOpen(true)
-                              }}><Edit2 size={15} /></button>
+                              <button className="btn-icon" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
                             )}
                             {can(role, 'inventory.sn.delete') && (
                               <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
@@ -483,23 +563,9 @@ export default function SerialNumber() {
                         <div className="mobile-info-row"><span className="mobile-info-label">Note</span><span className="mobile-info-value">{item.note || '-'}</span></div>
                         {(can(role, 'inventory.sn.edit') || can(role, 'inventory.sn.delete')) && (
                           <div className="mobile-card-actions">
+                            <button className="btn btn-secondary btn-sm" onClick={() => fetchHistory(item)}><History size={14} /> Riwayat</button>
                             {can(role, 'inventory.sn.edit') && (
-                              <button className="btn btn-secondary btn-sm" onClick={() => {
-                                setEditItem(item)
-                                setForm({
-                                  brand_id: item.brand_id || '',
-                                  brand_name: item.brand?.brand_name || '',
-                                  type_id: item.type_id || '',
-                                  type_name: item.type?.type_name || '',
-                                  serial_number: item.serial_number,
-                                  date_in: item.date_in ? item.date_in.slice(0, 10) : format(new Date(), 'yyyy-MM-dd'),
-                                  note: item.note || '',
-                                  status: item.status || 'tersedia'
-                                })
-                                if (item.brand_id) fetchTypes(item.brand_id)
-                                setIsBulkMode(false)
-                                setIsModalOpen(true)
-                              }}><Edit2 size={14} /> Edit</button>
+                              <button className="btn btn-secondary btn-sm" onClick={() => openEdit(item)}><Edit2 size={14} /> Edit</button>
                             )}
                             {can(role, 'inventory.sn.delete') && (
                               <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
@@ -635,6 +701,37 @@ export default function SerialNumber() {
               <button className="btn btn-primary" onClick={isBulkMode ? handleSaveBulk : handleSaveSingle} disabled={saving}>
                 {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : 'Simpan'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isHistoryOpen && historyItem && (
+        <div className="modal-overlay">
+          <div className="modal modal-lg">
+            <div className="modal-header">
+              <h3>Riwayat SN: {historyItem.serial_number}</h3>
+              <button className="btn-icon" onClick={() => setIsHistoryOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              {historyLoading ? (
+                <div className="flex-center" style={{height:'120px'}}><div className="spinner"/></div>
+              ) : historyData.length === 0 ? (
+                <div className="empty-state"><History size={32}/><p>Belum ada riwayat transaksi</p></div>
+              ) : (
+                <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                  {historyData.map((r, i) => (
+                    <div key={i} style={{display:'flex',alignItems:'center',gap:'12px',padding:'10px 14px',background: r.type==='in'?'var(--accent-dim)':'var(--bg-primary)',border:`1px solid ${r.type==='in'?'var(--accent)':'var(--border)'}`,borderRadius:'8px'}}>
+                      <div style={{width:'8px',height:'8px',borderRadius:'50%',background:r.type==='in'?'var(--accent)':'var(--warning)',flexShrink:0}}/>
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:600,fontSize:'13px'}}>{r.date} — {r.action}</div>
+                        <div className="text-secondary" style={{fontSize:'12px'}}>{r.note}</div>
+                        {r.user && <div className="text-secondary" style={{fontSize:'11px'}}>oleh {r.user}</div>}
+                      </div>
+                      <span className={`badge ${r.type==='in'?'badge-accent':'badge-warning'}`}>{r.type==='in'?'Masuk':'Keluar'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -560,21 +560,77 @@ export default function Pengeluaran() {
 
   const paginatedSchedules = filteredSchedules.slice((schedPage - 1) * schedPerPage, schedPage * schedPerPage)
 
-  const handleExportExcel = () => {
-    const rows = filtered.map(exp => ({
-      'Tanggal': exp.expense_date,
-      'Lokasi': SITES.find(s => s.value === exp.site)?.label || exp.site,
-      'Jenis Pekerjaan': WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type,
-      'Teknisi': getTechNames(exp.technicians),
-      'Jumlah Item': exp.items?.length || 0,
-      'Note': exp.note || '',
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Pengeluaran')
-    XLSX.writeFile(wb, `pengeluaran_${new Date().toISOString().slice(0,10)}.xlsx`)
-    toast.success('Export berhasil')
+  const handleExportExcel = async () => {
+    try {
+      const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      workbook.creator = 'Maintory'
+      workbook.created = new Date()
+
+      // ===== SHEET 1: Rekap Pengeluaran =====
+      const ws1 = workbook.addWorksheet('Rekap Pengeluaran')
+      const headers1 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Jumlah Item', 'Catatan']
+      setColumnWidths(ws1, [14, 18, 18, 32, 14, 30])
+      applyHeaderStyle(ws1, headers1)
+      filtered.forEach(exp => {
+        ws1.addRow([
+          exp.expense_date,
+          SITES.find(s => s.value === exp.site)?.label || exp.site,
+          WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type,
+          getTechNames(exp.technicians),
+          exp.items?.length || 0,
+          exp.note || ''
+        ])
+      })
+      applyDataRowStyles(ws1)
+
+      // ===== SHEET 2: Detail Barang Keluar =====
+      const ws2 = workbook.addWorksheet('Detail Barang Keluar')
+      const headers2 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Jenis Barang', 'Kode / Serial Number', 'Jumlah / Meter', 'Catatan']
+      setColumnWidths(ws2, [14, 18, 18, 32, 16, 26, 16, 30])
+      applyHeaderStyle(ws2, headers2, '065F46')
+
+      filtered.forEach(exp => {
+        const techNames = getTechNames(exp.technicians)
+        const site = SITES.find(s => s.value === exp.site)?.label || exp.site
+        const workType = WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type
+
+        if (!exp.items || exp.items.length === 0) {
+          ws2.addRow([exp.expense_date, site, workType, techNames, '-', '-', '-', exp.note || ''])
+        } else {
+          exp.items.forEach(item => {
+            let jenisBarang = ''
+            let kode = ''
+            let jumlah = ''
+
+            if (item.item_type === 'ont') {
+              jenisBarang = 'ONT / Modem'
+              kode = item.sn?.serial_number || '-'
+              jumlah = '1 unit'
+            } else if (item.item_type === 'dropcore') {
+              jenisBarang = 'Dropcore'
+              kode = item.haspel?.haspel_code || '-'
+              jumlah = `${item.meters_used} m`
+            } else if (item.item_type === 'other') {
+              jenisBarang = 'Material Lainnya'
+              kode = item.warehouse_item?.item_name || '-'
+              jumlah = `${item.quantity}`
+            }
+            ws2.addRow([exp.expense_date, site, workType, techNames, jenisBarang, kode, jumlah, exp.note || ''])
+          })
+        }
+      })
+      applyDataRowStyles(ws2)
+
+      await downloadWorkbook(workbook, `pengeluaran_${new Date().toISOString().slice(0, 10)}.xlsx`)
+      toast.success('Export berhasil!')
+    } catch (err) {
+      console.error(err)
+      toast.error('Gagal export: ' + err.message)
+    }
   }
+
 
   return (
     <div>

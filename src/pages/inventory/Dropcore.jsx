@@ -4,8 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, Edit2, X, Cable, AlertTriangle, Download } from 'lucide-react'
-import * as XLSX from 'xlsx'
+import { Search, Plus, Trash2, Edit2, X, Cable, AlertTriangle, Download, History } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 
@@ -25,6 +24,12 @@ export default function Dropcore() {
   const [expandedId, setExpandedId] = useState(null)
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
+
+  // History modal states
+  const [historyItem, setHistoryItem] = useState(null)
+  const [historyData, setHistoryData] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
 
   useEffect(() => { fetchHaspels() }, [])
   useEffect(() => { setPage(1) }, [searchTerm, typeFilter, statusFilter])
@@ -75,10 +80,20 @@ export default function Dropcore() {
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dropcore', action: 'Edit Haspel', detail: `Haspel: ${form.haspel_code}` })
         toast.success('Haspel berhasil diperbarui')
       } else {
-        const { error } = await supabase.from('dropcore_haspels').insert({ ...form, status, created_by: profile.id })
+        const { data: insertedData, error } = await supabase.from('dropcore_haspels').insert({ ...form, status, created_by: profile.id }).select().single()
         if (error) throw error
+        const newHaspelId = insertedData.id
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dropcore', action: 'Tambah Haspel', detail: `Haspel: ${form.haspel_code}` })
         toast.success('Haspel berhasil ditambahkan')
+        await supabase.from('inventory_log').insert({
+          log_date: form.date_in,
+          item_type: 'dropcore',
+          item_id: newHaspelId,
+          action: 'masuk',
+          meters: Number(form.initial_meters),
+          note: form.note || null,
+          created_by: profile.id
+        })
       }
       setIsModalOpen(false)
       fetchHaspels()
@@ -93,6 +108,48 @@ export default function Dropcore() {
     await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dropcore', action: 'Hapus Haspel', detail: h.haspel_code })
     toast.success('Haspel dihapus')
     fetchHaspels()
+  }
+
+  const fetchHistory = async (haspel) => {
+    setHistoryItem(haspel)
+    setIsHistoryOpen(true)
+    setHistoryLoading(true)
+
+    const { data: logs } = await supabase
+      .from('inventory_log')
+      .select('*, user:users(full_name)')
+      .eq('item_type', 'dropcore')
+      .eq('item_id', haspel.id)
+      .order('log_date', { ascending: true })
+
+    const { data: expItems } = await supabase
+      .from('expense_items')
+      .select('*, expense:daily_expenses(expense_date, site, technicians), expense_users:daily_expenses(technicians)')
+      .eq('item_type', 'dropcore')
+      .eq('haspel_id', haspel.id)
+      .order('created_at', { ascending: true })
+
+    const inRows = (logs || []).map(l => ({
+      date: l.log_date,
+      action: l.action === 'masuk' ? 'Masuk' : 'Koreksi',
+      meters: l.meters,
+      note: l.note,
+      user: l.user?.full_name,
+      type: 'in'
+    }))
+
+    const outRows = (expItems || []).map(ei => ({
+      date: ei.expense?.expense_date,
+      action: 'Keluar',
+      meters: ei.meters_used,
+      note: ei.expense?.site,
+      technicians: ei.expense?.technicians,
+      type: 'out'
+    }))
+
+    const combined = [...inRows, ...outRows].sort((a, b) => (a.date < b.date ? -1 : 1))
+    setHistoryData(combined)
+    setHistoryLoading(false)
   }
 
   const filtered = haspels.filter(h => {
@@ -115,21 +172,55 @@ export default function Dropcore() {
     return Math.round((used / total) * 100)
   }
 
-  const handleExportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(filtered.map(h => ({
-      'Kode Haspel': h.haspel_code,
-      'Tipe': h.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C',
-      'Tanggal Masuk': h.date_in,
-      'Meter Awal': Number(h.initial_meters),
-      'Terpakai': Number(h.used_meters),
-      'Sisa': Number(h.initial_meters) - Number(h.used_meters),
-      'Status': h.status,
-      'Note': h.note || ''
-    })))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Dropcore')
-    XLSX.writeFile(wb, `dropcore_${new Date().toISOString().slice(0,10)}.xlsx`)
-    toast.success('Export berhasil')
+  const handleExportExcel = async () => {
+    const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
+    const ExcelJS = (await import('exceljs')).default
+    const workbook = new ExcelJS.Workbook()
+    workbook.creator = 'Maintory'
+    workbook.created = new Date()
+
+    // Sheet 1: Stok Haspel
+    const ws1 = workbook.addWorksheet('Stok Haspel')
+    const headers1 = ['Kode Haspel', 'Tipe', 'Tanggal Masuk', 'Meter Awal', 'Meter Terpakai', 'Sisa Meter', 'Status', 'Catatan']
+    setColumnWidths(ws1, [16, 14, 16, 14, 16, 14, 12, 28])
+    applyHeaderStyle(ws1, headers1)
+    haspels.forEach(h => {
+      ws1.addRow([
+        h.haspel_code,
+        h.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C',
+        h.date_in,
+        Number(h.initial_meters),
+        Number(h.used_meters),
+        Number(h.initial_meters) - Number(h.used_meters),
+        h.status === 'habis' ? 'Habis' : 'Tersedia',
+        h.note || ''
+      ])
+    })
+    applyDataRowStyles(ws1)
+
+    // Sheet 2: Riwayat Transaksi (from expense_items)
+    const ws2 = workbook.addWorksheet('Riwayat Transaksi')
+    const headers2 = ['Kode Haspel', 'Tipe', 'Tanggal', 'Jenis', 'Meter', 'Lokasi', 'Catatan']
+    setColumnWidths(ws2, [16, 14, 16, 12, 12, 18, 28])
+    applyHeaderStyle(ws2, headers2, '065F46')
+
+    // Fetch all transactions
+    const { data: allExpItems } = await supabase.from('expense_items').select('*, haspel:dropcore_haspels(haspel_code, type), expense:daily_expenses(expense_date, site)').eq('item_type', 'dropcore').order('created_at', { ascending: true })
+    const { data: allLogs } = await supabase.from('inventory_log').select('*, item:dropcore_haspels(haspel_code, type), user:users(full_name)').eq('item_type', 'dropcore').order('log_date', { ascending: true })
+
+    const rows2 = []
+    ;(allLogs || []).forEach(l => {
+      rows2.push({ date: l.log_date, code: l.item?.haspel_code || '-', type: l.item?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C', jenis: l.action === 'masuk' ? 'Masuk' : 'Koreksi', meters: l.meters || 0, site: '-', note: l.note || '' })
+    })
+    ;(allExpItems || []).forEach(ei => {
+      rows2.push({ date: ei.expense?.expense_date || '-', code: ei.haspel?.haspel_code || '-', type: ei.haspel?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C', jenis: 'Keluar', meters: ei.meters_used || 0, site: ei.expense?.site || '-', note: '' })
+    })
+    rows2.sort((a, b) => (a.date < b.date ? -1 : 1))
+    rows2.forEach(r => ws2.addRow([r.code, r.type, r.date, r.jenis, r.meters, r.site, r.note]))
+    applyDataRowStyles(ws2)
+
+    await downloadWorkbook(workbook, `dropcore_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    toast.success('Export berhasil!')
   }
 
   return (
@@ -229,7 +320,7 @@ export default function Dropcore() {
                     <th>Sisa</th>
                     <th>Progress</th>
                     <th>Status</th>
-                    {can(role, 'inventory.dropcore.edit') && <th style={{ textAlign: 'right' }}>Aksi</th>}
+                    <th style={{ textAlign: 'right' }}>Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -257,16 +348,17 @@ export default function Dropcore() {
                             : <span className="badge badge-success">Tersedia</span>
                           }
                         </td>
-                        {can(role, 'inventory.dropcore.edit') && (
-                          <td style={{ textAlign: 'right' }}>
-                            <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                        <td style={{ textAlign: 'right' }}>
+                          <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                            <button className="btn-icon" title="Riwayat" onClick={() => fetchHistory(h)}><History size={15} /></button>
+                            {can(role, 'inventory.dropcore.edit') && (
                               <button className="btn-icon" onClick={() => openEdit(h)}><Edit2 size={15} /></button>
-                              {can(role, 'inventory.dropcore.delete') && (
-                                <button className="btn-icon text-danger" onClick={() => handleDelete(h)}><Trash2 size={15} /></button>
-                              )}
-                            </div>
-                          </td>
-                        )}
+                            )}
+                            {can(role, 'inventory.dropcore.delete') && (
+                              <button className="btn-icon text-danger" onClick={() => handleDelete(h)}><Trash2 size={15} /></button>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     )
                   })}
@@ -313,14 +405,15 @@ export default function Dropcore() {
                               <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', textAlign: 'right' }}>{p}%</div>
                             </span>
                           </div>
-                          {can(role, 'inventory.dropcore.edit') && (
-                            <div className="mobile-card-actions">
+                          <div className="mobile-card-actions">
+                            <button className="btn btn-secondary btn-sm" onClick={() => fetchHistory(h)}><History size={14} /> Riwayat</button>
+                            {can(role, 'inventory.dropcore.edit') && (
                               <button className="btn btn-secondary btn-sm" onClick={() => openEdit(h)}><Edit2 size={14} /> Edit</button>
-                              {can(role, 'inventory.dropcore.delete') && (
-                                <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(h)}><Trash2 size={14} /> Hapus</button>
-                              )}
-                            </div>
-                          )}
+                            )}
+                            {can(role, 'inventory.dropcore.delete') && (
+                              <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(h)}><Trash2 size={14} /> Hapus</button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -360,7 +453,7 @@ export default function Dropcore() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal">
@@ -417,6 +510,39 @@ export default function Dropcore() {
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : (editItem ? 'Simpan Perubahan' : 'Tambah Haspel')}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {isHistoryOpen && historyItem && (
+        <div className="modal-overlay">
+          <div className="modal modal-lg">
+            <div className="modal-header">
+              <h3>Riwayat Haspel: {historyItem.haspel_code}</h3>
+              <button className="btn-icon" onClick={() => setIsHistoryOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              {historyLoading ? (
+                <div className="flex-center" style={{ height: '120px' }}><div className="spinner"/></div>
+              ) : historyData.length === 0 ? (
+                <div className="empty-state"><History size={32}/><p>Belum ada riwayat transaksi</p></div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {historyData.map((r, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: r.type === 'in' ? 'var(--accent-dim)' : 'var(--bg-primary)', border: `1px solid ${r.type === 'in' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: '8px' }}>
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: r.type === 'in' ? 'var(--accent)' : 'var(--warning)', flexShrink: 0 }}/>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: '13px' }}>{r.date} — {r.action}</div>
+                        <div className="text-secondary" style={{ fontSize: '12px' }}>{r.type === 'in' ? `${r.meters}m masuk` : `${r.meters}m keluar, Lokasi: ${r.note}`}</div>
+                        {r.user && <div className="text-secondary" style={{ fontSize: '11px' }}>oleh {r.user}</div>}
+                      </div>
+                      <span className={`badge ${r.type === 'in' ? 'badge-accent' : 'badge-warning'}`}>{r.type === 'in' ? `+${r.meters}m` : `-${r.meters}m`}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
