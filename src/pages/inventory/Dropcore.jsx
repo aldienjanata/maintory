@@ -509,7 +509,7 @@ export default function Dropcore() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Meter Terpakai</label>
-                  <input type="number" className="form-input" min="0" value={form.used_meters} onChange={e => setForm(f => ({ ...f, used_meters: e.target.value }))} />
+                  <input type="number" className="form-input" min="0" disabled={role === 'teknisi'} value={form.used_meters} onChange={e => setForm(f => ({ ...f, used_meters: e.target.value }))} title={role === 'teknisi' ? 'Teknisi hanya bisa melihat, gunakan halaman Pengeluaran untuk input pemakaian' : ''} />
                 </div>
               </div>
               <div className="form-group">
