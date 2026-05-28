@@ -217,23 +217,29 @@ export default function Dropcore() {
 
     // Sheet 2: Riwayat Transaksi (from expense_items)
     const ws2 = workbook.addWorksheet('Riwayat Transaksi')
-    const headers2 = ['Kode Haspel', 'Tipe', 'Tanggal', 'Jenis', 'Meter', 'Lokasi', 'Catatan']
-    setColumnWidths(ws2, [16, 14, 16, 12, 12, 18, 28])
+    const headers2 = ['Kode Haspel', 'Tipe', 'Tanggal', 'Jenis', 'Pekerjaan', 'Teknisi', 'Meter', 'Lokasi/Note']
+    setColumnWidths(ws2, [16, 14, 16, 12, 16, 24, 12, 28])
     applyHeaderStyle(ws2, headers2, '065F46')
 
     // Fetch all transactions
-    const { data: allExpItems } = await supabase.from('expense_items').select('*, haspel:dropcore_haspels(haspel_code, type), expense:daily_expenses(expense_date, site)').eq('item_type', 'dropcore').order('created_at', { ascending: true })
+    const { data: allExpItems } = await supabase.from('expense_items').select('*, haspel:dropcore_haspels(haspel_code, type), expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type', 'dropcore').order('created_at', { ascending: true })
     const { data: allLogs } = await supabase.from('inventory_log').select('*, item:dropcore_haspels(haspel_code, type), user:users(full_name)').eq('item_type', 'dropcore').order('log_date', { ascending: true })
+    const { data: usersData } = await supabase.from('users').select('id, full_name')
+    
+    const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
+    const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3' }
 
     const rows2 = []
     ;(allLogs || []).forEach(l => {
-      rows2.push({ date: l.log_date, code: l.item?.haspel_code || '-', type: l.item?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C', jenis: l.action === 'masuk' ? 'Masuk' : 'Koreksi', meters: l.meters || 0, site: '-', note: l.note || '' })
+      rows2.push({ date: l.log_date, code: l.item?.haspel_code || '-', type: l.item?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C', jenis: l.action === 'masuk' ? 'Masuk' : 'Koreksi', work: '-', tech: '-', meters: l.meters || 0, note: l.note || '' })
     })
     ;(allExpItems || []).forEach(ei => {
-      rows2.push({ date: ei.expense?.expense_date || '-', code: ei.haspel?.haspel_code || '-', type: ei.haspel?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C', jenis: 'Keluar', meters: ei.meters_used || 0, site: ei.expense?.site || '-', note: '' })
+      const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+      const wType = ei.expense?.work_type
+      rows2.push({ date: ei.expense?.expense_date || '-', code: ei.haspel?.haspel_code || '-', type: ei.haspel?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C', jenis: 'Keluar', work: workTypeLabels[wType] || wType || '-', tech: techNames || '-', meters: ei.meters_used || 0, note: `Lokasi: ${ei.expense?.site || '-'}` })
     })
     rows2.sort((a, b) => (a.date < b.date ? -1 : 1))
-    rows2.forEach(r => ws2.addRow([r.code, r.type, r.date, r.jenis, r.meters, r.site, r.note]))
+    rows2.forEach(r => ws2.addRow([r.code, r.type, r.date, r.jenis, r.work, r.tech, r.meters, r.note]))
     applyDataRowStyles(ws2)
 
     await downloadWorkbook(workbook, `Dropcore ${new Date().toISOString().slice(0, 10)}.xlsx`)

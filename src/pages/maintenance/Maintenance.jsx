@@ -265,9 +265,40 @@ export default function Maintenance() {
       return na - nb
     })
 
-  // Export (dummy implementation for now)
-  const handleExport = () => {
-    toast('Fitur Export Excel akan segera hadir', { icon: '📊' })
+  const handleExport = async () => {
+    try {
+      const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      const ws = workbook.addWorksheet('Maintenance')
+      
+      const headers = ['No Tiket', 'Tgl Tiket', 'Tgl Selesai', 'ID Pelanggan', 'Nama Pelanggan', 'No HP', 'Keluhan', 'Desa', 'Titik Maps', 'Teknisi', 'Status', 'Catatan']
+      setColumnWidths(ws, [10, 16, 16, 16, 24, 16, 30, 20, 30, 24, 12, 24])
+      applyHeaderStyle(ws, headers)
+      
+      filteredTickets.forEach(t => {
+        ws.addRow([
+          t.ticket_number,
+          t.created_at ? t.created_at.split('T')[0] : '',
+          t.completed_at ? t.completed_at.split('T')[0] : '',
+          t.customer_id || '',
+          t.customer_name || '',
+          t.phone_number || '',
+          t.complaint || '',
+          t.village || '',
+          t.sharelok || '',
+          getTechNames(t.technicians),
+          t.status,
+          t.note || ''
+        ])
+      })
+      applyDataRowStyles(ws)
+
+      await downloadWorkbook(workbook, `Maintenance ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
+      toast.success('Export berhasil!')
+    } catch (err) {
+      toast.error('Gagal export: ' + err.message)
+    }
   }
 
   const getTechNames = (techIds) => {

@@ -239,22 +239,28 @@ export default function StokGudang() {
       applyDataRowStyles(ws1)
 
       const ws2 = workbook.addWorksheet('Riwayat Transaksi')
-      const headers2 = ['Nama Item', 'Tanggal', 'Jenis Transaksi', 'Jumlah', 'Lokasi/Note']
-      setColumnWidths(ws2, [30, 16, 18, 12, 30])
+      const headers2 = ['Nama Item', 'Tanggal', 'Jenis Transaksi', 'Pekerjaan', 'Teknisi', 'Jumlah', 'Lokasi/Note']
+      setColumnWidths(ws2, [30, 16, 18, 16, 24, 12, 30])
       applyHeaderStyle(ws2, headers2, '065F46')
       
-      const { data: allExpItems } = await supabase.from('expense_items').select('*, item:warehouses(item_name), expense:daily_expenses(expense_date, site)').eq('item_type','other').order('created_at', {ascending: true})
+      const { data: allExpItems } = await supabase.from('expense_items').select('*, item:warehouses(item_name), expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type','other').order('created_at', {ascending: true})
       const { data: allLogs } = await supabase.from('inventory_log').select('*, item:warehouses(item_name)').eq('item_type','stok_gudang').order('log_date', {ascending: true})
+      const { data: usersData } = await supabase.from('users').select('id, full_name')
       
+      const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
+      const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3' }
+
       const rows2 = []
       ;(allLogs || []).forEach(l => {
-        rows2.push({ name: l.item?.item_name || '-', date: l.log_date, action: l.action === 'masuk' ? 'Masuk' : 'Koreksi', qty: l.quantity || 0, note: l.note || '' })
+        rows2.push({ name: l.item?.item_name || '-', date: l.log_date, action: l.action === 'masuk' ? 'Masuk' : 'Koreksi', work: '-', tech: '-', qty: l.quantity || 0, note: l.note || '' })
       })
       ;(allExpItems || []).forEach(ei => {
-        rows2.push({ name: ei.item?.item_name || '-', date: ei.expense?.expense_date || '-', action: 'Keluar', qty: ei.quantity || 0, note: `Lokasi: ${ei.expense?.site || '-'}` })
+        const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+        const wType = ei.expense?.work_type
+        rows2.push({ name: ei.item?.item_name || '-', date: ei.expense?.expense_date || '-', action: 'Keluar', work: workTypeLabels[wType] || wType || '-', tech: techNames || '-', qty: ei.quantity || 0, note: `Lokasi: ${ei.expense?.site || '-'}` })
       })
       rows2.sort((a,b) => a.date < b.date ? -1 : 1)
-      rows2.forEach(r => ws2.addRow([r.name, r.date, r.action, r.qty, r.note]))
+      rows2.forEach(r => ws2.addRow([r.name, r.date, r.action, r.work, r.tech, r.qty, r.note]))
       applyDataRowStyles(ws2)
 
       await downloadWorkbook(workbook, `Stok Gudang ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)

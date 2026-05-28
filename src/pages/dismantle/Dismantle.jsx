@@ -7,7 +7,6 @@ import toast from 'react-hot-toast'
 import { Search, Plus, Trash2, Edit2, X, ArrowDownToLine, CheckCircle, Clock, MapPin, Phone, FileDown, Upload, Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
-import * as XLSX from 'xlsx'
 
 export default function Dismantle() {
   const { profile } = useAuth()
@@ -118,34 +117,56 @@ export default function Dismantle() {
 
   const paginated = filtered.slice((page - 1) * perPage, page * perPage)
 
-  const handleExportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(filtered.map(item => ({
-      'Tanggal Input': item.date_input,
-      'ID Pelanggan': item.customer_id,
-      'Nama Lengkap': item.full_name,
-      'No HP': item.phone_number || '',
-      'Alamat': item.address || '',
-      'SN ONT': item.serial_number || '',
-      'Bayar Terakhir': item.last_payment || '',
-      'Teknisi': getTechNames(item.technicians),
-      'Status': item.aksi,
-      'Tanggal Ambil': item.pickup_date || '',
-      'Note': item.note || '',
-    })))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Dismantle')
-    XLSX.writeFile(wb, `dismantle_${new Date().toISOString().slice(0,10)}.xlsx`)
-    toast.success('Export berhasil')
+  const handleExportExcel = async () => {
+    try {
+      const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      const ws = workbook.addWorksheet('Dismantle')
+      
+      const headers = ['Tanggal Input', 'ID Pelanggan', 'Nama Lengkap', 'No HP', 'Alamat', 'SN ONT', 'Bayar Terakhir', 'Teknisi', 'Status', 'Tanggal Ambil', 'Note']
+      setColumnWidths(ws, [16, 16, 24, 16, 30, 20, 16, 24, 12, 16, 24])
+      applyHeaderStyle(ws, headers)
+      
+      filtered.forEach(item => {
+        ws.addRow([
+          item.date_input,
+          item.customer_id,
+          item.full_name,
+          item.phone_number || '',
+          item.address || '',
+          item.serial_number || '',
+          item.last_payment || '',
+          getTechNames(item.technicians),
+          item.aksi,
+          item.pickup_date || '',
+          item.note || ''
+        ])
+      })
+      applyDataRowStyles(ws)
+
+      await downloadWorkbook(workbook, `Dismantle ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
+      toast.success('Export berhasil!')
+    } catch (err) {
+      toast.error('Gagal export: ' + err.message)
+    }
   }
 
-  const handleDownloadTemplate = () => {
-    const ws = XLSX.utils.aoa_to_sheet([[
-      'Tanggal Input (yyyy-mm-dd)', 'ID Pelanggan', 'Nama Lengkap',
-      'No HP', 'Alamat', 'SN ONT', 'Bayar Terakhir', 'Note'
-    ]])
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Template')
-    XLSX.writeFile(wb, 'template_dismantle.xlsx')
+  const handleDownloadTemplate = async () => {
+    try {
+      const { applyHeaderStyle, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      const ws = workbook.addWorksheet('Template')
+      
+      const headers = ['Tanggal Input (yyyy-mm-dd)', 'ID Pelanggan', 'Nama Lengkap', 'No HP', 'Alamat', 'SN ONT', 'Bayar Terakhir', 'Note']
+      setColumnWidths(ws, [26, 16, 24, 16, 30, 20, 16, 24])
+      applyHeaderStyle(ws, headers)
+      
+      await downloadWorkbook(workbook, 'Template Import Dismantle.xlsx')
+    } catch(err) {
+      toast.error('Gagal download template')
+    }
   }
 
   const handleImportExcel = async (e) => {
@@ -154,9 +175,10 @@ export default function Dismantle() {
     const reader = new FileReader()
     reader.onload = async (evt) => {
       try {
-        const wb = XLSX.read(evt.target.result, { type: 'binary' })
+        const { read, utils } = await import('xlsx')
+        const wb = read(evt.target.result, { type: 'binary' })
         const ws = wb.Sheets[wb.SheetNames[0]]
-        const data = XLSX.utils.sheet_to_json(ws)
+        const data = utils.sheet_to_json(ws)
         if (!data.length) { toast.error('File kosong'); return }
         const toInsert = data.map(row => ({
           date_input: row['Tanggal Input (yyyy-mm-dd)'] || row['Tanggal Input'] || format(new Date(), 'yyyy-MM-dd'),

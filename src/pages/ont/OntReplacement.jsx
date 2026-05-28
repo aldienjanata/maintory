@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, X, RefreshCcw, ArrowRight } from 'lucide-react'
+import { Search, Plus, Trash2, X, RefreshCcw, ArrowRight, Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 
@@ -107,6 +107,37 @@ export default function OntReplacement() {
 
   const paginated = filtered.slice((page - 1) * perPage, page * perPage)
 
+  const handleExportExcel = async () => {
+    try {
+      const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      const ws = workbook.addWorksheet('Pergantian ONT')
+      
+      const headers = ['Tanggal', 'ID Pelanggan', 'Nama Pelanggan', 'SN Lama', 'SN Baru', 'Teknisi', 'Alasan']
+      setColumnWidths(ws, [16, 16, 24, 20, 20, 24, 30])
+      applyHeaderStyle(ws, headers)
+      
+      filtered.forEach(item => {
+        ws.addRow([
+          item.replacement_date,
+          item.customer_id,
+          item.customer_name,
+          item.old_serial_number,
+          item.new_sn?.serial_number || '',
+          getTechNames(item.technicians),
+          item.reason || ''
+        ])
+      })
+      applyDataRowStyles(ws)
+
+      await downloadWorkbook(workbook, `Pergantian ONT ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
+      toast.success('Export berhasil!')
+    } catch (err) {
+      toast.error('Gagal export: ' + err.message)
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -115,6 +146,11 @@ export default function OntReplacement() {
           <p>Riwayat pergantian perangkat ONT pelanggan</p>
         </div>
         <div className="page-header-right">
+          {can(role, 'ont.export') && (
+            <button className="btn btn-secondary" onClick={handleExportExcel}>
+              <Download size={16} /> Export
+            </button>
+          )}
           {can(role, 'ont.input') && (
             <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setSnSearch(''); setSnDropdownOpen(false); setIsModalOpen(true) }}>
               <Plus size={16} /> Tambah Pergantian

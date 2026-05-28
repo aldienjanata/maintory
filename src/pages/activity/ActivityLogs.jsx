@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import toast from 'react-hot-toast'
-import { Search, Trash2, History, Filter } from 'lucide-react'
+import { Search, Trash2, History, Filter, Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 
@@ -57,6 +57,36 @@ export default function ActivityLogs() {
     return <span className={`badge ${map[r] || 'badge-muted'}`}>{r}</span>
   }
 
+  const handleExportExcel = async () => {
+    try {
+      const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      const ws = workbook.addWorksheet('Log Aktivitas')
+      
+      const headers = ['Waktu', 'User', 'Role', 'Modul', 'Aksi', 'Detail']
+      setColumnWidths(ws, [20, 20, 14, 20, 24, 40])
+      applyHeaderStyle(ws, headers)
+      
+      filtered.forEach(log => {
+        ws.addRow([
+          format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
+          log.username || '-',
+          log.role || '-',
+          log.module || '-',
+          log.action || '-',
+          log.detail || '-'
+        ])
+      })
+      applyDataRowStyles(ws)
+
+      await downloadWorkbook(workbook, `Log Aktivitas ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
+      toast.success('Export berhasil!')
+    } catch (err) {
+      toast.error('Gagal export: ' + err.message)
+    }
+  }
+
   const getModuleBadge = (mod) => {
     const colorMap = {
       'Auth': 'badge-purple', 'Maintenance': 'badge-warning', 'Stok Gudang': 'badge-info',
@@ -74,6 +104,9 @@ export default function ActivityLogs() {
           <p>Riwayat semua tindakan pengguna dalam sistem</p>
         </div>
         <div className="page-header-right">
+          <button className="btn btn-secondary" onClick={handleExportExcel}>
+            <Download size={15} /> Export
+          </button>
           {can(role, 'logs.delete') && (
             <button className="btn btn-danger" onClick={handleClearLogs}>
               <Trash2 size={15} /> Hapus Semua Log
