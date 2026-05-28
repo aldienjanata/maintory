@@ -623,7 +623,7 @@ export default function Pengeluaran() {
       })
       applyDataRowStyles(ws2)
 
-      await downloadWorkbook(workbook, `pengeluaran_${new Date().toISOString().slice(0, 10)}.xlsx`)
+      await downloadWorkbook(workbook, `Pengeluaran ${new Date().toISOString().slice(0, 10)}.xlsx`)
       toast.success('Export berhasil!')
     } catch (err) {
       console.error(err)

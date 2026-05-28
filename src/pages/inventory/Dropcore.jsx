@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { Search, Plus, Trash2, Edit2, X, Cable, AlertTriangle, Download, History } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
+import HistoryModal from '../../components/HistoryModal'
 
 export default function Dropcore() {
   const { profile } = useAuth()
@@ -124,28 +125,44 @@ export default function Dropcore() {
 
     const { data: expItems } = await supabase
       .from('expense_items')
-      .select('*, expense:daily_expenses(expense_date, site, technicians), expense_users:daily_expenses(technicians)')
+      .select('*, expense:daily_expenses(expense_date, site, technicians, work_type)')
       .eq('item_type', 'dropcore')
       .eq('haspel_id', haspel.id)
       .order('created_at', { ascending: true })
 
+    // Fetch all users to map technician IDs
+    const { data: usersData } = await supabase.from('users').select('id, full_name')
+    const usersMap = {}
+    ;(usersData || []).forEach(u => usersMap[u.id] = u.full_name)
+
+    const workTypeLabels = {
+      'ikr_psb': 'IKR / PSB',
+      'mt': 'Maintenance',
+      'pt2': 'PT2 / PT3'
+    }
+
     const inRows = (logs || []).map(l => ({
       date: l.log_date,
       action: l.action === 'masuk' ? 'Masuk' : 'Koreksi',
-      meters: l.meters,
+      qty: l.meters,
       note: l.note,
       user: l.user?.full_name,
       type: 'in'
     }))
 
-    const outRows = (expItems || []).map(ei => ({
-      date: ei.expense?.expense_date,
-      action: 'Keluar',
-      meters: ei.meters_used,
-      note: ei.expense?.site,
-      technicians: ei.expense?.technicians,
-      type: 'out'
-    }))
+    const outRows = (expItems || []).map(ei => {
+      const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+      const wType = ei.expense?.work_type
+      return {
+        date: ei.expense?.expense_date,
+        action: 'Keluar',
+        qty: ei.meters_used,
+        note: ei.expense?.site,
+        technicianNames: techNames,
+        workType: workTypeLabels[wType] || wType,
+        type: 'out'
+      }
+    })
 
     const combined = [...inRows, ...outRows].sort((a, b) => (a.date < b.date ? -1 : 1))
     setHistoryData(combined)
@@ -219,7 +236,7 @@ export default function Dropcore() {
     rows2.forEach(r => ws2.addRow([r.code, r.type, r.date, r.jenis, r.meters, r.site, r.note]))
     applyDataRowStyles(ws2)
 
-    await downloadWorkbook(workbook, `dropcore_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    await downloadWorkbook(workbook, `Dropcore ${new Date().toISOString().slice(0, 10)}.xlsx`)
     toast.success('Export berhasil!')
   }
 
@@ -240,7 +257,6 @@ export default function Dropcore() {
         </div>
       </div>
 
-      {/* Summary */}
       <div className="stats-grid mb-4">
         {[
           { key: 'total', label: 'Total Haspel Utuh', value: haspels.filter(h => (Number(h.initial_meters || 0) - Number(h.used_meters || 0)) === 1000).length, color: 'var(--accent)' },
@@ -420,7 +436,6 @@ export default function Dropcore() {
                   )
                 })}
               </div>
-              {/* Pagination */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', marginTop: '4px', borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
@@ -453,7 +468,6 @@ export default function Dropcore() {
         </div>
       </div>
 
-      {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal">
@@ -500,7 +514,6 @@ export default function Dropcore() {
                 <label className="form-label">Note</label>
                 <input className="form-input" placeholder="Opsional" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
               </div>
-              {/* Preview sisa */}
               <div style={{ padding: '10px 14px', background: 'var(--bg-hover)', borderRadius: '8px', fontSize: '13px' }}>
                 Sisa meter: <strong style={{ color: 'var(--accent)' }}>{Math.max(0, Number(form.initial_meters) - Number(form.used_meters))} m</strong>
               </div>
@@ -515,38 +528,15 @@ export default function Dropcore() {
         </div>
       )}
 
-      {/* History Modal */}
-      {isHistoryOpen && historyItem && (
-        <div className="modal-overlay">
-          <div className="modal modal-lg">
-            <div className="modal-header">
-              <h3>Riwayat Haspel: {historyItem.haspel_code}</h3>
-              <button className="btn-icon" onClick={() => setIsHistoryOpen(false)}><X size={18} /></button>
-            </div>
-            <div className="modal-body">
-              {historyLoading ? (
-                <div className="flex-center" style={{ height: '120px' }}><div className="spinner"/></div>
-              ) : historyData.length === 0 ? (
-                <div className="empty-state"><History size={32}/><p>Belum ada riwayat transaksi</p></div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {historyData.map((r, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: r.type === 'in' ? 'var(--accent-dim)' : 'var(--bg-primary)', border: `1px solid ${r.type === 'in' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: '8px' }}>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: r.type === 'in' ? 'var(--accent)' : 'var(--warning)', flexShrink: 0 }}/>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: '13px' }}>{r.date} — {r.action}</div>
-                        <div className="text-secondary" style={{ fontSize: '12px' }}>{r.type === 'in' ? `${r.meters}m masuk` : `${r.meters}m keluar, Lokasi: ${r.note}`}</div>
-                        {r.user && <div className="text-secondary" style={{ fontSize: '11px' }}>oleh {r.user}</div>}
-                      </div>
-                      <span className={`badge ${r.type === 'in' ? 'badge-accent' : 'badge-warning'}`}>{r.type === 'in' ? `+${r.meters}m` : `-${r.meters}m`}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <HistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        item={historyItem}
+        data={historyData}
+        loading={historyLoading}
+        title={`Riwayat Haspel: ${historyItem?.haspel_code}`}
+        unit="m"
+      />
     </div>
   )
 }

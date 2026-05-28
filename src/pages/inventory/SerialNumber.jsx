@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { Search, Plus, Trash2, Edit2, X, Hash, UploadCloud, CheckCircle, Clock, FileDown, Upload, Download, History } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
+import HistoryModal from '../../components/HistoryModal'
 
 export default function SerialNumber() {
   const { profile } = useAuth()
@@ -59,18 +60,31 @@ export default function SerialNumber() {
     setIsHistoryOpen(true)
     setHistoryLoading(true)
     
-    // Fetch riwayat masuk/koreksi
     const { data: logs } = await supabase.from('inventory_log').select('*, user:users(full_name)').eq('item_type', 'sn').eq('item_id', item.id).order('log_date', { ascending: true })
-    // Fetch riwayat pengeluaran
-    const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians)').eq('item_type', 'sn').eq('serial_number_id', item.id).order('created_at', { ascending: true })
+    const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type', 'sn').eq('serial_number_id', item.id).order('created_at', { ascending: true })
     
-    const combined = []
-    ;(logs || []).forEach(l => {
-      combined.push({ date: l.log_date, action: l.action === 'masuk' ? 'Masuk' : 'Koreksi', note: l.note || '', user: l.user?.full_name, type: 'in' })
-    })
-    ;(expItems || []).forEach(ei => {
-      combined.push({ date: ei.expense?.expense_date || '-', action: 'Keluar', note: `Lokasi: ${ei.expense?.site || '-'}`, type: 'out' })
-    })
+    const { data: usersData } = await supabase.from('users').select('id, full_name')
+    const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
+
+    const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3' }
+
+    const combined = [
+      ...(logs || []).map(l => ({ 
+        date: l.log_date, 
+        action: l.action === 'masuk' ? 'Masuk' : 'Koreksi', 
+        note: l.note || '', 
+        user: l.user?.full_name, 
+        qty: 1, 
+        type: 'in' 
+      })),
+      ...(expItems || []).map(ei => ({ 
+        date: ei.expense?.expense_date || '-', 
+        action: 'Keluar', 
+        note: `Lokasi: ${ei.expense?.site || '-'} | ${workTypeLabels[ei.expense?.work_type] || ei.expense?.work_type || '-'} | Teknisi: ${(ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')}`, 
+        qty: 1, 
+        type: 'out' 
+      }))
+    ]
     combined.sort((a, b) => (a.date < b.date ? -1 : 1))
     
     setHistoryData(combined)
@@ -97,7 +111,6 @@ export default function SerialNumber() {
   const handleBrandInput = async (brandName) => {
     setForm(f => ({ ...f, brand_name: brandName, brand_id: '', type_id: '', type_name: '' }))
     setTypes([])
-    // Cari brand yang match persis (case insensitive)
     const matched = brands.find(b => b.brand_name.toLowerCase() === brandName.toLowerCase())
     if (matched) {
       setForm(f => ({ ...f, brand_id: matched.id }))
@@ -108,9 +121,7 @@ export default function SerialNumber() {
   const handleTypeInput = (typeName) => {
     setForm(f => ({ ...f, type_name: typeName, type_id: '' }))
     const matched = types.find(t => t.type_name.toLowerCase() === typeName.toLowerCase())
-    if (matched) {
-      setForm(f => ({ ...f, type_id: matched.id }))
-    }
+    if (matched) setForm(f => ({ ...f, type_id: matched.id }))
   }
 
   const handleSaveSingle = async () => {
@@ -120,19 +131,16 @@ export default function SerialNumber() {
       let brandId = form.brand_id || null
       let typeId = form.type_id || null
 
-      // Buat merk baru jika diketik manual dan belum ada
       if (form.brand_name && !brandId) {
         const { data: newBrand, error } = await supabase.from('ont_brands').insert([{ brand_name: form.brand_name.trim() }]).select().single()
         if (error && error.code !== '23505') throw error
         if (newBrand) brandId = newBrand.id
         else {
-          // Sudah ada, fetch id-nya
           const { data: ex } = await supabase.from('ont_brands').select('id').ilike('brand_name', form.brand_name.trim()).single()
           if (ex) brandId = ex.id
         }
       }
 
-      // Buat tipe baru jika diketik manual dan belum ada
       if (form.type_name && !typeId && brandId) {
         const { data: newType, error } = await supabase.from('ont_types').insert([{ type_name: form.type_name.trim(), brand_id: brandId }]).select().single()
         if (error && error.code !== '23505') throw error
@@ -167,9 +175,7 @@ export default function SerialNumber() {
           created_by: profile.id
         }).select().single()
         if (error) throw error
-        
         await supabase.from('inventory_log').insert({ log_date: form.date_in, item_type: 'sn', item_id: newSn.id, action: 'masuk', quantity: 1, note: form.note || null, created_by: profile.id })
-        
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Tambah SN', detail: `SN: ${form.serial_number}` })
         toast.success('Serial Number berhasil ditambahkan')
       }
@@ -188,7 +194,6 @@ export default function SerialNumber() {
     try {
       let brandId = form.brand_id || null
       let typeId = form.type_id || null
-
       if (form.brand_name && !brandId) {
         const { data: newBrand, error } = await supabase.from('ont_brands').insert([{ brand_name: form.brand_name.trim() }]).select().single()
         if (error && error.code !== '23505') throw error
@@ -207,29 +212,10 @@ export default function SerialNumber() {
           if (ex) typeId = ex.id
         }
       }
-
-      const inserts = lines.map(sn => ({
-        brand_id: brandId,
-        type_id: typeId,
-        serial_number: sn,
-        date_in: form.date_in,
-        status: 'tersedia',
-        created_by: profile.id
-      }))
+      const inserts = lines.map(sn => ({ brand_id: brandId, type_id: typeId, serial_number: sn, date_in: form.date_in, status: 'tersedia', created_by: profile.id }))
       const { data: insertedSns, error } = await supabase.from('serial_numbers').insert(inserts).select()
       if (error) throw error
-      
-      const logInserts = insertedSns.map(sn => ({
-        log_date: form.date_in,
-        item_type: 'sn',
-        item_id: sn.id,
-        action: 'masuk',
-        quantity: 1,
-        note: 'Input massal via text',
-        created_by: profile.id
-      }))
-      await supabase.from('inventory_log').insert(logInserts)
-      
+      await supabase.from('inventory_log').insert(insertedSns.map(sn => ({ log_date: form.date_in, item_type: 'sn', item_id: sn.id, action: 'masuk', quantity: 1, note: 'Input massal via text', created_by: profile.id })))
       await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Input Massal SN', detail: `${lines.length} SN ditambahkan` })
       toast.success(`${lines.length} Serial Number berhasil ditambahkan`)
       setIsModalOpen(false)
@@ -270,40 +256,15 @@ export default function SerialNumber() {
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
       
-      // Sheet 1: Stok
       const ws1 = workbook.addWorksheet('Stok Serial Number')
-      const headers1 = ['Serial Number', 'Merk', 'Tipe', 'Tanggal Masuk', 'Status', 'Catatan']
+      applyHeaderStyle(ws1, ['Serial Number', 'Merk', 'Tipe', 'Tanggal Masuk', 'Status', 'Catatan'])
       setColumnWidths(ws1, [24, 18, 18, 16, 14, 30])
-      applyHeaderStyle(ws1, headers1)
-      items.forEach(i => {
-        ws1.addRow([i.serial_number, i.brand?.brand_name || '-', i.type?.type_name || '-', i.date_in, i.status === 'terpakai' ? 'Terpakai' : 'Tersedia', i.note || ''])
-      })
+      items.forEach(i => ws1.addRow([i.serial_number, i.brand?.brand_name || '-', i.type?.type_name || '-', i.date_in, i.status === 'terpakai' ? 'Terpakai' : 'Tersedia', i.note || '']))
       applyDataRowStyles(ws1)
 
-      // Sheet 2: Riwayat
-      const ws2 = workbook.addWorksheet('Riwayat Penggunaan')
-      const headers2 = ['Serial Number', 'Merk', 'Tipe', 'Tanggal', 'Jenis Transaksi', 'Lokasi/Note']
-      setColumnWidths(ws2, [24, 18, 18, 16, 18, 30])
-      applyHeaderStyle(ws2, headers2, '065F46')
-      
-      const { data: allExpItems } = await supabase.from('expense_items').select('*, sn:serial_numbers(serial_number, brand:ont_brands(brand_name), type:ont_types(type_name)), expense:daily_expenses(expense_date, site)').eq('item_type','ont').order('created_at', {ascending: true})
-      const { data: allLogs } = await supabase.from('inventory_log').select('*, sn:serial_numbers(serial_number, brand:ont_brands(brand_name), type:ont_types(type_name))').eq('item_type','sn').order('log_date', {ascending: true})
-      
-      const rows2 = []
-      ;(allLogs || []).forEach(l => {
-        rows2.push({ sn: l.sn?.serial_number || '-', brand: l.sn?.brand?.brand_name || '-', type: l.sn?.type?.type_name || '-', date: l.log_date, action: l.action === 'masuk' ? 'Masuk' : 'Koreksi', note: l.note || '' })
-      })
-      ;(allExpItems || []).forEach(ei => {
-        rows2.push({ sn: ei.sn?.serial_number || '-', brand: ei.sn?.brand?.brand_name || '-', type: ei.sn?.type?.type_name || '-', date: ei.expense?.expense_date || '-', action: 'Keluar', note: `Lokasi: ${ei.expense?.site || '-'}` })
-      })
-      rows2.sort((a,b) => a.date < b.date ? -1 : 1)
-      rows2.forEach(r => ws2.addRow([r.sn, r.brand, r.type, r.date, r.action, r.note]))
-      applyDataRowStyles(ws2)
-
-      await downloadWorkbook(workbook, `serial_number_${new Date().toISOString().slice(0,10)}.xlsx`)
+      await downloadWorkbook(workbook, `Data Serial Number ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
       toast.success('Export berhasil!')
     } catch (err) {
-      console.error(err)
       toast.error('Gagal export: ' + err.message)
     }
   }
@@ -314,12 +275,11 @@ export default function SerialNumber() {
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
       const ws = workbook.addWorksheet('Template')
-      const headers = ['Serial Number', 'Merk', 'Tipe', 'Tanggal Masuk (yyyy-mm-dd)', 'Note']
+      applyHeaderStyle(ws, ['Serial Number', 'Merk', 'Tipe', 'Tanggal Masuk (yyyy-mm-dd)', 'Note'])
       setColumnWidths(ws, [24, 18, 18, 26, 30])
-      applyHeaderStyle(ws, headers)
       ws.addRow(['ZTE123456', 'ZTE', 'F670L', '2026-01-01', 'Baru'])
       ws.addRow(['HUAWEI789', 'Huawei', 'HG8245H5', '2026-01-01', ''])
-      await downloadWorkbook(workbook, 'Template_Import_SN.xlsx')
+      await downloadWorkbook(workbook, 'Template Import Serial Number.xlsx')
     } catch(err) {
       toast.error('Gagal download template')
     }
@@ -332,100 +292,44 @@ export default function SerialNumber() {
     const reader = new FileReader()
     reader.onload = async (evt) => {
       try {
-        const wb = XLSX.read(evt.target.result, { type: 'binary' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const data = XLSX.utils.sheet_to_json(ws)
-        if (!data.length) { toast.error('File kosong'); setSaving(false); return }
+        const { read, utils } = await import('xlsx')
+        const wb = read(evt.target.result, { type: 'binary' })
+        const data = utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]])
+        if (!data.length) throw new Error('File kosong')
         
-        // Step 1: Extract unique brands from excel
         const uniqueBrands = [...new Set(data.map(r => String(r['Merk'] || '').trim()).filter(Boolean))]
-        const brandMap = {}
-        // Copy existing brands
-        brands.forEach(b => { brandMap[b.brand_name.toLowerCase()] = b.id })
-        
+        const brandMap = Object.fromEntries(brands.map(b => [b.brand_name.toLowerCase(), b.id]))
         for (const bName of uniqueBrands) {
-          const lowerName = bName.toLowerCase()
-          if (!brandMap[lowerName] && bName !== '-') {
-            // Insert new brand
-            const { data: newBrand, error } = await supabase.from('ont_brands').insert([{ brand_name: bName }]).select().single()
-            if (error) {
-              console.error('Error inserting brand:', bName, error)
-              toast.error(`Gagal membuat Merk baru (${bName}): ${error.message}`)
-            }
-            if (!error && newBrand) {
-              brandMap[lowerName] = newBrand.id
-            }
+          if (!brandMap[bName.toLowerCase()]) {
+            const { data: newBrand } = await supabase.from('ont_brands').insert([{ brand_name: bName }]).select().single()
+            if (newBrand) brandMap[bName.toLowerCase()] = newBrand.id
           }
         }
 
-        // Step 2: Fetch all types to avoid duplicates
         const { data: allTypes } = await supabase.from('ont_types').select('id, brand_id, type_name')
-        const typeMap = {} // key: brandId_typeNameLower -> value: typeId
-        if (allTypes) {
-          allTypes.forEach(t => { typeMap[`${t.brand_id}_${t.type_name.toLowerCase()}`] = t.id })
-        }
-
-        // Step 3: Insert missing types
-        const typesToInsert = []
-        data.forEach(r => {
-          const mName = String(r['Merk'] || '').trim().toLowerCase()
-          const bId = brandMap[mName]
-          const tName = String(r['Tipe'] || '').trim()
-          if (bId && tName && tName !== '-') {
-            const key = `${bId}_${tName.toLowerCase()}`
-            if (!typeMap[key] && !typesToInsert.find(t => t.brand_id === bId && t.type_name.toLowerCase() === tName.toLowerCase())) {
-              typesToInsert.push({ brand_id: bId, type_name: tName })
-            }
-          }
-        })
-
-        if (typesToInsert.length > 0) {
-          const { data: newTypes, error } = await supabase.from('ont_types').insert(typesToInsert).select()
-          if (error) {
-            console.error('Error inserting types:', error)
-            toast.error(`Gagal membuat Tipe baru: ${error.message}`)
-          }
-          if (!error && newTypes) {
-            newTypes.forEach(t => { typeMap[`${t.brand_id}_${t.type_name.toLowerCase()}`] = t.id })
-          }
-        }
-
-        // Step 4: Map data to insertion payload
+        const typeMap = Object.fromEntries((allTypes || []).map(t => [`${t.brand_id}_${t.type_name.toLowerCase()}`, t.id]))
+        
         const toInsert = data.map(row => {
           const sn = String(row['Serial Number'] || '').trim()
           if (!sn) return null
-          
-          const mName = String(row['Merk'] || '').trim().toLowerCase()
-          const tName = String(row['Tipe'] || '').trim().toLowerCase()
-          
-          const bId = brandMap[mName] || null
-          const tId = bId && tName && tName !== '-' ? typeMap[`${bId}_${tName}`] || null : null
-
-          return {
-            serial_number: sn,
-            date_in: row['Tanggal Masuk (yyyy-mm-dd)'] || row['Tanggal Masuk'] || format(new Date(), 'yyyy-MM-dd'),
-            status: 'tersedia',
-            note: String(row['Note'] || '').trim(),
-            brand_id: bId,
-            type_id: tId,
-            created_by: profile.id,
+          const bId = brandMap[String(row['Merk'] || '').trim().toLowerCase()]
+          const tName = String(row['Tipe'] || '').trim()
+          let tId = null
+          if (bId && tName) {
+            const key = `${bId}_${tName.toLowerCase()}`
+            tId = typeMap[key]
           }
-        }).filter(r => r)
+          return { serial_number: sn, date_in: row['Tanggal Masuk (yyyy-mm-dd)'] || format(new Date(), 'yyyy-MM-dd'), status: 'tersedia', note: String(row['Note'] || '').trim(), brand_id: bId || null, type_id: tId, created_by: profile.id }
+        }).filter(Boolean)
         
-        if (!toInsert.length) { toast.error('Tidak ada data valid'); setSaving(false); return }
-        
-        const { error } = await supabase.from('serial_numbers').insert(toInsert)
-        if (error) throw error
-        toast.success(`${toInsert.length} SN berhasil diimport`)
+        await supabase.from('serial_numbers').insert(toInsert)
+        toast.success('Import berhasil')
         fetchAll()
       } catch (err) {
         toast.error('Gagal import: ' + err.message)
-      } finally {
-        setSaving(false)
-      }
+      } finally { setSaving(false) }
     }
     reader.readAsBinaryString(file)
-    e.target.value = ''
   }
 
   return (
@@ -577,32 +481,6 @@ export default function SerialNumber() {
                   </div>
                 ))}
               </div>
-              {/* Pagination */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', marginTop: '4px', borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                    Showing {filtered.length === 0 ? 0 : (page-1)*perPage+1}–{Math.min(page*perPage, filtered.length)} of {filtered.length} entries
-                  </span>
-                  <select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(1) }} style={{ padding: '3px 8px', borderRadius: '6px', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer' }}>
-                    {[10,25,50,100].map(n => <option key={n} value={n}>{n} / hal</option>)}
-                  </select>
-                </div>
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                  {(() => {
-                    const tp = Math.ceil(filtered.length / perPage)
-                    const btns = []
-                    btns.push(<button key="first" onClick={() => setPage(1)} disabled={page===1} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page===1?'var(--text-muted)':'var(--text-primary)', cursor: page===1?'default':'pointer', fontSize:'13px' }}>«</button>)
-                    btns.push(<button key="prev" onClick={() => setPage(p=>Math.max(1,p-1))} disabled={page===1} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page===1?'var(--text-muted)':'var(--text-primary)', cursor: page===1?'default':'pointer', fontSize:'13px' }}>‹</button>)
-                    let s=Math.max(1,page-2), e=Math.min(tp,page+2)
-                    if(s>1) btns.push(<span key="se" style={{padding:'4px 4px',color:'var(--text-muted)',fontSize:'13px'}}>...</span>)
-                    for(let i=s;i<=e;i++) btns.push(<button key={i} onClick={()=>setPage(i)} style={{ padding:'4px 10px', borderRadius:'6px', background: i===page?'var(--accent)':'var(--bg-card)', border:'1px solid var(--border)', color: i===page?'#000':'var(--text-primary)', cursor:'pointer', fontWeight: i===page?700:400, fontSize:'13px' }}>{i}</button>)
-                    if(e<tp) btns.push(<span key="ee" style={{padding:'4px 4px',color:'var(--text-muted)',fontSize:'13px'}}>...</span>)
-                    btns.push(<button key="next" onClick={() => setPage(p=>Math.min(tp,p+1))} disabled={page>=tp} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page>=tp?'var(--text-muted)':'var(--text-primary)', cursor: page>=tp?'default':'pointer', fontSize:'13px' }}>›</button>)
-                    btns.push(<button key="last" onClick={() => setPage(tp)} disabled={page>=tp} style={{ padding:'4px 8px', borderRadius:'6px', background:'var(--bg-card)', border:'1px solid var(--border)', color: page>=tp?'var(--text-muted)':'var(--text-primary)', cursor: page>=tp?'default':'pointer', fontSize:'13px' }}>»</button>)
-                    return btns
-                  })()}
-                </div>
-              </div>
             </>
           ) : (
             <div className="empty-state"><Hash size={48} /><h3>Tidak Ada SN</h3><p>Belum ada serial number tersimpan.</p></div>
@@ -618,7 +496,6 @@ export default function SerialNumber() {
               <button className="btn-icon" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {/* Mode toggle */}
               {!editItem && (
                 <div className="tabs" style={{ marginBottom: 0 }}>
                   <button className={`tab-item ${!isBulkMode ? 'active' : ''}`} onClick={() => setIsBulkMode(false)}>Input Satu</button>
@@ -626,40 +503,15 @@ export default function SerialNumber() {
                 </div>
               )}
               <div className="grid-2">
-                {/* Merk ONT — combobox: pilih atau ketik baru */}
                 <div className="form-group">
                   <label className="form-label">Merk ONT</label>
-                  <input
-                    className="form-input"
-                    list="brand-list"
-                    placeholder="Pilih atau ketik merk..."
-                    value={form.brand_name}
-                    onChange={e => handleBrandInput(e.target.value)}
-                    autoComplete="off"
-                  />
-                  <datalist id="brand-list">
-                    {brands.map(b => <option key={b.id} value={b.brand_name} />)}
-                  </datalist>
+                  <input className="form-input" list="brand-list" placeholder="Pilih atau ketik merk..." value={form.brand_name} onChange={e => handleBrandInput(e.target.value)} autoComplete="off" />
+                  <datalist id="brand-list">{brands.map(b => <option key={b.id} value={b.brand_name} />)}</datalist>
                 </div>
-                {/* Tipe ONT — combobox: pilih dari daftar atau ketik baru */}
                 <div className="form-group">
                   <label className="form-label">Tipe</label>
-                  <input
-                    className="form-input"
-                    list="type-list"
-                    placeholder="Pilih atau ketik tipe..."
-                    value={form.type_name}
-                    onChange={e => handleTypeInput(e.target.value)}
-                    autoComplete="off"
-                  />
-                  <datalist id="type-list">
-                    {types.map(t => <option key={t.id} value={t.type_name} />)}
-                  </datalist>
-                  {form.brand_name && types.length === 0 && (
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                      Tipe baru akan dibuat otomatis
-                    </span>
-                  )}
+                  <input className="form-input" list="type-list" placeholder="Pilih atau ketik tipe..." value={form.type_name} onChange={e => handleTypeInput(e.target.value)} autoComplete="off" />
+                  <datalist id="type-list">{types.map(t => <option key={t.id} value={t.type_name} />)}</datalist>
                 </div>
               </div>
               <div className="form-group">
@@ -689,10 +541,7 @@ export default function SerialNumber() {
               ) : (
                 <div className="form-group">
                   <label className="form-label">Daftar Serial Number (satu per baris)</label>
-                  <textarea className="form-input" rows={8} placeholder={"ZXHN12345\nZXHN67890\nZXHN11111"} value={bulkText} onChange={e => setBulkText(e.target.value)} style={{ fontFamily: 'monospace', resize: 'vertical' }} />
-                  <span className="text-secondary" style={{ fontSize: '12px' }}>
-                    {bulkText.split('\n').filter(l => l.trim()).length} SN terdeteksi
-                  </span>
+                  <textarea className="form-input" rows={8} placeholder={"ZXHN12345\nZXHN67890"} value={bulkText} onChange={e => setBulkText(e.target.value)} style={{ fontFamily: 'monospace', resize: 'vertical' }} />
                 </div>
               )}
             </div>
@@ -705,37 +554,15 @@ export default function SerialNumber() {
           </div>
         </div>
       )}
-      {isHistoryOpen && historyItem && (
-        <div className="modal-overlay">
-          <div className="modal modal-lg">
-            <div className="modal-header">
-              <h3>Riwayat SN: {historyItem.serial_number}</h3>
-              <button className="btn-icon" onClick={() => setIsHistoryOpen(false)}><X size={18} /></button>
-            </div>
-            <div className="modal-body">
-              {historyLoading ? (
-                <div className="flex-center" style={{height:'120px'}}><div className="spinner"/></div>
-              ) : historyData.length === 0 ? (
-                <div className="empty-state"><History size={32}/><p>Belum ada riwayat transaksi</p></div>
-              ) : (
-                <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-                  {historyData.map((r, i) => (
-                    <div key={i} style={{display:'flex',alignItems:'center',gap:'12px',padding:'10px 14px',background: r.type==='in'?'var(--accent-dim)':'var(--bg-primary)',border:`1px solid ${r.type==='in'?'var(--accent)':'var(--border)'}`,borderRadius:'8px'}}>
-                      <div style={{width:'8px',height:'8px',borderRadius:'50%',background:r.type==='in'?'var(--accent)':'var(--warning)',flexShrink:0}}/>
-                      <div style={{flex:1}}>
-                        <div style={{fontWeight:600,fontSize:'13px'}}>{r.date} — {r.action}</div>
-                        <div className="text-secondary" style={{fontSize:'12px'}}>{r.note}</div>
-                        {r.user && <div className="text-secondary" style={{fontSize:'11px'}}>oleh {r.user}</div>}
-                      </div>
-                      <span className={`badge ${r.type==='in'?'badge-accent':'badge-warning'}`}>{r.type==='in'?'Masuk':'Keluar'}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <HistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        item={historyItem}
+        data={historyData}
+        loading={historyLoading}
+        title={`Riwayat Serial Number: ${historyItem?.serial_number}`}
+        unit="unit"
+      />
     </div>
   )
 }

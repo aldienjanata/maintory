@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { Search, Plus, Trash2, Edit2, X, Package, TrendingDown, TrendingUp, FileDown, Upload, Download, History } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
+import HistoryModal from '../../components/HistoryModal'
 
 const UNITS = ['unit', 'buah', 'pcs', 'meter', 'roll', 'set', 'dus', 'kg', 'haspel']
 const ITEM_TYPES = [
@@ -126,14 +127,28 @@ export default function StokGudang() {
     setHistoryLoading(true)
 
     const { data: logs } = await supabase.from('inventory_log').select('*, user:users(full_name)').eq('item_type', 'stok_gudang').eq('item_id', item.id).order('log_date', { ascending: true })
-    const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians)').eq('item_type', 'other').eq('warehouse_item_id', item.id).order('created_at', { ascending: true })
+    const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type', 'other').eq('warehouse_item_id', item.id).order('created_at', { ascending: true })
+
+    const { data: usersData } = await supabase.from('users').select('id, full_name')
+    const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
+    const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3' }
 
     const combined = []
     ;(logs || []).forEach(l => {
       combined.push({ date: l.log_date, action: l.action === 'masuk' ? 'Masuk' : 'Koreksi', note: l.note || '', user: l.user?.full_name, qty: l.quantity, type: 'in' })
     })
     ;(expItems || []).forEach(ei => {
-      combined.push({ date: ei.expense?.expense_date || '-', action: 'Keluar', note: `Lokasi: ${ei.expense?.site || '-'}`, qty: ei.quantity, type: 'out' })
+      const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+      const wType = ei.expense?.work_type
+      combined.push({ 
+        date: ei.expense?.expense_date || '-', 
+        action: 'Keluar', 
+        note: ei.expense?.site || '-',
+        technicianNames: techNames,
+        workType: workTypeLabels[wType] || wType,
+        qty: ei.quantity, 
+        type: 'out' 
+      })
     })
     combined.sort((a, b) => (a.date < b.date ? -1 : 1))
 
@@ -242,7 +257,7 @@ export default function StokGudang() {
       rows2.forEach(r => ws2.addRow([r.name, r.date, r.action, r.qty, r.note]))
       applyDataRowStyles(ws2)
 
-      await downloadWorkbook(workbook, `stok_gudang_${new Date().toISOString().slice(0,10)}.xlsx`)
+      await downloadWorkbook(workbook, `Stok Gudang ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
       toast.success('Export berhasil!')
     } catch (err) {
       console.error(err)
@@ -263,7 +278,7 @@ export default function StokGudang() {
       ws.addRow(['Dropcore 1C Haspel A', 'dropcore_1c', 0, 'haspel'])
       ws.addRow(['Dropcore 4C Haspel B', 'dropcore_4c', 0, 'haspel'])
       ws.addRow(['Kabel UTP CAT6', 'other', 10, 'roll'])
-      await downloadWorkbook(workbook, 'Template_Import_Stok.xlsx')
+      await downloadWorkbook(workbook, 'Template Import Stok Gudang.xlsx')
     } catch(err) {
       toast.error('Gagal download template')
     }
@@ -573,37 +588,15 @@ export default function StokGudang() {
           </div>
         </div>
       )}
-      {isHistoryOpen && historyItem && (
-        <div className="modal-overlay">
-          <div className="modal modal-lg">
-            <div className="modal-header">
-              <h3>Riwayat Material: {historyItem.item_name}</h3>
-              <button className="btn-icon" onClick={() => setIsHistoryOpen(false)}><X size={18} /></button>
-            </div>
-            <div className="modal-body">
-              {historyLoading ? (
-                <div className="flex-center" style={{height:'120px'}}><div className="spinner"/></div>
-              ) : historyData.length === 0 ? (
-                <div className="empty-state"><History size={32}/><p>Belum ada riwayat transaksi</p></div>
-              ) : (
-                <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-                  {historyData.map((r, i) => (
-                    <div key={i} style={{display:'flex',alignItems:'center',gap:'12px',padding:'10px 14px',background: r.type==='in'?'var(--accent-dim)':'var(--bg-primary)',border:`1px solid ${r.type==='in'?'var(--accent)':'var(--border)'}`,borderRadius:'8px'}}>
-                      <div style={{width:'8px',height:'8px',borderRadius:'50%',background:r.type==='in'?'var(--accent)':'var(--warning)',flexShrink:0}}/>
-                      <div style={{flex:1}}>
-                        <div style={{fontWeight:600,fontSize:'13px'}}>{r.date} — {r.action}</div>
-                        <div className="text-secondary" style={{fontSize:'12px'}}>{r.note}</div>
-                        {r.user && <div className="text-secondary" style={{fontSize:'11px'}}>oleh {r.user}</div>}
-                      </div>
-                      <span className={`badge ${r.type==='in'?'badge-accent':'badge-warning'}`}>{r.type==='in'?`+${r.qty}`:`-${r.qty}`} {historyItem.unit}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <HistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        item={historyItem}
+        data={historyData}
+        loading={historyLoading}
+        title={`Riwayat Material: ${historyItem?.item_name}`}
+        unit={historyItem?.unit || ''}
+      />
     </div>
   )
 }
