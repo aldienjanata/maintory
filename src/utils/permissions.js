@@ -61,6 +61,7 @@ export const can = (role, action) => {
     'ont.edit': ['superadmin', 'admin'],
     'ont.delete': ['superadmin', 'admin'],
     'ont.view': ['superadmin', 'admin', 'teknisi'],
+    'ont.export': ['superadmin', 'admin'],
 
     // Log Aktivitas
     'log.view.all': ['superadmin', 'admin'],

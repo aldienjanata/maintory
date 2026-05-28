@@ -267,21 +267,49 @@ export default function SerialNumber() {
       setColumnWidths(ws2, [24, 18, 18, 16, 12, 16, 24, 30])
       applyHeaderStyle(ws2, headers2, '065F46')
       
-      const { data: allExpItems } = await supabase.from('expense_items').select('*, sn:serial_numbers(serial_number, brand:ont_brands(brand_name), type:ont_types(type_name)), expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type','ont').order('created_at', {ascending: true})
-      const { data: allLogs } = await supabase.from('inventory_log').select('*, sn:serial_numbers(serial_number, brand:ont_brands(brand_name), type:ont_types(type_name))').eq('item_type','sn').order('log_date', {ascending: true})
+      const { data: allExpItems } = await supabase
+        .from('expense_items')
+        .select('*, expense:daily_expenses(expense_date, site, technicians, work_type)')
+        .eq('item_type', 'ont')
+        .order('created_at', { ascending: true })
+      const { data: allLogs } = await supabase
+        .from('inventory_log')
+        .select('*, sn:serial_numbers(serial_number, brand:ont_brands(brand_name), type:ont_types(type_name))')
+        .eq('item_type', 'sn')
+        .order('log_date', { ascending: true })
       const { data: usersData } = await supabase.from('users').select('id, full_name')
       
+      const snLookup = Object.fromEntries(items.map(i => [i.id, i]))
       const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
       const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3' }
 
       const rows2 = []
       ;(allLogs || []).forEach(l => {
-        rows2.push({ sn: l.sn?.serial_number || '-', brand: l.sn?.brand?.brand_name || '-', type: l.sn?.type?.type_name || '-', date: l.log_date, action: l.action === 'masuk' ? 'Masuk' : 'Koreksi', work: '-', tech: '-', note: l.note || '' })
+        const snInfo = snLookup[l.item_id]
+        rows2.push({ 
+          sn: snInfo?.serial_number || l.sn?.serial_number || '-', 
+          brand: snInfo?.brand?.brand_name || l.sn?.brand?.brand_name || '-', 
+          type: snInfo?.type?.type_name || l.sn?.type?.type_name || '-', 
+          date: l.log_date, 
+          action: l.action === 'masuk' ? 'Masuk' : 'Koreksi', 
+          work: '-', tech: '-', 
+          note: l.note || '' 
+        })
       })
       ;(allExpItems || []).forEach(ei => {
+        const snInfo = snLookup[ei.serial_number_id]
         const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
         const wType = ei.expense?.work_type
-        rows2.push({ sn: ei.sn?.serial_number || '-', brand: ei.sn?.brand?.brand_name || '-', type: ei.sn?.type?.type_name || '-', date: ei.expense?.expense_date || '-', action: 'Keluar', work: workTypeLabels[wType] || wType || '-', tech: techNames || '-', note: `Lokasi: ${ei.expense?.site || '-'}` })
+        rows2.push({ 
+          sn: snInfo?.serial_number || '-', 
+          brand: snInfo?.brand?.brand_name || '-', 
+          type: snInfo?.type?.type_name || '-', 
+          date: ei.expense?.expense_date || '-', 
+          action: 'Keluar', 
+          work: workTypeLabels[wType] || wType || '-', 
+          tech: techNames || '-', 
+          note: `Lokasi: ${ei.expense?.site || '-'}` 
+        })
       })
       rows2.sort((a,b) => a.date < b.date ? -1 : 1)
       rows2.forEach(r => ws2.addRow([r.sn, r.brand, r.type, r.date, r.action, r.work, r.tech, r.note]))
