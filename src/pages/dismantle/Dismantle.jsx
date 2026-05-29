@@ -19,6 +19,9 @@ export default function Dismantle() {
   const [dateFilter, setDateFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false)
+  const [closeItem, setCloseItem] = useState(null)
+  const [closeForm, setCloseForm] = useState({ pickup_date: format(new Date(), 'yyyy-MM-dd'), technicians: [] })
   const [editItem, setEditItem] = useState(null)
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
@@ -29,7 +32,7 @@ export default function Dismantle() {
     date_input: format(new Date(), 'yyyy-MM-dd'),
     customer_id: '', full_name: '', address: '', sharelok: '',
     phone_number: '', last_payment: '', serial_number: '',
-    technicians: [], aksi: 'aktif', pickup_date: '', note: ''
+    technicians: [], aksi: 'aktif', pickup_date: '', note: '', lokasi: ''
   }
   const [form, setForm] = useState(emptyForm)
 
@@ -54,13 +57,17 @@ export default function Dismantle() {
       date_input: item.date_input, customer_id: item.customer_id, full_name: item.full_name,
       address: item.address || '', sharelok: item.sharelok || '', phone_number: item.phone_number || '',
       last_payment: item.last_payment || '', serial_number: item.serial_number || '',
-      technicians: item.technicians || [], aksi: item.aksi, pickup_date: item.pickup_date || '', note: item.note || ''
+      technicians: item.technicians || [], aksi: item.aksi || 'aktif', pickup_date: item.pickup_date || '', note: item.note || '', lokasi: item.lokasi || ''
     })
     setIsModalOpen(true)
   }
 
   const toggleTech = (techId) => {
     setForm(f => ({ ...f, technicians: f.technicians.includes(techId) ? f.technicians.filter(t => t !== techId) : [...f.technicians, techId] }))
+  }
+
+  const toggleCloseTech = (techId) => {
+    setCloseForm(f => ({ ...f, technicians: f.technicians.includes(techId) ? f.technicians.filter(t => t !== techId) : [...f.technicians, techId] }))
   }
 
   const handleSave = async () => {
@@ -85,14 +92,34 @@ export default function Dismantle() {
     } finally { setSaving(false) }
   }
 
-  const handleClose = async (item) => {
-    if (!window.confirm(`Tandai dismantle ${item.full_name} sebagai selesai (Close)?`)) return
-    const { error } = await supabase.from('dismantles').update({ aksi: 'close', pickup_date: format(new Date(), 'yyyy-MM-dd'), updated_at: new Date().toISOString() }).eq('id', item.id)
-    if (!error) {
-      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Close Dismantle', detail: `ID: ${item.customer_id}` })
-      toast.success('Dismantle ditandai selesai')
-      fetchAll()
+  const openCloseModal = (item) => {
+    setCloseItem(item)
+    setCloseForm({ pickup_date: format(new Date(), 'yyyy-MM-dd'), technicians: item.technicians || [] })
+    setIsCloseModalOpen(true)
+  }
+
+  const submitClose = async () => {
+    if (!closeForm.technicians.length) {
+      toast.error('Pilih minimal 1 teknisi yang melakukan eksekusi close')
+      return
     }
+    setSaving(true)
+    const { error } = await supabase.from('dismantles').update({ 
+      aksi: 'close', 
+      pickup_date: closeForm.pickup_date, 
+      technicians: closeForm.technicians,
+      updated_at: new Date().toISOString() 
+    }).eq('id', closeItem.id)
+    
+    if (!error) {
+      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Close Dismantle', detail: `ID: ${closeItem.customer_id}` })
+      toast.success('Dismantle ditandai selesai')
+      setIsCloseModalOpen(false)
+      fetchAll()
+    } else {
+      toast.error('Gagal close: ' + error.message)
+    }
+    setSaving(false)
   }
 
   const handleDelete = async (item) => {
@@ -124,8 +151,8 @@ export default function Dismantle() {
       const workbook = new ExcelJS.Workbook()
       const ws = workbook.addWorksheet('Dismantle')
       
-      const headers = ['Tanggal Input', 'ID Pelanggan', 'Nama Lengkap', 'No HP', 'Alamat', 'SN ONT', 'Bayar Terakhir', 'Teknisi', 'Status', 'Tanggal Ambil', 'Note']
-      setColumnWidths(ws, [16, 16, 24, 16, 30, 20, 16, 24, 12, 16, 24])
+      const headers = ['Tanggal Input', 'ID Pelanggan', 'Nama Lengkap', 'No HP', 'Alamat', 'Lokasi', 'SN ONT', 'Bayar Terakhir', 'Teknisi', 'Status', 'Tanggal Ambil', 'Note']
+      setColumnWidths(ws, [16, 16, 24, 16, 30, 16, 20, 16, 24, 16, 16, 24])
       applyHeaderStyle(ws, headers)
       
       filtered.forEach(item => {
@@ -135,6 +162,7 @@ export default function Dismantle() {
           item.full_name,
           item.phone_number || '',
           item.address || '',
+          item.lokasi || '',
           item.serial_number || '',
           item.last_payment || '',
           getTechNames(item.technicians),
@@ -159,8 +187,8 @@ export default function Dismantle() {
       const workbook = new ExcelJS.Workbook()
       const ws = workbook.addWorksheet('Template')
       
-      const headers = ['Tanggal Input (yyyy-mm-dd)', 'ID Pelanggan', 'Nama Lengkap', 'No HP', 'Alamat', 'SN ONT', 'Bayar Terakhir', 'Note']
-      setColumnWidths(ws, [26, 16, 24, 16, 30, 20, 16, 24])
+      const headers = ['Tanggal Input (yyyy-mm-dd)', 'ID Pelanggan', 'Nama Lengkap', 'No HP', 'Alamat', 'Lokasi', 'Status', 'SN ONT', 'Bayar Terakhir', 'Note']
+      setColumnWidths(ws, [26, 16, 24, 16, 30, 16, 16, 20, 16, 24])
       applyHeaderStyle(ws, headers)
       
       await downloadWorkbook(workbook, 'Template Import Dismantle.xlsx')
@@ -186,11 +214,12 @@ export default function Dismantle() {
           full_name: String(row['Nama Lengkap'] || '').trim(),
           phone_number: String(row['No HP'] || '').trim(),
           address: String(row['Alamat'] || '').trim(),
+          lokasi: String(row['Lokasi'] || '').trim(),
+          aksi: String(row['Status'] || 'aktif').trim().toLowerCase().replace(' ', '_'),
           serial_number: String(row['SN ONT'] || '').trim(),
           last_payment: String(row['Bayar Terakhir'] || '').trim(),
           note: String(row['Note'] || '').trim(),
           technicians: [],
-          aksi: 'aktif',
           created_by: profile.id,
         })).filter(r => r.customer_id && r.full_name)
         if (!toInsert.length) { toast.error('Tidak ada data valid'); return }
@@ -314,23 +343,25 @@ export default function Dismantle() {
                       <td>{item.last_payment || '-'}</td>
                       <td><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{item.serial_number || '-'}</span></td>
                       <td>
-                        {item.sharelok ? (
-                          <a href={item.sharelok} target="_blank" rel="noreferrer" className="text-accent" style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <MapPin size={12} /> Buka Maps
+                        <div style={{ fontSize: '13px' }}>{item.lokasi || '-'}</div>
+                        {item.sharelok && (
+                          <a href={item.sharelok} target="_blank" rel="noreferrer" className="text-accent" style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '2px', marginTop: '4px' }}>
+                            <MapPin size={10} /> Maps
                           </a>
-                        ) : <span className="text-secondary">-</span>}
+                        )}
                       </td>
                       <td style={{ fontSize: '12px' }}>{getTechNames(item.technicians)}</td>
                       <td>
-                        {item.aksi === 'close'
-                          ? <span className="badge badge-success"><CheckCircle size={10} /> Close</span>
-                          : <span className="badge badge-warning"><Clock size={10} /> Aktif</span>
-                        }
+                        {item.aksi === 'close' ? <span className="badge badge-success"><CheckCircle size={10} /> Close</span> :
+                         item.aksi === 'disable' ? <span className="badge badge-muted"><X size={10} /> Disable</span> :
+                         item.aksi === 'berhenti_sementara' ? <span className="badge badge-warning"><Clock size={10} /> Sementara</span> :
+                         item.aksi === 'berhenti_berlangganan' ? <span className="badge badge-danger"><Trash2 size={10} /> Berhenti</span> :
+                         <span className="badge badge-warning"><Clock size={10} /> Aktif</span>}
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                          {item.aksi === 'aktif' && (
-                            <button className="btn-icon text-success" title="Selesaikan" onClick={() => handleClose(item)}><CheckCircle size={15} /></button>
+                          {item.aksi !== 'close' && (
+                            <button className="btn-icon text-success" title="Selesaikan" onClick={() => openCloseModal(item)}><CheckCircle size={15} /></button>
                           )}
                           {can(role, 'dismantle.edit') && (
                             <button className="btn-icon" title="Edit" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
@@ -365,6 +396,7 @@ export default function Dismantle() {
                         <div className="mobile-info-row"><span className="mobile-info-label">Tanggal</span><span className="mobile-info-value">{format(new Date(item.date_input), 'dd MMM yyyy', { locale: id })}</span></div>
                         <div className="mobile-info-row"><span className="mobile-info-label">Bayar Terakhir</span><span className="mobile-info-value">{item.last_payment || '-'}</span></div>
                         <div className="mobile-info-row"><span className="mobile-info-label">SN</span><span className="mobile-info-value" style={{ fontFamily: 'monospace' }}>{item.serial_number || '-'}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{item.lokasi || '-'}</span></div>
                         <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(item.technicians)}</span></div>
                         
                         {item.phone_number && (
@@ -390,8 +422,8 @@ export default function Dismantle() {
                         )}
 
                         <div className="mobile-card-actions">
-                          {item.aksi === 'aktif' && (
-                            <button className="btn btn-secondary btn-sm text-success" onClick={() => handleClose(item)}>
+                          {item.aksi !== 'close' && (
+                            <button className="btn btn-secondary btn-sm text-success" onClick={() => openCloseModal(item)}>
                               <CheckCircle size={14} /> Selesaikan
                             </button>
                           )}
@@ -486,6 +518,27 @@ export default function Dismantle() {
                   <input className="form-input" placeholder="Contoh: Januari 2024" value={form.last_payment} onChange={e => setForm(f => ({ ...f, last_payment: e.target.value }))} />
                 </div>
               </div>
+              <div className="grid-2">
+                <div className="form-group">
+                  <label className="form-label">Lokasi <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <select className="form-input" style={{ height: 'auto' }} value={form.lokasi} onChange={e => setForm(f => ({ ...f, lokasi: e.target.value }))}>
+                    <option value="">Pilih Lokasi</option>
+                    <option value="Banyumas">Banyumas</option>
+                    <option value="Cilacap">Cilacap</option>
+                    <option value="Cilacap-Herman">Cilacap-Herman</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Status <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <select className="form-input" style={{ height: 'auto' }} value={form.aksi} onChange={e => setForm(f => ({ ...f, aksi: e.target.value }))}>
+                    <option value="aktif">Aktif</option>
+                    <option value="disable">Disable</option>
+                    <option value="berhenti_sementara">Berhenti Sementara</option>
+                    <option value="berhenti_berlangganan">Berhenti Berlangganan</option>
+                    <option value="close">Close</option>
+                  </select>
+                </div>
+              </div>
               <div className="form-group">
                 <label className="form-label">Serial Number ONT</label>
                 <input className="form-input" placeholder="SN perangkat yang akan dicabut" value={form.serial_number} onChange={e => setForm(f => ({ ...f, serial_number: e.target.value }))} />
@@ -511,6 +564,44 @@ export default function Dismantle() {
               <button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : (editItem ? 'Simpan Perubahan' : 'Tambah')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isCloseModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3>Selesaikan Dismantle</h3>
+              <button className="btn-icon" onClick={() => setIsCloseModalOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ padding: '12px', background: 'var(--bg-hover)', borderRadius: '8px', fontSize: '13px' }}>
+                Menandai dismantle <strong>{closeItem?.full_name}</strong> sebagai selesai.
+              </div>
+              <div className="form-group">
+                <label className="form-label">Pilih Teknisi Eksekutor <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                  {technicians.map(t => (
+                    <button key={t.id} type="button" onClick={() => toggleCloseTech(t.id)}
+                      className={`badge ${closeForm.technicians.includes(t.id) ? 'badge-accent' : 'badge-muted'}`}
+                      style={{ border: 'none', cursor: 'pointer', padding: '5px 10px' }}>
+                      {t.full_name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Tanggal Close</label>
+                <input type="date" className="form-input" value={closeForm.pickup_date} onChange={e => setCloseForm(f => ({ ...f, pickup_date: e.target.value }))} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setIsCloseModalOpen(false)}>Batal</button>
+              <button className="btn btn-primary" onClick={submitClose} disabled={saving}>
+                {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : 'Selesaikan'}
               </button>
             </div>
           </div>
