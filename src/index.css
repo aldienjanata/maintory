@@ -1489,8 +1489,8 @@ tbody tr:hover td { background: var(--bg-hover); }
   thead th { padding: 8px 10px; font-size: 10px; white-space: nowrap; }
 
   /* --- Modal --- */
-  .modal { max-width: 100%; margin: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
-  .modal-overlay { align-items: flex-end; padding: 0; }
+  .modal { max-width: 90%; margin: 0 auto; border-radius: var(--radius-lg); }
+  .modal-overlay { align-items: center; padding: 16px; }
   .modal-header { padding: 16px 16px 0; }
   .modal-body { padding: 14px 16px; gap: 10px !important; }
   .modal-footer { padding: 0 16px 16px; flex-direction: column; }

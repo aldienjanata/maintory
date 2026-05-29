@@ -9,6 +9,7 @@ import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import HistoryModal from '../../components/HistoryModal'
 import { useProgress } from '../../contexts/ProgressContext'
+import Pagination from '../../components/common/Pagination'
 
 export default function SerialNumber() {
   const { profile } = useAuth()
@@ -565,6 +566,13 @@ export default function SerialNumber() {
                   </div>
                 ))}
               </div>
+              <Pagination 
+                page={page} 
+                setPage={setPage} 
+                perPage={perPage} 
+                setPerPage={setPerPage} 
+                totalItems={filtered.length} 
+              />
             </>
           ) : (
             <div className="empty-state"><Hash size={48} /><h3>Tidak Ada SN</h3><p>Belum ada serial number tersimpan.</p></div>
