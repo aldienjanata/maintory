@@ -379,9 +379,9 @@ export default function Dismantle() {
                       <td>
                         {item.aksi === 'close' ? <span className="badge badge-success"><CheckCircle size={10} /> Close</span> :
                          item.aksi === 'disable' ? <span className="badge badge-muted"><X size={10} /> Disable</span> :
-                         item.aksi === 'berhenti_sementara' ? <span className="badge badge-warning"><Clock size={10} /> Sementara</span> :
-                         item.aksi === 'berhenti_berlangganan' ? <span className="badge badge-danger"><Trash2 size={10} /> Berhenti</span> :
-                         <span className="badge badge-warning"><Clock size={10} /> Aktif</span>}
+                         item.aksi === 'berhenti_sementara' ? <span className="badge badge-warning"><Clock size={10} /> Berhenti Sementara</span> :
+                         item.aksi === 'berhenti_berlangganan' ? <span className="badge badge-danger"><Trash2 size={10} /> Berhenti Berlangganan</span> :
+                         <span className="badge badge-accent"><CheckCircle size={10} /> Aktif</span>}
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
@@ -410,10 +410,11 @@ export default function Dismantle() {
                         <div className="mobile-card-subtitle">{item.customer_id}</div>
                       </div>
                       <div>
-                        {item.aksi === 'close'
-                          ? <span className="badge badge-success"><CheckCircle size={10} /> Close</span>
-                          : <span className="badge badge-warning"><Clock size={10} /> Aktif</span>
-                        }
+                        {item.aksi === 'close' ? <span className="badge badge-success"><CheckCircle size={10} /> Close</span> :
+                         item.aksi === 'disable' ? <span className="badge badge-muted"><X size={10} /> Disable</span> :
+                         item.aksi === 'berhenti_sementara' ? <span className="badge badge-warning"><Clock size={10} /> Berhenti Sementara</span> :
+                         item.aksi === 'berhenti_berlangganan' ? <span className="badge badge-danger"><Trash2 size={10} /> Berhenti Berlangganan</span> :
+                         <span className="badge badge-accent"><CheckCircle size={10} /> Aktif</span>}
                       </div>
                     </div>
                     {expandedId === item.id && (
