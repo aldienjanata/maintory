@@ -34,7 +34,7 @@ export default function Dismantle() {
     date_input: format(new Date(), 'yyyy-MM-dd'),
     customer_id: '', full_name: '', address: '', sharelok: '',
     phone_number: '', last_payment: '', serial_number: '',
-    technicians: [], aksi: 'aktif', pickup_date: '', note: '', lokasi: ''
+    technicians: [], aksi: 'aktif', pickup_date: '', note: '', lokasi: '', koordinator: ''
   }
   const [form, setForm] = useState(emptyForm)
 
@@ -59,7 +59,7 @@ export default function Dismantle() {
       date_input: item.date_input, customer_id: item.customer_id, full_name: item.full_name,
       address: item.address || '', sharelok: item.sharelok || '', phone_number: item.phone_number || '',
       last_payment: item.last_payment || '', serial_number: item.serial_number || '',
-      technicians: item.technicians || [], aksi: item.aksi || 'aktif', pickup_date: item.pickup_date || '', note: item.note || '', lokasi: item.lokasi || ''
+      technicians: item.technicians || [], aksi: item.aksi || 'aktif', pickup_date: item.pickup_date || '', note: item.note || '', lokasi: item.lokasi || '', koordinator: item.koordinator || ''
     })
     setIsModalOpen(true)
   }
@@ -154,8 +154,8 @@ export default function Dismantle() {
       const workbook = new ExcelJS.Workbook()
       const ws = workbook.addWorksheet('Dismantle')
       
-      const headers = ['Tanggal Input', 'ID Pelanggan', 'Nama Lengkap', 'No HP', 'Alamat', 'Lokasi', 'SN ONT', 'Bayar Terakhir', 'Teknisi', 'Status', 'Tanggal Ambil', 'Note']
-      setColumnWidths(ws, [16, 16, 24, 16, 30, 16, 20, 16, 24, 16, 16, 24])
+      const headers = ['Tanggal Input', 'ID Pelanggan', 'Nama Lengkap', 'No HP', 'Alamat', 'Lokasi', 'Koordinator', 'SN ONT', 'Bayar Terakhir', 'Teknisi', 'Status', 'Tanggal Ambil', 'Note']
+      setColumnWidths(ws, [16, 16, 24, 16, 30, 16, 20, 20, 16, 24, 16, 16, 24])
       applyHeaderStyle(ws, headers)
       
       for (let i = 0; i < filtered.length; i++) {
@@ -167,6 +167,7 @@ export default function Dismantle() {
           item.phone_number || '',
           item.address || '',
           item.lokasi || '',
+          item.koordinator || '',
           item.serial_number || '',
           item.last_payment || '',
           getTechNames(item.technicians),
@@ -198,8 +199,8 @@ export default function Dismantle() {
       const workbook = new ExcelJS.Workbook()
       const ws = workbook.addWorksheet('Template')
       
-      const headers = ['Tanggal Input (yyyy-mm-dd)', 'ID Pelanggan', 'Nama Lengkap', 'No HP', 'Alamat', 'Lokasi', 'Status', 'SN ONT', 'Bayar Terakhir', 'Note']
-      setColumnWidths(ws, [26, 16, 24, 16, 30, 16, 16, 20, 16, 24])
+      const headers = ['Tanggal Input (yyyy-mm-dd)', 'ID Pelanggan', 'Nama Lengkap', 'No HP', 'Alamat', 'Lokasi', 'Koordinator', 'Status', 'SN ONT', 'Bayar Terakhir', 'Note']
+      setColumnWidths(ws, [26, 16, 24, 16, 30, 16, 20, 16, 20, 16, 24])
       applyHeaderStyle(ws, headers)
       
       await downloadWorkbook(workbook, 'Template Import Dismantle.xlsx')
@@ -229,7 +230,8 @@ export default function Dismantle() {
           phone_number: String(row['No HP'] || '').trim(),
           address: String(row['Alamat'] || '').trim(),
           lokasi: String(row['Lokasi'] || '').trim(),
-          aksi: String(row['Status'] || 'aktif').trim().toLowerCase().replace(' ', '_'),
+          koordinator: String(row['Koordinator'] || '').trim(),
+          aksi: String(row['Status'] || 'aktif').trim().toLowerCase().replace(/ /g, '_'),
           serial_number: String(row['SN ONT'] || '').trim(),
           last_payment: String(row['Bayar Terakhir'] || '').trim(),
           note: String(row['Note'] || '').trim(),
@@ -347,6 +349,7 @@ export default function Dismantle() {
                     <th>Bayar Terakhir</th>
                     <th>SN</th>
                     <th>Lokasi</th>
+                    <th>Koordinator</th>
                     <th>Teknisi</th>
                     <th>Status</th>
                     <th style={{ textAlign: 'right' }}>Aksi</th>
@@ -375,6 +378,7 @@ export default function Dismantle() {
                           </a>
                         )}
                       </td>
+                      <td style={{ fontSize: '12px' }}>{item.koordinator || '-'}</td>
                       <td style={{ fontSize: '12px' }}>{getTechNames(item.technicians)}</td>
                       <td>
                         {item.aksi === 'close' ? <span className="badge badge-success"><CheckCircle size={10} /> Close</span> :
@@ -386,7 +390,7 @@ export default function Dismantle() {
                       <td style={{ textAlign: 'right' }}>
                         <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
                           {item.aksi !== 'close' && (
-                            <button className="btn-icon text-success" title="Selesaikan" onClick={() => openCloseModal(item)}><CheckCircle size={15} /></button>
+                            <button className="btn-icon text-success" title="Close Status" onClick={() => openCloseModal(item)}><CheckCircle size={15} /></button>
                           )}
                           {can(role, 'dismantle.edit') && (
                             <button className="btn-icon" title="Edit" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
@@ -423,6 +427,7 @@ export default function Dismantle() {
                         <div className="mobile-info-row"><span className="mobile-info-label">Bayar Terakhir</span><span className="mobile-info-value">{item.last_payment || '-'}</span></div>
                         <div className="mobile-info-row"><span className="mobile-info-label">SN</span><span className="mobile-info-value" style={{ fontFamily: 'monospace' }}>{item.serial_number || '-'}</span></div>
                         <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{item.lokasi || '-'}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Koordinator</span><span className="mobile-info-value">{item.koordinator || '-'}</span></div>
                         <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(item.technicians)}</span></div>
                         
                         {item.phone_number && (
@@ -449,17 +454,17 @@ export default function Dismantle() {
 
                         <div className="mobile-card-actions">
                           {item.aksi !== 'close' && (
-                            <button className="btn btn-secondary btn-sm text-success" onClick={() => openCloseModal(item)}>
-                              <CheckCircle size={14} /> Selesaikan
+                            <button className="btn btn-secondary btn-sm text-success" onClick={(e) => { e.stopPropagation(); openCloseModal(item) }}>
+                              <CheckCircle size={14} /> Close Status
                             </button>
                           )}
                           {can(role, 'dismantle.edit') && (
-                            <button className="btn btn-secondary btn-sm" onClick={() => openEdit(item)}>
+                            <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); openEdit(item) }}>
                               <Edit2 size={14} /> Edit
                             </button>
                           )}
                           {can(role, 'dismantle.delete') && (
-                            <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}>
+                            <button className="btn btn-secondary btn-sm text-danger" onClick={(e) => { e.stopPropagation(); handleDelete(item) }}>
                               <Trash2 size={14} /> Hapus
                             </button>
                           )}
@@ -582,6 +587,10 @@ export default function Dismantle() {
                 </div>
               </div>
               <div className="form-group">
+                <label className="form-label">Koordinator</label>
+                <input className="form-input" placeholder="Nama koordinator..." value={form.koordinator} onChange={e => setForm(f => ({ ...f, koordinator: e.target.value }))} />
+              </div>
+              <div className="form-group">
                 <label className="form-label">Note</label>
                 <textarea className="form-input" rows={2} value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder="Keterangan tambahan..." />
               </div>
@@ -600,12 +609,12 @@ export default function Dismantle() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h3>Selesaikan Dismantle</h3>
+              <h3>Close Status Dismantle</h3>
               <button className="btn-icon" onClick={() => setIsCloseModalOpen(false)}><X size={18} /></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ padding: '12px', background: 'var(--bg-hover)', borderRadius: '8px', fontSize: '13px' }}>
-                Menandai dismantle <strong>{closeItem?.full_name}</strong> sebagai selesai.
+                Menandai <strong>{closeItem?.full_name}</strong> sebagai <strong>Close</strong> — pelanggan sudah close dan ONT sudah diambil.
               </div>
               <div className="form-group">
                 <label className="form-label">Pilih Teknisi Eksekutor <span style={{ color: 'var(--danger)' }}>*</span></label>
@@ -627,7 +636,7 @@ export default function Dismantle() {
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setIsCloseModalOpen(false)}>Batal</button>
               <button className="btn btn-primary" onClick={submitClose} disabled={saving}>
-                {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : 'Selesaikan'}
+                {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : 'Close Status'}
               </button>
             </div>
           </div>
