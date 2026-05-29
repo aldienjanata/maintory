@@ -502,7 +502,7 @@ export default function Dismantle() {
                         <div className="mobile-card-actions">
                           {item.aksi !== 'close' && (
                             <button className="btn btn-secondary btn-sm text-success" onClick={(e) => { e.stopPropagation(); openCloseModal(item) }}>
-                              <CheckCircle size={14} /> Close Status
+                              <CheckCircle size={14} /> Update Eksekusi
                             </button>
                           )}
                           {can(role, 'dismantle.edit') && (
@@ -638,12 +638,23 @@ export default function Dismantle() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h3>Close Status Dismantle</h3>
+              <h3>Update Status Eksekusi</h3>
               <button className="btn-icon" onClick={() => setIsCloseModalOpen(false)}><X size={18} /></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div className="form-group">
+                <label className="form-label">Status Eksekusi <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <select className="form-input" style={{ height: 'auto' }} value={closeForm.aksi} onChange={e => setCloseForm(f => ({ ...f, aksi: e.target.value }))}>
+                  <option value="close">Close (ONT Terambil)</option>
+                  <option value="pending">Pending (Tertunda / Gagal Ambil)</option>
+                </select>
+              </div>
               <div style={{ padding: '12px', background: 'var(--bg-hover)', borderRadius: '8px', fontSize: '13px' }}>
-                Menandai <strong>{closeItem?.full_name}</strong> sebagai <strong>Close</strong> — pelanggan sudah close dan ONT sudah diambil.
+                {closeForm.aksi === 'close' ? (
+                  <>Menandai <strong>{closeItem?.full_name}</strong> sebagai <strong>Close</strong> — pelanggan sudah close dan ONT sudah diambil.</>
+                ) : (
+                  <>Menandai <strong>{closeItem?.full_name}</strong> sebagai <strong>Pending</strong> — teknisi sudah ke rumah pelanggan tetapi ONT belum terambil.</>
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">Pilih Teknisi Eksekutor <span style={{ color: 'var(--danger)' }}>*</span></label>
@@ -657,15 +668,23 @@ export default function Dismantle() {
                   ))}
                 </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">Tanggal Close</label>
-                <input type="date" className="form-input" value={closeForm.pickup_date} onChange={e => setCloseForm(f => ({ ...f, pickup_date: e.target.value }))} />
-              </div>
+              {closeForm.aksi === 'close' && (
+                <div className="form-group">
+                  <label className="form-label">Tanggal Close</label>
+                  <input type="date" className="form-input" value={closeForm.pickup_date} onChange={e => setCloseForm(f => ({ ...f, pickup_date: e.target.value }))} />
+                </div>
+              )}
+              {closeForm.aksi === 'pending' && (
+                <div className="form-group">
+                  <label className="form-label">Note / Alasan <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <textarea className="form-input" placeholder="Alasan belum terambil (misal: rumah kosong)" rows="3" value={closeForm.note} onChange={e => setCloseForm(f => ({ ...f, note: e.target.value }))}></textarea>
+                </div>
+              )}
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setIsCloseModalOpen(false)}>Batal</button>
               <button className="btn btn-primary" onClick={submitClose} disabled={saving}>
-                {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : 'Close Status'}
+                {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : 'Simpan Status'}
               </button>
             </div>
           </div>
