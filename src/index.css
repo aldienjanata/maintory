@@ -621,7 +621,7 @@ tbody tr:hover td { background: var(--bg-hover); }
   border-radius: var(--radius-lg);
   width: 100%;
   max-width: 520px;
-  max-height: 90vh;
+  max-height: 85vh;
   overflow-y: auto;
   box-shadow: var(--shadow-lg);
   animation: slideUp 0.2s ease;
@@ -953,7 +953,7 @@ tbody tr:hover td { background: var(--bg-hover); }
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
