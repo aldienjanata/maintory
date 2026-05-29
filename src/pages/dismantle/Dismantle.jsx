@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
@@ -433,7 +434,7 @@ export default function Dismantle() {
                       <td style={{ textAlign: 'right' }}>
                         <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
                           {item.aksi !== 'close' && (
-                            <button className="btn-icon text-success" title="Update Eksekusi" onClick={() => openCloseModal(item)}><CheckCircle size={15} /></button>
+                            <button className="btn-icon text-success" title="Update Status" onClick={() => openCloseModal(item)}><CheckCircle size={15} /></button>
                           )}
                           {can(role, 'dismantle.edit') && (
                             <button className="btn-icon" title="Edit" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
@@ -502,7 +503,7 @@ export default function Dismantle() {
                         <div className="mobile-card-actions">
                           {item.aksi !== 'close' && (
                             <button className="btn btn-secondary btn-sm text-success" onClick={(e) => { e.stopPropagation(); openCloseModal(item) }}>
-                              <CheckCircle size={14} /> Update Eksekusi
+                              <CheckCircle size={14} /> Update Status
                             </button>
                           )}
                           {can(role, 'dismantle.edit') && (
@@ -536,7 +537,7 @@ export default function Dismantle() {
         </div>
       </div>
 
-      {isModalOpen && (
+      {isModalOpen && createPortal(
         <div className="modal-overlay">
           <div className="modal modal-lg">
             <div className="modal-header">
@@ -632,9 +633,9 @@ export default function Dismantle() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
-      {isCloseModalOpen && (
+      {isCloseModalOpen && createPortal(
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
@@ -689,7 +690,7 @@ export default function Dismantle() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   )
 }
