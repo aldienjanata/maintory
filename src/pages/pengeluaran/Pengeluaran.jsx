@@ -74,7 +74,7 @@ export default function Pengeluaran() {
   const fetchAll = async () => {
     setLoading(true)
     const [expRes, techRes, snRes, haspelRes, schedRes, whRes] = await Promise.all([
-      supabase.from('daily_expenses').select('*, items:expense_items(*, warehouse_item:warehouses(item_name), haspel:dropcore_haspels(haspel_code), sn:serial_numbers(serial_number))').order('expense_date', { ascending: false }),
+      supabase.from('daily_expenses').select('*, items:expense_items(*, warehouse_item:warehouses(item_name), haspel:dropcore_haspels(haspel_code, remaining_meters, used_meters), sn:serial_numbers(serial_number))').order('expense_date', { ascending: false }),
       supabase.from('users').select('id, full_name, username').in('role', ['admin', 'teknisi']).eq('is_active', true),
       supabase.from('serial_numbers').select('id, serial_number, brand:ont_brands(brand_name), type:ont_types(type_name)').eq('status', 'tersedia'),
       supabase.from('dropcore_haspels').select('id, haspel_code, type, remaining_meters, used_meters').eq('status', 'tersedia'),
@@ -669,6 +669,11 @@ export default function Pengeluaran() {
             if (!haspelId) continue
             const haspelCode = item.haspel?.haspel_code || haspelId
             const metersUsed = item.meters_used || 0
+
+            // Hitung stok awal haspel: remaining + used = kapasitas awal
+            // Hanya haspel yang kapasitas awalnya = 1000m (utuh 1 haspel) yang dihitung
+            const haspelOriginalMeters = (item.haspel?.remaining_meters || 0) + (item.haspel?.used_meters || 0)
+            if (haspelOriginalMeters < HASPEL_FULL_METERS) continue // H4C-001 700m = skip
 
             const prevCumulative = haspelCumulative[haspelId] || 0
 
