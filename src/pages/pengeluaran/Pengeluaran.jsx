@@ -646,7 +646,13 @@ export default function Pengeluaran() {
 
       // Build aggregation map: key = "tanggal||namaItem" => count
       const rekapMap = {}
-      for (const exp of filtered) {
+      // Dropcore: setiap haspel dihitung HANYA 1x, pada tanggal pertama kali dipakai
+      const countedHaspels = new Set()
+
+      // Sort ascending by date to correctly find first usage of each haspel
+      const sortedForRekap = [...filtered].sort((a, b) => (a.expense_date || '').localeCompare(b.expense_date || ''))
+
+      for (const exp of sortedForRekap) {
         if (!exp.items || exp.items.length === 0) continue
         const tgl = exp.expense_date
         for (const item of exp.items) {
@@ -654,10 +660,15 @@ export default function Pengeluaran() {
             const key = `${tgl}||ONT / Modem`
             rekapMap[key] = (rekapMap[key] || 0) + 1
           } else if (item.item_type === 'dropcore') {
-            // Count per haspel: each distinct haspel usage = 1 unit (perhaspel)
-            const haspelCode = item.haspel?.haspel_code || item.haspel_id || 'Unknown'
-            const key = `${tgl}||${haspelCode}`
-            rekapMap[key] = (rekapMap[key] || 0) + 1
+            // Hitung 1x saja per haspel — pada tanggal pertama kali haspel digunakan
+            const haspelId = item.haspel_id || item.haspel?.id
+            if (haspelId && !countedHaspels.has(haspelId)) {
+              countedHaspels.add(haspelId)
+              const haspelCode = item.haspel?.haspel_code || haspelId
+              const key = `${tgl}||${haspelCode}`
+              rekapMap[key] = (rekapMap[key] || 0) + 1
+            }
+            // Pemakaian berikutnya dari haspel yg sama tidak dihitung lagi
           } else if (item.item_type === 'other') {
             const itemName = item.warehouse_item?.item_name || 'Material Lainnya'
             const key = `${tgl}||${itemName}`
