@@ -43,6 +43,15 @@ export default function Dismantle() {
   useEffect(() => { fetchAll() }, [])
   useEffect(() => { setPage(1) }, [searchTerm, statusFilter, dateFilter, koordinatorFilter])
 
+  useEffect(() => {
+    if (isModalOpen || isCloseModalOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => { document.body.style.overflow = 'unset' }
+  }, [isModalOpen, isCloseModalOpen])
+
   const fetchAll = async () => {
     setLoading(true)
     const [res, techRes] = await Promise.all([
@@ -373,7 +382,14 @@ export default function Dismantle() {
                 <tbody>
                   {paginated.map(item => (
                     <tr key={item.id}>
-                      <td className="text-secondary">{format(new Date(item.date_input), 'dd MMM yy', { locale: id })}</td>
+                      <td>
+                        <div>{format(new Date(item.date_input), 'dd MMM yyyy', { locale: id })}</div>
+                        {item.aksi === 'close' && item.pickup_date && (
+                          <div className="text-success" style={{ fontSize: '10px', marginTop: '4px', fontWeight: 600 }}>
+                            Close: {format(new Date(item.pickup_date), 'dd MMM yy', { locale: id })}
+                          </div>
+                        )}
+                      </td>
                       <td>
                         <div className="font-semibold">{item.full_name}</div>
                         <div className="text-secondary" style={{ fontSize: '11px' }}>{item.customer_id}</div>
@@ -438,7 +454,10 @@ export default function Dismantle() {
                     </div>
                     {expandedId === item.id && (
                       <div className="mobile-card-body">
-                        <div className="mobile-info-row"><span className="mobile-info-label">Tanggal</span><span className="mobile-info-value">{format(new Date(item.date_input), 'dd MMM yyyy', { locale: id })}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Tanggal Input</span><span className="mobile-info-value">{format(new Date(item.date_input), 'dd MMM yyyy', { locale: id })}</span></div>
+                        {item.aksi === 'close' && item.pickup_date && (
+                          <div className="mobile-info-row"><span className="mobile-info-label">Tanggal Close</span><span className="mobile-info-value text-success font-semibold">{format(new Date(item.pickup_date), 'dd MMM yyyy', { locale: id })}</span></div>
+                        )}
                         <div className="mobile-info-row"><span className="mobile-info-label">Bayar Terakhir</span><span className="mobile-info-value">{item.last_payment || '-'}</span></div>
                         <div className="mobile-info-row"><span className="mobile-info-label">SN</span><span className="mobile-info-value" style={{ fontFamily: 'monospace' }}>{item.serial_number || '-'}</span></div>
                         <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{item.lokasi || '-'}</span></div>
