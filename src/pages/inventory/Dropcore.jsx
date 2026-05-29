@@ -7,11 +7,13 @@ import toast from 'react-hot-toast'
 import { Search, Plus, Trash2, Edit2, X, Cable, AlertTriangle, Download, History } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
+import { useProgress } from '../../contexts/ProgressContext'
 import HistoryModal from '../../components/HistoryModal'
 
 export default function Dropcore() {
   const { profile } = useAuth()
   const role = profile?.role || 'teknisi'
+  const { showProgress, hideProgress } = useProgress()
 
   const [haspels, setHaspels] = useState([])
   const [loading, setLoading] = useState(true)
@@ -190,60 +192,81 @@ export default function Dropcore() {
   }
 
   const handleExportExcel = async () => {
-    const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
-    const ExcelJS = (await import('exceljs')).default
-    const workbook = new ExcelJS.Workbook()
-    workbook.creator = 'Maintory'
-    workbook.created = new Date()
+    try {
+      showProgress('Menyiapkan Export', 'Menginisialisasi file Excel...', 10)
+      const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      workbook.creator = 'Maintory'
+      workbook.created = new Date()
 
-    // Sheet 1: Stok Haspel
-    const ws1 = workbook.addWorksheet('Stok Haspel')
-    const headers1 = ['Kode Haspel', 'Tipe', 'Tanggal Masuk', 'Meter Awal', 'Meter Terpakai', 'Sisa Meter', 'Status', 'Catatan']
-    setColumnWidths(ws1, [16, 14, 16, 14, 16, 14, 12, 28])
-    applyHeaderStyle(ws1, headers1)
-    haspels.forEach(h => {
-      ws1.addRow([
-        h.haspel_code,
-        h.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C',
-        h.date_in,
-        Number(h.initial_meters),
-        Number(h.used_meters),
-        Number(h.initial_meters) - Number(h.used_meters),
-        h.status === 'habis' ? 'Habis' : 'Tersedia',
-        h.note || ''
-      ])
-    })
-    applyDataRowStyles(ws1)
+      // Sheet 1: Stok Haspel
+      const ws1 = workbook.addWorksheet('Stok Haspel')
+      const headers1 = ['Kode Haspel', 'Tipe', 'Tanggal Masuk', 'Meter Awal', 'Meter Terpakai', 'Sisa Meter', 'Status', 'Catatan']
+      setColumnWidths(ws1, [16, 14, 16, 14, 16, 14, 12, 28])
+      applyHeaderStyle(ws1, headers1)
+      for (let i = 0; i < haspels.length; i++) {
+        const h = haspels[i]
+        ws1.addRow([
+          h.haspel_code,
+          h.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C',
+          h.date_in,
+          Number(h.initial_meters),
+          Number(h.used_meters),
+          Number(h.initial_meters) - Number(h.used_meters),
+          h.status === 'habis' ? 'Habis' : 'Tersedia',
+          h.note || ''
+        ])
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses Stok Haspel... (${i + 1}/${haspels.length})`, 10 + ((i + 1) / haspels.length) * 40)
+          await new Promise(r => setTimeout(r, 0))
+        }
+      }
+      applyDataRowStyles(ws1)
 
-    // Sheet 2: Riwayat Transaksi (from expense_items)
-    const ws2 = workbook.addWorksheet('Riwayat Transaksi')
-    const headers2 = ['Kode Haspel', 'Tipe', 'Tanggal', 'Jenis', 'Pekerjaan', 'Teknisi', 'Meter', 'Lokasi/Note']
-    setColumnWidths(ws2, [16, 14, 16, 12, 16, 24, 12, 28])
-    applyHeaderStyle(ws2, headers2, '065F46')
+      // Sheet 2: Riwayat Transaksi (from expense_items)
+      const ws2 = workbook.addWorksheet('Riwayat Transaksi')
+      const headers2 = ['Kode Haspel', 'Tipe', 'Tanggal', 'Jenis', 'Pekerjaan', 'Teknisi', 'Meter', 'Lokasi/Note']
+      setColumnWidths(ws2, [16, 14, 16, 12, 16, 24, 12, 28])
+      applyHeaderStyle(ws2, headers2, '065F46')
 
-    // Fetch all transactions
-    const { data: allExpItems } = await supabase.from('expense_items').select('*, haspel:dropcore_haspels(haspel_code, type), expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type', 'dropcore').order('created_at', { ascending: true })
-    const { data: allLogs } = await supabase.from('inventory_log').select('*, item:dropcore_haspels(haspel_code, type), user:users(full_name)').eq('item_type', 'dropcore').order('log_date', { ascending: true })
-    const { data: usersData } = await supabase.from('users').select('id, full_name')
-    
-    const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
-    const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3' }
+      // Fetch all transactions
+      const { data: allExpItems } = await supabase.from('expense_items').select('*, haspel:dropcore_haspels(haspel_code, type), expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type', 'dropcore').order('created_at', { ascending: true })
+      const { data: allLogs } = await supabase.from('inventory_log').select('*, item:dropcore_haspels(haspel_code, type), user:users(full_name)').eq('item_type', 'dropcore').order('log_date', { ascending: true })
+      const { data: usersData } = await supabase.from('users').select('id, full_name')
+      
+      const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
+      const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3' }
 
-    const rows2 = []
-    ;(allLogs || []).forEach(l => {
-      rows2.push({ date: l.log_date, code: l.item?.haspel_code || '-', type: l.item?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C', jenis: l.action === 'masuk' ? 'Masuk' : 'Koreksi', work: '-', tech: '-', meters: l.meters || 0, note: l.note || '' })
-    })
-    ;(allExpItems || []).forEach(ei => {
-      const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
-      const wType = ei.expense?.work_type
-      rows2.push({ date: ei.expense?.expense_date || '-', code: ei.haspel?.haspel_code || '-', type: ei.haspel?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C', jenis: 'Keluar', work: workTypeLabels[wType] || wType || '-', tech: techNames || '-', meters: ei.meters_used || 0, note: `Lokasi: ${ei.expense?.site || '-'}` })
-    })
-    rows2.sort((a, b) => (a.date < b.date ? -1 : 1))
-    rows2.forEach(r => ws2.addRow([r.code, r.type, r.date, r.jenis, r.work, r.tech, r.meters, r.note]))
-    applyDataRowStyles(ws2)
+      const rows2 = []
+      ;(allLogs || []).forEach(l => {
+        rows2.push({ date: l.log_date, code: l.item?.haspel_code || '-', type: l.item?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C', jenis: l.action === 'masuk' ? 'Masuk' : 'Koreksi', work: '-', tech: '-', meters: l.meters || 0, note: l.note || '' })
+      })
+      ;(allExpItems || []).forEach(ei => {
+        const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+        const wType = ei.expense?.work_type
+        rows2.push({ date: ei.expense?.expense_date || '-', code: ei.haspel?.haspel_code || '-', type: ei.haspel?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C', jenis: 'Keluar', work: workTypeLabels[wType] || wType || '-', tech: techNames || '-', meters: ei.meters_used || 0, note: `Lokasi: ${ei.expense?.site || '-'}` })
+      })
+      rows2.sort((a, b) => (a.date < b.date ? -1 : 1))
+      
+      for (let i = 0; i < rows2.length; i++) {
+        const r = rows2[i]
+        ws2.addRow([r.code, r.type, r.date, r.jenis, r.work, r.tech, r.meters, r.note])
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses Riwayat Transaksi... (${i + 1}/${rows2.length})`, 50 + ((i + 1) / rows2.length) * 40)
+          await new Promise(res => setTimeout(res, 0))
+        }
+      }
+      applyDataRowStyles(ws2)
 
-    await downloadWorkbook(workbook, `Dropcore ${new Date().toISOString().slice(0, 10)}.xlsx`)
-    toast.success('Export berhasil!')
+      showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
+      await downloadWorkbook(workbook, `Dropcore ${new Date().toISOString().slice(0, 10)}.xlsx`)
+      toast.success('Export berhasil!')
+    } catch (err) {
+      toast.error('Gagal export: ' + err.message)
+    } finally {
+      hideProgress()
+    }
   }
 
   return (

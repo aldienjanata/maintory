@@ -6,12 +6,14 @@ import toast from 'react-hot-toast'
 import { Search, Trash2, History, Filter, Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
+import { useProgress } from '../../contexts/ProgressContext'
 
 const MODULES = ['Auth', 'Maintenance', 'Stok Gudang', 'Serial Number', 'Dropcore', 'Pengeluaran', 'Dismantle', 'Pergantian ONT', 'Settings']
 
 export default function ActivityLogs() {
   const { profile } = useAuth()
   const role = profile?.role || 'teknisi'
+  const { showProgress, hideProgress } = useProgress()
 
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -59,6 +61,7 @@ export default function ActivityLogs() {
 
   const handleExportExcel = async () => {
     try {
+      showProgress('Menyiapkan Export', 'Menginisialisasi file Excel...', 10)
       const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
@@ -68,7 +71,8 @@ export default function ActivityLogs() {
       setColumnWidths(ws, [20, 20, 14, 20, 24, 40])
       applyHeaderStyle(ws, headers)
       
-      filtered.forEach(log => {
+      for (let i = 0; i < filtered.length; i++) {
+        const log = filtered[i]
         ws.addRow([
           format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
           log.username || '-',
@@ -77,13 +81,20 @@ export default function ActivityLogs() {
           log.action || '-',
           log.detail || '-'
         ])
-      })
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses log ${i + 1} dari ${filtered.length}...`, 10 + ((i + 1) / filtered.length) * 80)
+          await new Promise(r => setTimeout(r, 0))
+        }
+      }
       applyDataRowStyles(ws)
 
+      showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
       await downloadWorkbook(workbook, `Log Aktivitas ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
       toast.success('Export berhasil!')
     } catch (err) {
       toast.error('Gagal export: ' + err.message)
+    } finally {
+      hideProgress()
     }
   }
 

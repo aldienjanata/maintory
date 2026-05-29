@@ -10,10 +10,12 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
+import { useProgress } from '../../contexts/ProgressContext'
 
 export default function Maintenance() {
   const { profile } = useAuth()
   const role = profile?.role || 'teknisi'
+  const { showProgress, hideProgress } = useProgress()
   
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
@@ -145,7 +147,8 @@ export default function Maintenance() {
     }
 
     try {
-      // Gunakan globalTechnicians untuk semua tiket
+      showProgress('Menyimpan Tiket', 'Memulai proses penyimpanan...', 10)
+      
       const toInsert = parsedTickets.map(({ _id, ...rest }) => ({
         ...rest,
         technicians: globalTechnicians,
@@ -153,8 +156,15 @@ export default function Maintenance() {
         created_by: profile.id
       }))
 
-      const { error } = await supabase.from('maintenance_tickets').insert(toInsert)
-      if (error) throw error
+      let inserted = 0
+      const batchSize = 10
+      for (let i = 0; i < toInsert.length; i += batchSize) {
+        const batch = toInsert.slice(i, i + batchSize)
+        const { error } = await supabase.from('maintenance_tickets').insert(batch)
+        if (error) throw error
+        inserted += batch.length
+        showProgress('Menyimpan ke Database', `Menyimpan ${inserted} dari ${toInsert.length} tiket...`, 10 + (inserted / toInsert.length) * 80)
+      }
 
       const techNames = globalTechnicians.map(id => technicians.find(t => t.id === id)?.full_name || '').filter(Boolean).join(', ')
       await logActivity({
@@ -174,6 +184,8 @@ export default function Maintenance() {
       fetchTickets()
     } catch (err) {
       toast.error('Gagal menyimpan data: ' + err.message)
+    } finally {
+      hideProgress()
     }
   }
 
@@ -267,6 +279,7 @@ export default function Maintenance() {
 
   const handleExport = async () => {
     try {
+      showProgress('Menyiapkan Export', 'Menginisialisasi file Excel...', 10)
       const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
@@ -276,7 +289,8 @@ export default function Maintenance() {
       setColumnWidths(ws, [10, 16, 16, 16, 24, 16, 30, 20, 30, 24, 12, 24])
       applyHeaderStyle(ws, headers)
       
-      filteredTickets.forEach(t => {
+      for (let i = 0; i < filteredTickets.length; i++) {
+        const t = filteredTickets[i]
         ws.addRow([
           t.ticket_number,
           t.created_at ? t.created_at.split('T')[0] : '',
@@ -291,13 +305,20 @@ export default function Maintenance() {
           t.status,
           t.note || ''
         ])
-      })
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses baris ${i + 1} dari ${filteredTickets.length}...`, 10 + ((i + 1) / filteredTickets.length) * 80)
+          await new Promise(r => setTimeout(r, 0))
+        }
+      }
       applyDataRowStyles(ws)
 
+      showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
       await downloadWorkbook(workbook, `Maintenance ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
       toast.success('Export berhasil!')
     } catch (err) {
       toast.error('Gagal export: ' + err.message)
+    } finally {
+      hideProgress()
     }
   }
 

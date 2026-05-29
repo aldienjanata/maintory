@@ -8,10 +8,12 @@ import { Search, Plus, Trash2, Edit2, X, Hash, UploadCloud, CheckCircle, Clock, 
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import HistoryModal from '../../components/HistoryModal'
+import { useProgress } from '../../contexts/ProgressContext'
 
 export default function SerialNumber() {
   const { profile } = useAuth()
   const role = profile?.role || 'teknisi'
+  const { showProgress, hideProgress } = useProgress()
 
   const [items, setItems] = useState([])
   const [brands, setBrands] = useState([])
@@ -252,6 +254,7 @@ export default function SerialNumber() {
 
   const handleExportExcel = async () => {
     try {
+      showProgress('Menyiapkan Export', 'Menginisialisasi file Excel...', 10)
       const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
@@ -259,7 +262,14 @@ export default function SerialNumber() {
       const ws1 = workbook.addWorksheet('Stok Serial Number')
       applyHeaderStyle(ws1, ['Serial Number', 'Merk', 'Tipe', 'Tanggal Masuk', 'Status', 'Catatan'])
       setColumnWidths(ws1, [24, 18, 18, 16, 14, 30])
-      items.forEach(i => ws1.addRow([i.serial_number, i.brand?.brand_name || '-', i.type?.type_name || '-', i.date_in, i.status === 'terpakai' ? 'Terpakai' : 'Tersedia', i.note || '']))
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        ws1.addRow([item.serial_number, item.brand?.brand_name || '-', item.type?.type_name || '-', item.date_in, item.status === 'terpakai' ? 'Terpakai' : 'Tersedia', item.note || ''])
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses Serial Number... (${i + 1}/${items.length})`, 10 + ((i + 1) / items.length) * 30)
+          await new Promise(r => setTimeout(r, 0))
+        }
+      }
       applyDataRowStyles(ws1)
 
       const ws2 = workbook.addWorksheet('Riwayat Penggunaan')
@@ -267,6 +277,7 @@ export default function SerialNumber() {
       setColumnWidths(ws2, [24, 18, 18, 16, 12, 16, 24, 30])
       applyHeaderStyle(ws2, headers2, '065F46')
       
+      showProgress('Mengambil Data', 'Mengambil riwayat dari database...', 40)
       const { data: allExpItems } = await supabase
         .from('expense_items')
         .select('*, expense:daily_expenses(expense_date, site, technicians, work_type)')
@@ -312,13 +323,23 @@ export default function SerialNumber() {
         })
       })
       rows2.sort((a,b) => a.date < b.date ? -1 : 1)
-      rows2.forEach(r => ws2.addRow([r.sn, r.brand, r.type, r.date, r.action, r.work, r.tech, r.note]))
+      for (let i = 0; i < rows2.length; i++) {
+        const r = rows2[i]
+        ws2.addRow([r.sn, r.brand, r.type, r.date, r.action, r.work, r.tech, r.note])
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses Riwayat... (${i + 1}/${rows2.length})`, 50 + ((i + 1) / rows2.length) * 40)
+          await new Promise(res => setTimeout(res, 0))
+        }
+      }
       applyDataRowStyles(ws2)
 
+      showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
       await downloadWorkbook(workbook, `Serial Number ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
       toast.success('Export berhasil!')
     } catch (err) {
       toast.error('Gagal export: ' + err.message)
+    } finally {
+      hideProgress()
     }
   }
 
@@ -345,11 +366,13 @@ export default function SerialNumber() {
     const reader = new FileReader()
     reader.onload = async (evt) => {
       try {
+        showProgress('Membaca File', 'Menganalisis isi Excel...', 10)
         const { read, utils } = await import('xlsx')
         const wb = read(evt.target.result, { type: 'binary' })
         const data = utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]])
         if (!data.length) throw new Error('File kosong')
         
+        showProgress('Memproses Brand & Tipe', 'Sinkronisasi data merk ONT...', 20)
         const uniqueBrands = [...new Set(data.map(r => String(r['Merk'] || '').trim()).filter(Boolean))]
         const brandMap = Object.fromEntries(brands.map(b => [b.brand_name.toLowerCase(), b.id]))
         for (const bName of uniqueBrands) {
@@ -362,6 +385,7 @@ export default function SerialNumber() {
         const { data: allTypes } = await supabase.from('ont_types').select('id, brand_id, type_name')
         const typeMap = Object.fromEntries((allTypes || []).map(t => [`${t.brand_id}_${t.type_name.toLowerCase()}`, t.id]))
         
+        showProgress('Memvalidasi Data', 'Mencocokkan serial number...', 35)
         const toInsert = data.map(row => {
           const sn = String(row['Serial Number'] || '').trim()
           if (!sn) return null
@@ -375,12 +399,19 @@ export default function SerialNumber() {
           return { serial_number: sn, date_in: row['Tanggal Masuk (yyyy-mm-dd)'] || format(new Date(), 'yyyy-MM-dd'), status: 'tersedia', note: String(row['Note'] || '').trim(), brand_id: bId || null, type_id: tId, created_by: profile.id }
         }).filter(Boolean)
         
-        await supabase.from('serial_numbers').insert(toInsert)
+        let inserted = 0
+        const batchSize = 50
+        for (let i = 0; i < toInsert.length; i += batchSize) {
+          const batch = toInsert.slice(i, i + batchSize)
+          await supabase.from('serial_numbers').insert(batch)
+          inserted += batch.length
+          showProgress('Menyimpan ke Database', `Menyimpan ${inserted} dari ${toInsert.length} SN...`, 35 + (inserted / toInsert.length) * 65)
+        }
         toast.success('Import berhasil')
         fetchAll()
       } catch (err) {
         toast.error('Gagal import: ' + err.message)
-      } finally { setSaving(false) }
+      } finally { setSaving(false); hideProgress() }
     }
     reader.readAsBinaryString(file)
   }

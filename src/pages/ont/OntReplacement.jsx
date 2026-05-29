@@ -7,10 +7,12 @@ import toast from 'react-hot-toast'
 import { Search, Plus, Trash2, X, RefreshCcw, ArrowRight, Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
+import { useProgress } from '../../contexts/ProgressContext'
 
 export default function OntReplacement() {
   const { profile } = useAuth()
   const role = profile?.role || 'teknisi'
+  const { showProgress, hideProgress } = useProgress()
 
   const [items, setItems] = useState([])
   const [technicians, setTechnicians] = useState([])
@@ -109,6 +111,7 @@ export default function OntReplacement() {
 
   const handleExportExcel = async () => {
     try {
+      showProgress('Menyiapkan Export', 'Menginisialisasi file Excel...', 10)
       const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
@@ -118,7 +121,8 @@ export default function OntReplacement() {
       setColumnWidths(ws, [16, 16, 24, 20, 20, 24, 30])
       applyHeaderStyle(ws, headers)
       
-      filtered.forEach(item => {
+      for (let i = 0; i < filtered.length; i++) {
+        const item = filtered[i]
         ws.addRow([
           item.replacement_date,
           item.customer_id,
@@ -128,13 +132,20 @@ export default function OntReplacement() {
           getTechNames(item.technicians),
           item.reason || ''
         ])
-      })
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses baris ${i + 1} dari ${filtered.length}...`, 10 + ((i + 1) / filtered.length) * 80)
+          await new Promise(r => setTimeout(r, 0))
+        }
+      }
       applyDataRowStyles(ws)
 
+      showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
       await downloadWorkbook(workbook, `Pergantian ONT ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
       toast.success('Export berhasil!')
     } catch (err) {
       toast.error('Gagal export: ' + err.message)
+    } finally {
+      hideProgress()
     }
   }
 

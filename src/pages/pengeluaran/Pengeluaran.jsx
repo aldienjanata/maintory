@@ -9,6 +9,7 @@ import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
 import Select from 'react-select'
+import { useProgress } from '../../contexts/ProgressContext'
 
 const SITES = [
   { value: 'banyumas', label: 'Banyumas' },
@@ -24,6 +25,7 @@ const WORK_TYPES = [
 export default function Pengeluaran() {
   const { profile } = useAuth()
   const role = profile?.role || 'teknisi'
+  const { showProgress, hideProgress } = useProgress()
 
   const [expenses, setExpenses] = useState([])
   const [technicians, setTechnicians] = useState([])
@@ -562,6 +564,7 @@ export default function Pengeluaran() {
 
   const handleExportExcel = async () => {
     try {
+      showProgress('Menyiapkan Export', 'Menginisialisasi file Excel...', 10)
       const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
@@ -573,7 +576,8 @@ export default function Pengeluaran() {
       const headers1 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Jumlah Item', 'Catatan']
       setColumnWidths(ws1, [14, 18, 18, 32, 14, 30])
       applyHeaderStyle(ws1, headers1)
-      filtered.forEach(exp => {
+      for (let i = 0; i < filtered.length; i++) {
+        const exp = filtered[i]
         ws1.addRow([
           exp.expense_date,
           SITES.find(s => s.value === exp.site)?.label || exp.site,
@@ -582,7 +586,11 @@ export default function Pengeluaran() {
           exp.items?.length || 0,
           exp.note || ''
         ])
-      })
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses Rekap Pengeluaran... (${i + 1}/${filtered.length})`, 10 + ((i + 1) / filtered.length) * 40)
+          await new Promise(r => setTimeout(r, 0))
+        }
+      }
       applyDataRowStyles(ws1)
 
       // ===== SHEET 2: Detail Barang Keluar =====
@@ -591,7 +599,8 @@ export default function Pengeluaran() {
       setColumnWidths(ws2, [14, 18, 18, 32, 16, 26, 16, 30])
       applyHeaderStyle(ws2, headers2, '065F46')
 
-      filtered.forEach(exp => {
+      for (let i = 0; i < filtered.length; i++) {
+        const exp = filtered[i]
         const techNames = getTechNames(exp.technicians)
         const site = SITES.find(s => s.value === exp.site)?.label || exp.site
         const workType = WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type
@@ -620,14 +629,21 @@ export default function Pengeluaran() {
             ws2.addRow([exp.expense_date, site, workType, techNames, jenisBarang, kode, jumlah, exp.note || ''])
           })
         }
-      })
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses Detail Barang Keluar... (${i + 1}/${filtered.length})`, 50 + ((i + 1) / filtered.length) * 40)
+          await new Promise(r => setTimeout(r, 0))
+        }
+      }
       applyDataRowStyles(ws2)
 
+      showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
       await downloadWorkbook(workbook, `Pengeluaran ${new Date().toISOString().slice(0, 10)}.xlsx`)
       toast.success('Export berhasil!')
     } catch (err) {
       console.error(err)
       toast.error('Gagal export: ' + err.message)
+    } finally {
+      hideProgress()
     }
   }
 

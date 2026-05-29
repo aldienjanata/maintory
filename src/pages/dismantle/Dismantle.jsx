@@ -7,10 +7,12 @@ import toast from 'react-hot-toast'
 import { Search, Plus, Trash2, Edit2, X, ArrowDownToLine, CheckCircle, Clock, MapPin, Phone, FileDown, Upload, Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
+import { useProgress } from '../../contexts/ProgressContext'
 
 export default function Dismantle() {
   const { profile } = useAuth()
   const role = profile?.role || 'teknisi'
+  const { showProgress, hideProgress } = useProgress()
 
   const [items, setItems] = useState([])
   const [technicians, setTechnicians] = useState([])
@@ -146,6 +148,7 @@ export default function Dismantle() {
 
   const handleExportExcel = async () => {
     try {
+      showProgress('Menyiapkan Export', 'Menginisialisasi file Excel...', 10)
       const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
@@ -155,7 +158,8 @@ export default function Dismantle() {
       setColumnWidths(ws, [16, 16, 24, 16, 30, 16, 20, 16, 24, 16, 16, 24])
       applyHeaderStyle(ws, headers)
       
-      filtered.forEach(item => {
+      for (let i = 0; i < filtered.length; i++) {
+        const item = filtered[i]
         ws.addRow([
           item.date_input,
           item.customer_id,
@@ -170,13 +174,20 @@ export default function Dismantle() {
           item.pickup_date || '',
           item.note || ''
         ])
-      })
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses baris ${i + 1} dari ${filtered.length}...`, 10 + ((i + 1) / filtered.length) * 80)
+          await new Promise(r => setTimeout(r, 0))
+        }
+      }
       applyDataRowStyles(ws)
 
+      showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
       await downloadWorkbook(workbook, `Dismantle ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
       toast.success('Export berhasil!')
     } catch (err) {
       toast.error('Gagal export: ' + err.message)
+    } finally {
+      hideProgress()
     }
   }
 
@@ -203,11 +214,14 @@ export default function Dismantle() {
     const reader = new FileReader()
     reader.onload = async (evt) => {
       try {
+        showProgress('Membaca File', 'Menganalisis isi Excel...', 10)
         const { read, utils } = await import('xlsx')
         const wb = read(evt.target.result, { type: 'binary' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const data = utils.sheet_to_json(ws)
-        if (!data.length) { toast.error('File kosong'); return }
+        if (!data.length) { toast.error('File kosong'); hideProgress(); return }
+        
+        showProgress('Memvalidasi Data', 'Mencocokkan kolom...', 20)
         const toInsert = data.map(row => ({
           date_input: row['Tanggal Input (yyyy-mm-dd)'] || row['Tanggal Input'] || format(new Date(), 'yyyy-MM-dd'),
           customer_id: String(row['ID Pelanggan'] || '').trim(),
@@ -222,13 +236,24 @@ export default function Dismantle() {
           technicians: [],
           created_by: profile.id,
         })).filter(r => r.customer_id && r.full_name)
-        if (!toInsert.length) { toast.error('Tidak ada data valid'); return }
-        const { error } = await supabase.from('dismantles').insert(toInsert)
-        if (error) throw error
-        toast.success(`${toInsert.length} data dismantle berhasil diimport`)
+        if (!toInsert.length) { toast.error('Tidak ada data valid'); hideProgress(); return }
+        
+        let inserted = 0
+        const batchSize = 50
+        for (let i = 0; i < toInsert.length; i += batchSize) {
+          const batch = toInsert.slice(i, i + batchSize)
+          const { error } = await supabase.from('dismantles').insert(batch)
+          if (error) throw error
+          inserted += batch.length
+          showProgress('Menyimpan ke Database', `Menyimpan ${inserted} dari ${toInsert.length} data...`, 20 + (inserted / toInsert.length) * 80)
+        }
+        
+        toast.success(`${inserted} data dismantle berhasil diimport`)
         fetchAll()
       } catch (err) {
         toast.error('Gagal import: ' + err.message)
+      } finally {
+        hideProgress()
       }
     }
     reader.readAsBinaryString(file)

@@ -8,6 +8,7 @@ import { Search, Plus, Trash2, Edit2, X, Package, TrendingDown, TrendingUp, File
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import HistoryModal from '../../components/HistoryModal'
+import { useProgress } from '../../contexts/ProgressContext'
 
 const UNITS = ['unit', 'buah', 'pcs', 'meter', 'roll', 'set', 'dus', 'kg', 'haspel']
 const ITEM_TYPES = [
@@ -20,6 +21,7 @@ const ITEM_TYPES = [
 export default function StokGudang() {
   const { profile } = useAuth()
   const role = profile?.role || 'teknisi'
+  const { showProgress, hideProgress } = useProgress()
 
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -225,6 +227,7 @@ export default function StokGudang() {
 
   const handleExportExcel = async () => {
     try {
+      showProgress('Menyiapkan Export', 'Menginisialisasi file Excel...', 10)
       const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
@@ -233,9 +236,14 @@ export default function StokGudang() {
       const headers1 = ['Nama Item', 'Tipe', 'Satuan', 'Stok Awal', 'Stok Keluar', 'Stok Saat Ini']
       setColumnWidths(ws1, [30, 20, 12, 14, 14, 16])
       applyHeaderStyle(ws1, headers1)
-      items.forEach(i => {
-        ws1.addRow([i.item_name, ITEM_TYPES.find(t => t.value === i.item_type)?.label || i.item_type, i.unit, i.display_initial, i.display_out, i.display_current])
-      })
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        ws1.addRow([item.item_name, ITEM_TYPES.find(t => t.value === item.item_type)?.label || item.item_type, item.unit, item.display_initial, item.display_out, item.display_current])
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses Stok Gudang... (${i + 1}/${items.length})`, 10 + ((i + 1) / items.length) * 30)
+          await new Promise(r => setTimeout(r, 0))
+        }
+      }
       applyDataRowStyles(ws1)
 
       const ws2 = workbook.addWorksheet('Riwayat Transaksi')
@@ -243,6 +251,7 @@ export default function StokGudang() {
       setColumnWidths(ws2, [30, 16, 18, 16, 24, 12, 30])
       applyHeaderStyle(ws2, headers2, '065F46')
       
+      showProgress('Mengambil Data', 'Mengambil riwayat transaksi dari database...', 40)
       const { data: allExpItems } = await supabase.from('expense_items').select('*, item:warehouses(item_name), expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type','other').order('created_at', {ascending: true})
       const { data: allLogs } = await supabase.from('inventory_log').select('*, item:warehouses(item_name)').eq('item_type','stok_gudang').order('log_date', {ascending: true})
       const { data: usersData } = await supabase.from('users').select('id, full_name')
@@ -260,14 +269,24 @@ export default function StokGudang() {
         rows2.push({ name: ei.item?.item_name || '-', date: ei.expense?.expense_date || '-', action: 'Keluar', work: workTypeLabels[wType] || wType || '-', tech: techNames || '-', qty: ei.quantity || 0, note: `Lokasi: ${ei.expense?.site || '-'}` })
       })
       rows2.sort((a,b) => a.date < b.date ? -1 : 1)
-      rows2.forEach(r => ws2.addRow([r.name, r.date, r.action, r.work, r.tech, r.qty, r.note]))
+      for (let i = 0; i < rows2.length; i++) {
+        const r = rows2[i]
+        ws2.addRow([r.name, r.date, r.action, r.work, r.tech, r.qty, r.note])
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses Riwayat Transaksi... (${i + 1}/${rows2.length})`, 50 + ((i + 1) / rows2.length) * 40)
+          await new Promise(res => setTimeout(res, 0))
+        }
+      }
       applyDataRowStyles(ws2)
 
+      showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
       await downloadWorkbook(workbook, `Stok Gudang ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
       toast.success('Export berhasil!')
     } catch (err) {
       console.error(err)
       toast.error('Gagal export: ' + err.message)
+    } finally {
+      hideProgress()
     }
   }
 
@@ -296,22 +315,21 @@ export default function StokGudang() {
     const reader = new FileReader()
     reader.onload = async (evt) => {
       try {
+        showProgress('Membaca File', 'Menganalisis isi Excel...', 10)
         const wb = XLSX.read(evt.target.result, { type: 'binary' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const data = XLSX.utils.sheet_to_json(ws)
-        if (!data.length) { toast.error('File kosong atau format tidak sesuai'); return }
+        if (!data.length) { toast.error('File kosong atau format tidak sesuai'); hideProgress(); return }
         const VALID_TYPES = ['ont', 'dropcore_1c', 'dropcore_4c', 'other']
+        showProgress('Memvalidasi Data', 'Mencocokkan kolom...', 20)
         const toInsert = data.map(row => {
-          // Try multiple column name variants and sanitize
           const rawType = (
             row['Tipe'] ||
             row['Tipe (ont/dropcore_1c/dropcore_4c/other)'] ||
             row['tipe'] ||
             'other'
           ).toString().trim().toLowerCase()
-          // Validate and fallback to 'other' if invalid
           const type = VALID_TYPES.includes(rawType) ? rawType : 'other'
-
           const rawUnit = (
             row['Satuan'] ||
             row['Satuan (unit/buah/pcs/meter/roll/set/dus/kg/haspel)'] ||
@@ -332,17 +350,25 @@ export default function StokGudang() {
             created_by: profile.id,
           }
         }).filter(r => r.item_name)
-        if (!toInsert.length) { toast.error('Tidak ada data valid di file'); return }
-        const { error } = await supabase.from('warehouses').insert(toInsert)
-        if (error) throw error
-        toast.success(`${toInsert.length} item berhasil diimport`)
+        if (!toInsert.length) { toast.error('Tidak ada data valid di file'); hideProgress(); return }
+        
+        let inserted = 0
+        const batchSize = 30
+        for (let i = 0; i < toInsert.length; i += batchSize) {
+          const batch = toInsert.slice(i, i + batchSize)
+          const { error } = await supabase.from('warehouses').insert(batch)
+          if (error) throw error
+          inserted += batch.length
+          showProgress('Menyimpan ke Database', `Menyimpan ${inserted} dari ${toInsert.length} item...`, 20 + (inserted / toInsert.length) * 80)
+        }
+        toast.success(`${inserted} item berhasil diimport`)
         fetchItems()
       } catch (err) {
         toast.error('Gagal import: ' + err.message)
+      } finally {
+        hideProgress()
       }
     }
-    // Handle both old xlsx and new exceljs imports if we ever use xlsx for reading
-    // For now we assume xlsx is still used for reading since exceljs reading requires Buffer/ArrayBuffer parsing differently
     reader.readAsArrayBuffer(file)
     e.target.value = ''
   }
