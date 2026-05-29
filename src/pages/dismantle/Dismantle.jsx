@@ -24,7 +24,7 @@ export default function Dismantle() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false)
   const [closeItem, setCloseItem] = useState(null)
-  const [closeForm, setCloseForm] = useState({ pickup_date: format(new Date(), 'yyyy-MM-dd'), technicians: [] })
+  const [closeForm, setCloseForm] = useState({ aksi: 'close', pickup_date: format(new Date(), 'yyyy-MM-dd'), technicians: [], note: '' })
   const [editItem, setEditItem] = useState(null)
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
@@ -107,30 +107,41 @@ export default function Dismantle() {
 
   const openCloseModal = (item) => {
     setCloseItem(item)
-    setCloseForm({ pickup_date: format(new Date(), 'yyyy-MM-dd'), technicians: item.technicians || [] })
+    setCloseForm({ aksi: 'close', pickup_date: format(new Date(), 'yyyy-MM-dd'), technicians: item.technicians || [], note: item.note || '' })
     setIsCloseModalOpen(true)
   }
 
   const submitClose = async () => {
     if (!closeForm.technicians.length) {
-      toast.error('Pilih minimal 1 teknisi yang melakukan eksekusi close')
+      toast.error('Pilih minimal 1 teknisi yang melakukan eksekusi')
+      return
+    }
+    if (closeForm.aksi === 'pending' && !closeForm.note.trim()) {
+      toast.error('Note wajib diisi untuk status Pending')
       return
     }
     setSaving(true)
-    const { error } = await supabase.from('dismantles').update({ 
-      aksi: 'close', 
-      pickup_date: closeForm.pickup_date, 
+    const updateData = { 
+      aksi: closeForm.aksi, 
       technicians: closeForm.technicians,
       updated_at: new Date().toISOString() 
-    }).eq('id', closeItem.id)
+    }
+    if (closeForm.aksi === 'close') {
+      updateData.pickup_date = closeForm.pickup_date
+      updateData.note = closeForm.note || ''
+    } else if (closeForm.aksi === 'pending') {
+      updateData.note = closeForm.note
+    }
+
+    const { error } = await supabase.from('dismantles').update(updateData).eq('id', closeItem.id)
     
     if (!error) {
-      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Close Dismantle', detail: `ID: ${closeItem.customer_id}` })
-      toast.success('Dismantle ditandai selesai')
+      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: closeForm.aksi === 'close' ? 'Close Dismantle' : 'Pending Dismantle', detail: `ID: ${closeItem.customer_id}` })
+      toast.success(`Dismantle ditandai ${closeForm.aksi}`)
       setIsCloseModalOpen(false)
       fetchAll()
     } else {
-      toast.error('Gagal close: ' + error.message)
+      toast.error('Gagal update status: ' + error.message)
     }
     setSaving(false)
   }
@@ -413,6 +424,7 @@ export default function Dismantle() {
                       <td style={{ fontSize: '12px' }}>{getTechNames(item.technicians)}</td>
                       <td>
                         {item.aksi === 'close' ? <span className="badge badge-success"><CheckCircle size={10} /> Close</span> :
+                         item.aksi === 'pending' ? <span className="badge badge-info" style={{ background: 'var(--accent-dim)', color: 'var(--accent)' }}><Clock size={10} /> Pending</span> :
                          item.aksi === 'disable' ? <span className="badge badge-muted"><X size={10} /> Disable</span> :
                          item.aksi === 'berhenti_sementara' ? <span className="badge badge-warning"><Clock size={10} /> Berhenti Sementara</span> :
                          item.aksi === 'berhenti_berlangganan' ? <span className="badge badge-danger"><Trash2 size={10} /> Berhenti Berlangganan</span> :
@@ -421,7 +433,7 @@ export default function Dismantle() {
                       <td style={{ textAlign: 'right' }}>
                         <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
                           {item.aksi !== 'close' && (
-                            <button className="btn-icon text-success" title="Close Status" onClick={() => openCloseModal(item)}><CheckCircle size={15} /></button>
+                            <button className="btn-icon text-success" title="Update Eksekusi" onClick={() => openCloseModal(item)}><CheckCircle size={15} /></button>
                           )}
                           {can(role, 'dismantle.edit') && (
                             <button className="btn-icon" title="Edit" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
@@ -446,6 +458,7 @@ export default function Dismantle() {
                       </div>
                       <div>
                         {item.aksi === 'close' ? <span className="badge badge-success"><CheckCircle size={10} /> Close</span> :
+                         item.aksi === 'pending' ? <span className="badge badge-info" style={{ background: 'var(--accent-dim)', color: 'var(--accent)' }}><Clock size={10} /> Pending</span> :
                          item.aksi === 'disable' ? <span className="badge badge-muted"><X size={10} /> Disable</span> :
                          item.aksi === 'berhenti_sementara' ? <span className="badge badge-warning"><Clock size={10} /> Berhenti Sementara</span> :
                          item.aksi === 'berhenti_berlangganan' ? <span className="badge badge-danger"><Trash2 size={10} /> Berhenti Berlangganan</span> :
