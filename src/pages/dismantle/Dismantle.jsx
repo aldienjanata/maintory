@@ -29,6 +29,7 @@ export default function Dismantle() {
   const [expandedId, setExpandedId] = useState(null)
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
+  const [koordinatorFilter, setKoordinatorFilter] = useState('all')
 
   const emptyForm = {
     date_input: format(new Date(), 'yyyy-MM-dd'),
@@ -39,7 +40,7 @@ export default function Dismantle() {
   const [form, setForm] = useState(emptyForm)
 
   useEffect(() => { fetchAll() }, [])
-  useEffect(() => { setPage(1) }, [searchTerm, statusFilter, dateFilter])
+  useEffect(() => { setPage(1) }, [searchTerm, statusFilter, dateFilter, koordinatorFilter])
 
   const fetchAll = async () => {
     setLoading(true)
@@ -137,11 +138,14 @@ export default function Dismantle() {
     return ids.map(id => technicians.find(t => t.id === id)?.full_name || '?').join(', ')
   }
 
+  const koordinatorList = [...new Set(items.map(i => i.koordinator).filter(Boolean))].sort()
+
   const filtered = items.filter(i => {
     const matchSearch = i.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || i.customer_id?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchStatus = statusFilter === 'all' || i.aksi === statusFilter
     const matchDate = !dateFilter || i.date_input === dateFilter
-    return matchSearch && matchStatus && matchDate
+    const matchKoordinator = koordinatorFilter === 'all' || (i.koordinator || '') === koordinatorFilter
+    return matchSearch && matchStatus && matchDate && matchKoordinator
   })
 
   const paginated = filtered.slice((page - 1) * perPage, page * perPage)
@@ -323,7 +327,17 @@ export default function Dismantle() {
           <select className="filter-select status-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="all">Semua Status</option>
             <option value="aktif">Aktif</option>
+            <option value="disable">Disable</option>
+            <option value="berhenti_sementara">Berhenti Sementara</option>
+            <option value="berhenti_berlangganan">Berhenti Berlangganan</option>
             <option value="close">Close</option>
+          </select>
+
+          <select className="filter-select" value={koordinatorFilter} onChange={e => setKoordinatorFilter(e.target.value)}>
+            <option value="all">Semua Koordinator</option>
+            {koordinatorList.map(k => (
+              <option key={k} value={k}>{k}</option>
+            ))}
           </select>
 
           <div className="filter-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
