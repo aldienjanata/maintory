@@ -637,6 +637,48 @@ export default function Pengeluaran() {
       }
       applyDataRowStyles(ws2)
 
+      // ===== SHEET 3: Rekap Per Item =====
+      showProgress('Mengekspor Data', 'Membuat Rekap Per Item...', 88)
+      const ws3 = workbook.addWorksheet('Rekap Per Item')
+      const headers3 = ['Tanggal', 'Item', 'Total']
+      setColumnWidths(ws3, [14, 30, 12])
+      applyHeaderStyle(ws3, headers3, '7C3AED')
+
+      // Build aggregation map: key = "tanggal||namaItem" => count
+      const rekapMap = {}
+      for (const exp of filtered) {
+        if (!exp.items || exp.items.length === 0) continue
+        const tgl = exp.expense_date
+        for (const item of exp.items) {
+          if (item.item_type === 'ont') {
+            const key = `${tgl}||ONT / Modem`
+            rekapMap[key] = (rekapMap[key] || 0) + 1
+          } else if (item.item_type === 'dropcore') {
+            // Count per haspel: each distinct haspel usage = 1 unit (perhaspel)
+            const haspelCode = item.haspel?.haspel_code || item.haspel_id || 'Unknown'
+            const key = `${tgl}||${haspelCode}`
+            rekapMap[key] = (rekapMap[key] || 0) + 1
+          } else if (item.item_type === 'other') {
+            const itemName = item.warehouse_item?.item_name || 'Material Lainnya'
+            const key = `${tgl}||${itemName}`
+            rekapMap[key] = (rekapMap[key] || 0) + (item.quantity || 1)
+          }
+        }
+      }
+
+      // Sort by tanggal then item name
+      const rekapRows = Object.entries(rekapMap)
+        .map(([key, total]) => {
+          const [tgl, itemName] = key.split('||')
+          return { tgl, itemName, total }
+        })
+        .sort((a, b) => a.tgl.localeCompare(b.tgl) || a.itemName.localeCompare(b.itemName))
+
+      for (const row of rekapRows) {
+        ws3.addRow([row.tgl, row.itemName, row.total])
+      }
+      applyDataRowStyles(ws3)
+
       showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
       await downloadWorkbook(workbook, `Pengeluaran ${new Date().toISOString().slice(0, 10)}.xlsx`)
       toast.success('Export berhasil!')
