@@ -55,18 +55,53 @@ export default function Pengeluaran() {
   const [schedPage, setSchedPage] = useState(1)
   const [schedPerPage, setSchedPerPage] = useState(10)
 
-  const [form, setForm] = useState({
-    expense_date: format(new Date(), 'yyyy-MM-dd'),
-    site: 'banyumas',
-    work_type: 'ikr_psb',
-    technicians: [],
-    note: '',
-    items: []
+  const FORM_STORAGE_KEY = 'pengeluaran_draft'
+
+  const [form, setForm] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(FORM_STORAGE_KEY)
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return {
+      expense_date: format(new Date(), 'yyyy-MM-dd'),
+      site: 'banyumas',
+      work_type: 'ikr_psb',
+      technicians: [],
+      note: '',
+      items: []
+    }
   })
 
   useEffect(() => {
     fetchAll()
   }, [])
+
+  // Persist form to sessionStorage whenever it changes (so tab-switch doesn't lose data)
+  useEffect(() => {
+    if (isModalOpen) {
+      try { sessionStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(form)) } catch {}
+    }
+  }, [form, isModalOpen])
+
+  // Back-button guard: push a history entry when modal opens, intercept popstate
+  useEffect(() => {
+    if (!isModalOpen) return
+    window.history.pushState({ modalOpen: true }, '')
+    const onPop = (e) => {
+      const hasData = form.items.length > 0 || form.technicians.length > 0 || form.note
+      if (hasData) {
+        const leave = window.confirm('Data yang sudah diisi belum disimpan. Yakin ingin menutup form?')
+        if (!leave) {
+          // Put history back so back button doesn't navigate away
+          window.history.pushState({ modalOpen: true }, '')
+          return
+        }
+      }
+      setIsModalOpen(false)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [isModalOpen, form])
 
   useEffect(() => { setPage(1) }, [searchTerm, dateFilter, statusFilter])
   useEffect(() => { setSchedPage(1) }, [schedStatusFilter])
@@ -487,6 +522,7 @@ export default function Pengeluaran() {
     setForm({ expense_date: format(new Date(), 'yyyy-MM-dd'), site: 'banyumas', work_type: 'ikr_psb', technicians: [], note: '', items: [] })
     setSelectedScheduleId('')
     setEditItem(null)
+    try { sessionStorage.removeItem(FORM_STORAGE_KEY) } catch {}
   }
 
   const handleDelete = async (exp) => {
@@ -980,10 +1016,28 @@ export default function Pengeluaran() {
 
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="modal modal-lg">
-            <div className="modal-header">
-              <h3>Tambah Pengeluaran Harian</h3>
-              <button className="btn-icon" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
+          <div className="modal modal-lg" style={{ display: 'flex', flexDirection: 'column', maxHeight: '92vh' }}>
+            <div className="modal-header" style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0', padding: '14px 18px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <h3 style={{ margin: 0, fontSize: '16px' }}>Tambah Pengeluaran Harian</h3>
+                {form.items.length > 0 && (
+                  <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: 600 }}>
+                    {form.items.length} item diisi · Data tersimpan otomatis
+                  </span>
+                )}
+              </div>
+              <button
+                className="btn-icon"
+                onClick={() => {
+                  const hasData = form.items.length > 0 || form.technicians.length > 0 || form.note
+                  if (hasData && !window.confirm('Data yang sudah diisi belum disimpan. Yakin ingin menutup?')) return
+                  resetForm()
+                  setIsModalOpen(false)
+                }}
+                style={{ color: 'var(--danger)', background: 'var(--danger-dim)', borderRadius: '6px', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', flexShrink: 0 }}
+              >
+                <X size={16} />
+              </button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {selectedScheduleId && (
@@ -1208,8 +1262,13 @@ export default function Pengeluaran() {
                 <textarea className="form-input" rows={2} placeholder="Keterangan tambahan (opsional)" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
+            <div className="modal-footer" style={{ position: 'sticky', bottom: 0, zIndex: 10, background: 'var(--bg-card)', borderTop: '1px solid var(--border)', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)', padding: '12px 18px', gap: '10px' }}>
+              <button className="btn btn-secondary" onClick={() => {
+                const hasData = form.items.length > 0 || form.technicians.length > 0 || form.note
+                if (hasData && !window.confirm('Data yang sudah diisi belum disimpan. Yakin ingin menutup?')) return
+                resetForm()
+                setIsModalOpen(false)
+              }}>Batal</button>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : 'Simpan Pengeluaran'}
               </button>
