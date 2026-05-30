@@ -1536,12 +1536,12 @@ tbody tr:hover td { background: var(--bg-hover); }
 /* --- Mobile Card Layout --- */
 .mobile-card-list {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin-top: 12px;
   align-items: start;
 }
-.mobile-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow); }
+.mobile-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow); min-width: 0; word-wrap: break-word; }
 .mobile-card-header { padding: 14px; display: flex; align-items: flex-start; justify-content: space-between; cursor: pointer; transition: background 0.2s; }
 .mobile-card-header:hover { background: var(--bg-hover); }
 .mobile-card-title { font-weight: 700; color: var(--text-primary); font-size: 14px; line-height: 1.3; }

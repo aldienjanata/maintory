@@ -835,7 +835,7 @@ export default function Pengeluaran() {
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : combinedData.length > 0 ? (
             <>
-              <div className="mobile-card-list" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '10px' }}>
+              <div className="mobile-card-list" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 400px), 1fr))', gap: '10px' }}>
                 {paginatedCombined.map(item => {
                   if (item.isSchedule) {
                     return (
@@ -948,7 +948,7 @@ export default function Pengeluaran() {
               </button>
             </div>
           </div>
-          <div className="mobile-card-list" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '10px' }}>
+          <div className="mobile-card-list" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 400px), 1fr))', gap: '10px' }}>
             {filteredSchedules.length > 0 ? paginatedSchedules.map(t => (
               <div key={t.id} className="mobile-card" style={{ borderLeft: `4px solid ${t.isFilled ? 'var(--success)' : 'var(--warning)'}` }}>
                 <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === `jadwal-${t.id}` ? null : `jadwal-${t.id}`)}
