@@ -51,9 +51,9 @@ export default function Pengeluaran() {
   const [statusFilter, setStatusFilter] = useState('semua')
   const [schedStatusFilter, setSchedStatusFilter] = useState('semua')
   const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(10)
+  const [perPage, setPerPage] = useState(20)
   const [schedPage, setSchedPage] = useState(1)
-  const [schedPerPage, setSchedPerPage] = useState(10)
+  const [schedPerPage, setSchedPerPage] = useState(20)
 
   const FORM_STORAGE_KEY = 'pengeluaran_draft'
 
