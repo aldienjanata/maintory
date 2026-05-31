@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
@@ -558,7 +559,7 @@ export default function StokGudang() {
       </div>
 
       {/* Modal */}
-      {isModalOpen && (
+      {isModalOpen && createPortal(
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
@@ -601,7 +602,8 @@ export default function StokGudang() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       <HistoryModal
         isOpen={isHistoryOpen}

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { X, History } from 'lucide-react'
 
 export default function HistoryModal({ isOpen, onClose, item, data, loading, title, unit = '' }) {
@@ -30,7 +31,7 @@ export default function HistoryModal({ isOpen, onClose, item, data, loading, tit
 
   if (!isOpen || !item) return null
 
-  return (
+  return createPortal(
     <div className="modal-overlay">
       <div className="modal modal-lg" style={{ display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
         <div className="modal-header">
@@ -111,6 +112,7 @@ export default function HistoryModal({ isOpen, onClose, item, data, loading, tit
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
