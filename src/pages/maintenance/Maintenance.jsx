@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { can, isAdmin } from '../../utils/permissions'
@@ -573,28 +574,22 @@ export default function Maintenance() {
       </div>
 
       {/* Modal Input Paste WA */}
-      {isAddModalOpen && (
+      {isAddModalOpen && createPortal(
         <div className="modal-overlay">
-          <div className="modal modal-xl">
-            <div className="modal-header">
-              <h3>Input Tiket dari WhatsApp</h3>
+          <div className="modal modal-xl" style={{ display: 'flex', flexDirection: 'column', maxHeight: '92vh', width: '90%', maxWidth: '800px' }}>
+            <div className="modal-header" style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', padding: '16px 20px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>Input Tiket dari WhatsApp</h3>
               <button className="btn-icon" onClick={() => setIsAddModalOpen(false)}>
                 <X size={18} />
               </button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body" style={{ overflowY: 'auto', flex: 1, padding: '20px' }}>
               <div className="form-group mb-4">
-                <label className="form-label">Paste pesan WhatsApp di sini (bisa banyak sekaligus)</label>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', padding: '10px', background: 'var(--bg-hover)', borderRadius: '6px' }}>
-                  <strong>Contoh Format:</strong><br/>
-                  1.Desa Bangsa<br/>
-                  Nama : Wasito<br/>
-                  Alamat : RT 004 RW 001 Desa Bangsa Kecamatan Kebasen<br/>
-                  ID Pelanggan : 816806946@bms.wifian.net.id<br/>
-                  No Hp : +6281327419114<br/>
-                  Keluhan : Loss Merah<br/>
-                  Sharelok : https://maps.app.goo.gl/mqVmn9tvgrUSZiBd9?g_st<br/>
-                  Note : Info By Pak Joko
+                <label className="form-label">Paste pesan WhatsApp di sini</label>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px', padding: '12px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', lineHeight: '1.6' }}>
+                  <strong style={{ color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>Contoh Format:</strong>
+                  <code style={{ background: 'var(--bg-primary)', padding: '2px 4px', borderRadius: '4px', color: 'var(--text-primary)' }}>1.Desa Bangsa | Nama : Wasito | ID : 816806946 | Keluhan : Loss</code><br/>
+                  <small style={{ color: 'var(--text-muted)' }}>*Setiap tiket dipisah oleh baris kosong atau nomor (1., 2., dst).</small>
                 </div>
                 <textarea 
                   className="form-input" 
@@ -602,7 +597,7 @@ export default function Maintenance() {
                   value={waText}
                   onChange={handleWaTextChange}
                   placeholder="Paste teks WA di sini..."
-                  style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: '13px' }}
+                  style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: '13px', padding: '12px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px' }}
                 />
               </div>
 
@@ -675,11 +670,12 @@ export default function Maintenance() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* === CUSTOM ACTION MODAL === */}
-      {actionModal.open && (
+      {actionModal.open && createPortal(
         <div className="modal-overlay" style={{ zIndex: 1100 }}>
           <div className="modal" style={{ maxWidth: '420px', width: '90%' }}>
             <div className="modal-header">
@@ -780,3 +776,5 @@ export default function Maintenance() {
     </div>
   )
 }
+
+
