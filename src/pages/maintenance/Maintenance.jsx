@@ -109,11 +109,11 @@ export default function Maintenance() {
 
       return {
         _id: Math.random().toString(36).substr(2, 9), // temp id for UI
-        ticket_number: ticketMatch ? ticketMatch[1].trim() : '',
-        village: ticketMatch ? ticketMatch[2].trim() : '',
-        customer_name: namaMatch ? namaMatch[1].trim() : '',
+        ticket_number: ticketMatch ? ticketMatch[1].trim() : (namaMatch ? 'TKT-' + Math.floor(Math.random()*10000) : '-'),
+        village: ticketMatch ? ticketMatch[2].trim() : '-',
+        customer_name: namaMatch ? namaMatch[1].trim() : 'Tanpa Nama',
         address: alamatMatch ? alamatMatch[1].trim() : '',
-        customer_id: idMatch ? idMatch[1].trim() : '',
+        customer_id: idMatch ? idMatch[1].trim() : '-',
         phone_number: hpMatch ? hpMatch[1].trim() : '',
         complaint: keluhanMatch ? keluhanMatch[1].trim() : '',
         sharelok: sharelokMatch ? sharelokMatch[1].trim() : '',
@@ -139,13 +139,6 @@ export default function Maintenance() {
 
   const handleSaveParsed = async () => {
     if (parsedTickets.length === 0) return
-
-    // Validations
-    const invalid = parsedTickets.find(t => !t.ticket_number || !t.customer_name)
-    if (invalid) {
-      toast.error('Ada data tidak lengkap (No Tiket atau Nama kosong). Periksa kembali hasil parsing.')
-      return
-    }
 
     try {
       showProgress('Menyimpan Tiket', 'Memulai proses penyimpanan...', 10)
@@ -588,8 +581,14 @@ export default function Maintenance() {
                 <label className="form-label">Paste pesan WhatsApp di sini</label>
                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px', padding: '12px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', lineHeight: '1.6' }}>
                   <strong style={{ color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>Contoh Format:</strong>
-                  <code style={{ background: 'var(--bg-primary)', padding: '2px 4px', borderRadius: '4px', color: 'var(--text-primary)' }}>1.Desa Bangsa | Nama : Wasito | ID : 816806946 | Keluhan : Loss</code><br/>
-                  <small style={{ color: 'var(--text-muted)' }}>*Setiap tiket dipisah oleh baris kosong atau nomor (1., 2., dst).</small>
+                  1.Desa Bajing Kulon<br/>
+                  Nama : DARYATMI<br/>
+                  Alamat : JL PERKUTUT RT 003 RW 007 DESA BAJING KULON KECAMATAN KROYA<br/>
+                  ID Pelanggan : 816808877@bms.wifian.net.id<br/>
+                  No Hp : +62882003656030<br/>
+                  Keluhan : Port Lan Error<br/>
+                  Sharelok : https://maps.app.goo.gl/r45akiTdJLysbgR46?g_st=aw<br/>
+                  Note : Info By Pak Bejo
                 </div>
                 <textarea 
                   className="form-input" 
