@@ -769,7 +769,8 @@ export default function Maintenance() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>
