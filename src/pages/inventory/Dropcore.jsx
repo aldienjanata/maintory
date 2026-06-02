@@ -245,34 +245,105 @@ export default function Dropcore() {
       }
       applyDataRowStyles(ws1)
 
-      // Sheet 2: Riwayat Transaksi (from expense_items)
+      // Sheet 2: Riwayat Transaksi
       const ws2 = workbook.addWorksheet('Riwayat Transaksi')
-      const headers2 = ['Kode Haspel', 'Tipe', 'Tanggal', 'Jenis', 'Pekerjaan', 'Teknisi', 'Meter', 'Lokasi/Note']
-      setColumnWidths(ws2, [16, 14, 16, 12, 16, 24, 12, 28])
+      const headers2 = ['Kode Haspel', 'Tipe', 'Tanggal', 'Jenis', 'Pekerjaan', 'Teknisi', 'Stok Awal', 'Masuk', 'Keluar', 'Sisa Stok', 'Lokasi/Note']
+      setColumnWidths(ws2, [16, 14, 16, 12, 16, 24, 12, 12, 12, 12, 28])
       applyHeaderStyle(ws2, headers2, '065F46')
 
       // Fetch all transactions
       const { data: allExpItems } = await supabase.from('expense_items').select('*, haspel:dropcore_haspels(haspel_code, type), expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type', 'dropcore').order('created_at', { ascending: true })
-      const { data: allLogs } = await supabase.from('inventory_log').select('*, item:dropcore_haspels(haspel_code, type), user:users(full_name)').eq('item_type', 'dropcore').order('log_date', { ascending: true })
+      const { data: allLogs } = await supabase.from('inventory_log').select('*, user:users(full_name)').eq('item_type', 'dropcore').order('created_at', { ascending: true })
       const { data: usersData } = await supabase.from('users').select('id, full_name')
       
       const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
       const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3' }
+      const haspelMap = Object.fromEntries(haspels.map(h => [h.id, h]))
 
-      const rows2 = []
+      const transactionsByHaspelId = {}
+
       ;(allLogs || []).forEach(l => {
-        rows2.push({ date: l.log_date, code: l.item?.haspel_code || '-', type: l.item?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C', jenis: l.action === 'masuk' ? 'Masuk' : 'Koreksi', work: '-', tech: '-', meters: l.meters || 0, note: l.note || '' })
+        const hId = l.item_id
+        if (!hId) return
+        if (!transactionsByHaspelId[hId]) transactionsByHaspelId[hId] = []
+        
+        const haspelCode = haspelMap[hId]?.haspel_code || '-'
+        const haspelType = haspelMap[hId]?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C'
+
+        transactionsByHaspelId[hId].push({
+          date: l.log_date,
+          created_at: l.created_at,
+          code: haspelCode,
+          type: haspelType,
+          jenis: l.action === 'masuk' ? 'Masuk' : 'Koreksi',
+          work: '-',
+          tech: l.user?.full_name || '-',
+          stok_awal: 0,
+          keluar: 0,
+          masuk: Number(l.meters || l.quantity || 0),
+          stok_akhir: 0,
+          note: l.note || ''
+        })
       })
+
       ;(allExpItems || []).forEach(ei => {
+        const hId = ei.haspel_id
+        if (!hId) return
+        if (!transactionsByHaspelId[hId]) transactionsByHaspelId[hId] = []
+
+        const haspelCode = ei.haspel?.haspel_code || haspelMap[hId]?.haspel_code || '-'
+        const haspelType = (ei.haspel?.type || haspelMap[hId]?.type) === '1c' ? 'Dropcore 1C' : 'Dropcore 4C'
         const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
         const wType = ei.expense?.work_type
-        rows2.push({ date: ei.expense?.expense_date || '-', code: ei.haspel?.haspel_code || '-', type: ei.haspel?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C', jenis: 'Keluar', work: workTypeLabels[wType] || wType || '-', tech: techNames || '-', meters: ei.meters_used || 0, note: `Lokasi: ${ei.expense?.site || '-'}` })
+
+        transactionsByHaspelId[hId].push({
+          date: ei.expense?.expense_date || '-',
+          created_at: ei.created_at,
+          code: haspelCode,
+          type: haspelType,
+          jenis: 'Keluar',
+          work: workTypeLabels[wType] || wType || '-',
+          tech: techNames || '-',
+          stok_awal: 0,
+          keluar: Number(ei.meters_used || 0),
+          masuk: 0,
+          stok_akhir: 0,
+          note: `Lokasi: ${ei.expense?.site || '-'}`
+        })
       })
-      rows2.sort((a, b) => (a.date < b.date ? -1 : 1))
+
+      const rows2 = []
+      
+      // Calculate running balance per haspel
+      Object.keys(transactionsByHaspelId).forEach(hId => {
+        const txs = transactionsByHaspelId[hId]
+        txs.sort((a, b) => {
+          if (a.date !== b.date) return a.date < b.date ? -1 : 1
+          return new Date(a.created_at) - new Date(b.created_at)
+        })
+
+        let currentStock = 0
+        txs.forEach(tx => {
+          tx.stok_awal = currentStock
+          if (tx.jenis === 'Masuk' || tx.jenis === 'Koreksi') {
+            currentStock += tx.masuk
+          } else if (tx.jenis === 'Keluar') {
+            currentStock -= tx.keluar
+          }
+          tx.stok_akhir = currentStock
+          rows2.push(tx)
+        })
+      })
+
+      // Sort all combined rows by date for the final excel sheet
+      rows2.sort((a, b) => {
+        if (a.date !== b.date) return a.date < b.date ? -1 : 1
+        return new Date(a.created_at) - new Date(b.created_at)
+      })
       
       for (let i = 0; i < rows2.length; i++) {
         const r = rows2[i]
-        ws2.addRow([r.code, r.type, r.date, r.jenis, r.work, r.tech, r.meters, r.note])
+        ws2.addRow([r.code, r.type, r.date, r.jenis, r.work, r.tech, r.stok_awal, r.masuk || '-', r.keluar || '-', r.stok_akhir, r.note])
         if (i % 20 === 0) {
           showProgress('Mengekspor Data', `Memproses Riwayat Transaksi... (${i + 1}/${rows2.length})`, 50 + ((i + 1) / rows2.length) * 40)
           await new Promise(res => setTimeout(res, 0))
