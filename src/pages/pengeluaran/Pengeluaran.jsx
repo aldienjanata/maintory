@@ -154,7 +154,12 @@ export default function Pengeluaran() {
       return { value: h.id, label: `${h.haspel_code} (${h.type?.toUpperCase() || ''}, sisa: ${sisa}m)`, sisa }
     })
     .filter(h => h.sisa > 0)
-  const otherOptions = otherItems.map(w => ({ value: w.id, label: w.item_name }))
+  const otherOptions = otherItems
+    .map(w => {
+      const sisa = Number(w.initial_stock || 0)
+      return { value: w.id, label: `${w.item_name} (sisa: ${sisa})`, sisa }
+    })
+    .filter(w => w.sisa > 0)
 
   const handleSaveSchedule = async () => {
     if (!scheduleForm.schedule_date || !scheduleForm.site) { toast.error('Tanggal dan lokasi wajib diisi'); return }
