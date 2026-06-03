@@ -609,23 +609,46 @@ export default function Pengeluaran() {
       workbook.creator = 'Maintory'
       workbook.created = new Date()
 
+      showProgress('Menyiapkan Export', 'Mengambil data Pergantian ONT...', 15)
+      const { data: replacements } = await supabase.from('ont_replacements').select('*, new_sn:serial_numbers(serial_number)').order('replacement_date', { ascending: false })
+      
+      const filteredReplacements = (replacements || []).filter(r => {
+        const matchDate = !dateFilter || r.replacement_date === dateFilter
+        const matchSearch = !searchTerm || getTechNames(r.technicians).toLowerCase().includes(searchTerm.toLowerCase()) || r.site?.includes(searchTerm.toLowerCase()) || r.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
+        return matchDate && matchSearch
+      }).map(rep => ({
+        id: rep.id,
+        expense_date: rep.replacement_date,
+        site: rep.site,
+        work_type: 'pergantian_ont',
+        technicians: rep.technicians,
+        note: `Pergantian ONT Pelanggan: ${rep.customer_name}${rep.reason ? ' - ' + rep.reason : ''}`,
+        items: rep.new_sn_id ? [{
+            item_type: 'ont',
+            sn: { serial_number: rep.new_sn?.serial_number }
+        }] : [],
+        isReplacement: true
+      }))
+
+      const exportData = [...filtered, ...filteredReplacements].sort((a, b) => new Date(a.expense_date) - new Date(b.expense_date))
+
       // ===== SHEET 1: Rekap Pengeluaran =====
       const ws1 = workbook.addWorksheet('Rekap Pengeluaran')
       const headers1 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Jumlah Item', 'Catatan']
       setColumnWidths(ws1, [14, 18, 18, 32, 14, 30])
       applyHeaderStyle(ws1, headers1)
-      for (let i = 0; i < filtered.length; i++) {
-        const exp = filtered[i]
+      for (let i = 0; i < exportData.length; i++) {
+        const exp = exportData[i]
         ws1.addRow([
           exp.expense_date,
           SITES.find(s => s.value === exp.site)?.label || exp.site,
-          WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type,
+          exp.isReplacement ? 'Pergantian ONT' : (WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type),
           getTechNames(exp.technicians),
           exp.items?.length || 0,
           exp.note || ''
         ])
         if (i % 20 === 0) {
-          showProgress('Mengekspor Data', `Memproses Rekap Pengeluaran... (${i + 1}/${filtered.length})`, 10 + ((i + 1) / filtered.length) * 40)
+          showProgress('Mengekspor Data', `Memproses Rekap Pengeluaran... (${i + 1}/${exportData.length})`, 15 + ((i + 1) / exportData.length) * 35)
           await new Promise(r => setTimeout(r, 0))
         }
       }
@@ -637,11 +660,11 @@ export default function Pengeluaran() {
       setColumnWidths(ws2, [14, 18, 18, 32, 16, 26, 16, 30])
       applyHeaderStyle(ws2, headers2, '065F46')
 
-      for (let i = 0; i < filtered.length; i++) {
-        const exp = filtered[i]
+      for (let i = 0; i < exportData.length; i++) {
+        const exp = exportData[i]
         const techNames = getTechNames(exp.technicians)
         const site = SITES.find(s => s.value === exp.site)?.label || exp.site
-        const workType = WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type
+        const workType = exp.isReplacement ? 'Pergantian ONT' : (WORK_TYPES.find(w => w.value === exp.work_type)?.label || exp.work_type)
 
         if (!exp.items || exp.items.length === 0) {
           ws2.addRow([exp.expense_date, site, workType, techNames, '-', '-', '-', exp.note || ''])
@@ -668,7 +691,7 @@ export default function Pengeluaran() {
           })
         }
         if (i % 20 === 0) {
-          showProgress('Mengekspor Data', `Memproses Detail Barang Keluar... (${i + 1}/${filtered.length})`, 50 + ((i + 1) / filtered.length) * 40)
+          showProgress('Mengekspor Data', `Memproses Detail Barang Keluar... (${i + 1}/${exportData.length})`, 50 + ((i + 1) / exportData.length) * 35)
           await new Promise(r => setTimeout(r, 0))
         }
       }
@@ -685,7 +708,7 @@ export default function Pengeluaran() {
       const rekapMap = {}
 
       // Sort ascending by date to correctly process haspel usage chronologically
-      const sortedForRekap = [...filtered].sort((a, b) => (a.expense_date || '').localeCompare(b.expense_date || ''))
+      const sortedForRekap = [...exportData].sort((a, b) => (a.expense_date || '').localeCompare(b.expense_date || ''))
 
       // Dropcore: track cumulative meters per haspel_id.
       // Hitung 1 saat cumulative = 0 (haspel baru/fresh atau baru restock ke 1000m).
