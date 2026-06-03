@@ -331,7 +331,7 @@ export default function OntReplacement() {
               <div className="grid-2">
                 <div className="form-group">
                   <label className="form-label">Tanggal</label>
-                  <input type="date" className="form-input" value={form.replacement_date} onChange={e => setForm(f => ({ ...f, replacement_date: e.target.value }))} />
+                  <input type="date" className="form-input" value={form.replacement_date} onChange={e => setForm(f => ({ ...f, replacement_date: e.target.value }))} disabled={role !== 'superadmin'} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Lokasi</label>

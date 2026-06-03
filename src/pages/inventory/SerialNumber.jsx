@@ -608,7 +608,7 @@ export default function SerialNumber() {
               </div>
               <div className="form-group">
                 <label className="form-label">Tanggal Masuk</label>
-                <input type="date" className="form-input" value={form.date_in} onChange={e => setForm(f => ({ ...f, date_in: e.target.value }))} />
+                <input type="date" className="form-input" value={form.date_in} onChange={e => setForm(f => ({ ...f, date_in: e.target.value }))} disabled={role !== 'superadmin'} />
               </div>
               {!isBulkMode ? (
                 <>

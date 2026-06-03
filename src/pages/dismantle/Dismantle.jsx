@@ -548,7 +548,7 @@ export default function Dismantle() {
               <div className="grid-2">
                 <div className="form-group">
                   <label className="form-label">Tanggal Input</label>
-                  <input type="date" className="form-input" value={form.date_input} onChange={e => setForm(f => ({ ...f, date_input: e.target.value }))} />
+                  <input type="date" className="form-input" value={form.date_input} onChange={e => setForm(f => ({ ...f, date_input: e.target.value }))} disabled={role !== 'superadmin'} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">ID Pelanggan <span style={{ color: 'var(--danger)' }}>*</span></label>
@@ -672,7 +672,7 @@ export default function Dismantle() {
               {closeForm.aksi === 'close' && (
                 <div className="form-group">
                   <label className="form-label">Tanggal Close</label>
-                  <input type="date" className="form-input" value={closeForm.pickup_date} onChange={e => setCloseForm(f => ({ ...f, pickup_date: e.target.value }))} />
+                  <input type="date" className="form-input" value={closeForm.pickup_date} onChange={e => setCloseForm(f => ({ ...f, pickup_date: e.target.value }))} disabled={role !== 'superadmin'} />
                 </div>
               )}
               {closeForm.aksi === 'pending' && (

@@ -113,7 +113,7 @@ export default function Pengeluaran() {
       supabase.from('daily_expenses').select('*, items:expense_items(*, warehouse_item:warehouses(item_name), haspel:dropcore_haspels(haspel_code, remaining_meters, used_meters), sn:serial_numbers(serial_number))').order('expense_date', { ascending: false }),
       supabase.from('users').select('id, full_name, username').in('role', ['admin', 'teknisi']).eq('is_active', true),
       supabase.from('serial_numbers').select('id, serial_number, brand:ont_brands(brand_name), type:ont_types(type_name)').eq('status', 'tersedia'),
-      supabase.from('dropcore_haspels').select('id, haspel_code, type, remaining_meters, used_meters').eq('status', 'tersedia'),
+      supabase.from('dropcore_haspels').select('id, haspel_code, type, initial_meters, used_meters').eq('status', 'tersedia'),
       supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }),
       supabase.from('warehouses').select('id, item_name, initial_stock').eq('item_type', 'other')
     ])
@@ -142,13 +142,18 @@ export default function Pengeluaran() {
   }
 
   // React Select Options
-  const ontOptions = snList.map(s => {
+  const snOptions = snList.map(s => {
     const parts = [s.serial_number]
     if (s.brand?.brand_name) parts.push(s.brand.brand_name)
     if (s.type?.type_name) parts.push(s.type.type_name)
     return { value: s.id, label: parts.join(' ') }
   })
-  const haspelOptions = haspelList.map(h => ({ value: h.id, label: `${h.haspel_code} (${h.type?.toUpperCase() || ''}, sisa: ${h.remaining_meters}m)` }))
+  const haspelOptions = haspelList
+    .map(h => {
+      const sisa = Number(h.initial_meters || 0) - Number(h.used_meters || 0)
+      return { value: h.id, label: `${h.haspel_code} (${h.type?.toUpperCase() || ''}, sisa: ${sisa}m)`, sisa }
+    })
+    .filter(h => h.sisa > 0)
   const otherOptions = otherItems.map(w => ({ value: w.id, label: w.item_name }))
 
   const handleSaveSchedule = async () => {
@@ -1094,8 +1099,8 @@ export default function Pengeluaran() {
               )}
               <div className="grid-2">
                 <div className="form-group">
-                  <label className="form-label">Tanggal <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input type="date" className="form-input" value={form.expense_date} onChange={e => setForm(f => ({ ...f, expense_date: e.target.value }))} disabled={!!selectedScheduleId} />
+                  <label className="form-label">Tanggal</label>
+                  <input type="date" className="form-input" value={form.expense_date} onChange={e => setForm(f => ({ ...f, expense_date: e.target.value }))} disabled={!!selectedScheduleId || role !== 'superadmin'} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Lokasi <span style={{ color: 'var(--danger)' }}>*</span></label>
@@ -1151,7 +1156,7 @@ export default function Pengeluaran() {
                       {item.item_type === 'ont' && (
                         <Select 
                           isMulti 
-                          options={ontOptions} 
+                          options={snOptions} 
                           placeholder="Pilih beberapa ONT/Modem..."
                           value={item.selected_onts || []}
                           onChange={val => updateItem(item.id, 'selected_onts', val)}
@@ -1333,8 +1338,8 @@ export default function Pengeluaran() {
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="grid-2">
                 <div className="form-group">
-                  <label className="form-label">Tanggal <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input type="date" className="form-input" value={scheduleForm.schedule_date} onChange={e => setScheduleForm(f => ({ ...f, schedule_date: e.target.value }))} />
+                  <label className="form-label">Tanggal</label>
+                  <input type="date" className="form-input" value={scheduleForm.schedule_date} onChange={e => setScheduleForm(f => ({ ...f, schedule_date: e.target.value }))} disabled={role !== 'superadmin'} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Lokasi <span style={{ color: 'var(--danger)' }}>*</span></label>
