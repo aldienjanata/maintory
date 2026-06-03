@@ -10,6 +10,12 @@ import { id } from 'date-fns/locale'
 import { useProgress } from '../../contexts/ProgressContext'
 import Pagination from '../../components/common/Pagination'
 
+const SITES = [
+  { value: 'banyumas', label: 'Banyumas' },
+  { value: 'cilacap', label: 'Cilacap' },
+  { value: 'cilacap_herman', label: 'Cilacap (Herman)' }
+]
+
 export default function OntReplacement() {
   const { profile } = useAuth()
   const role = profile?.role || 'teknisi'
@@ -31,6 +37,7 @@ export default function OntReplacement() {
 
   const emptyForm = {
     replacement_date: format(new Date(), 'yyyy-MM-dd'),
+    site: 'banyumas',
     customer_name: '', customer_id: '',
     old_serial_number: '', new_serial_number_id: '',
     reason: '', technicians: []
@@ -225,6 +232,11 @@ export default function OntReplacement() {
                     <tr key={item.id}>
                       <td className="text-secondary">{format(new Date(item.replacement_date), 'dd MMM yyyy', { locale: id })}</td>
                       <td>
+                        <span className="badge badge-accent">
+                          {SITES.find(s => s.value === item.site)?.label || item.site || '-'}
+                        </span>
+                      </td>
+                      <td>
                         <div className="font-semibold">{item.customer_name}</div>
                         <div className="text-secondary" style={{ fontSize: '11px' }}>{item.customer_id}</div>
                       </td>
@@ -264,6 +276,10 @@ export default function OntReplacement() {
                     </div>
                     {expandedId === item.id && (
                       <div className="mobile-card-body">
+                        <div className="mobile-info-row">
+                          <span className="mobile-info-label">Lokasi</span>
+                          <span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site || '-'}</span>
+                        </div>
                         <div className="mobile-info-row">
                           <span className="mobile-info-label">SN Lama</span>
                           <span className="mobile-info-value" style={{ fontFamily: 'monospace', color: 'var(--danger)' }}>{item.old_serial_number}</span>
@@ -315,11 +331,22 @@ export default function OntReplacement() {
                   <label className="form-label">Tanggal</label>
                   <input type="date" className="form-input" value={form.replacement_date} onChange={e => setForm(f => ({ ...f, replacement_date: e.target.value }))} />
                 </div>
-              <div className="form-group">
-                <label className="form-label">ID Pelanggan <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input className="form-input" placeholder="ID Pelanggan" value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))} />
+                <div className="form-group">
+                  <label className="form-label">Lokasi</label>
+                  <select className="form-input" style={{ height: 'auto' }} value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}>
+                    {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
               </div>
-                <input className="form-input" placeholder="Nama lengkap pelanggan" value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} />
+              <div className="grid-2">
+                <div className="form-group">
+                  <label className="form-label">ID Pelanggan <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <input className="form-input" placeholder="ID Pelanggan" value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Nama Pelanggan <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <input className="form-input" placeholder="Nama lengkap pelanggan" value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} />
+                </div>
               </div>
               <div className="grid-2">
                 <div className="form-group">

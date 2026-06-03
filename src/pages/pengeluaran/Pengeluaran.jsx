@@ -622,7 +622,7 @@ export default function Pengeluaran() {
         site: rep.site,
         work_type: 'pergantian_ont',
         technicians: rep.technicians,
-        note: `Pergantian ONT Pelanggan: ${rep.customer_name}${rep.reason ? ' - ' + rep.reason : ''}`,
+        note: `Pergantian ONT ID Pelanggan: ${rep.customer_id}${rep.reason ? ' - ' + rep.reason : ''}`,
         items: rep.new_sn_id ? [{
             item_type: 'ont',
             sn: { serial_number: rep.new_sn?.serial_number }
@@ -653,6 +653,15 @@ export default function Pengeluaran() {
         }
       }
       applyDataRowStyles(ws1)
+      
+      // Color Replacement rows for WS1
+      exportData.forEach((exp, i) => {
+        if (exp.isReplacement) {
+          ws1.getRow(i + 2).eachCell({ includeEmpty: true }, cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } }
+          })
+        }
+      })
 
       // ===== SHEET 2: Detail Barang Keluar =====
       const ws2 = workbook.addWorksheet('Detail Barang Keluar')
@@ -696,6 +705,20 @@ export default function Pengeluaran() {
         }
       }
       applyDataRowStyles(ws2)
+
+      // Color Replacement rows for WS2
+      let ws2RowIdx = 2
+      exportData.forEach(exp => {
+        const rowCount = (!exp.items || exp.items.length === 0) ? 1 : exp.items.length
+        if (exp.isReplacement) {
+          for(let j=0; j<rowCount; j++) {
+            ws2.getRow(ws2RowIdx + j).eachCell({ includeEmpty: true }, cell => {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } }
+            })
+          }
+        }
+        ws2RowIdx += rowCount
+      })
 
       // ===== SHEET 3: Rekap Per Item =====
       showProgress('Mengekspor Data', 'Membuat Rekap Per Item...', 88)
