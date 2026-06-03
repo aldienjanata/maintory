@@ -110,7 +110,8 @@ export default function OntReplacement() {
   const filtered = items.filter(i => {
     const matchSearch = i.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         i.customer_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        i.old_serial_number?.toLowerCase().includes(searchTerm.toLowerCase())
+                        i.old_serial_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                        i.new_sn?.serial_number?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchDate = !dateFilter || i.replacement_date === dateFilter
     return matchSearch && matchDate
   })
@@ -218,6 +219,7 @@ export default function OntReplacement() {
                 <thead>
                   <tr>
                     <th>Tanggal</th>
+                    <th>Lokasi</th>
                     <th>Pelanggan</th>
                     <th>SN Lama</th>
                     <th></th>
