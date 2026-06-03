@@ -69,7 +69,7 @@ export default function SerialNumber() {
     const { data: usersData } = await supabase.from('users').select('id, full_name')
     const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
 
-    const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3' }
+    const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3', 'maintenance': 'Maintenance', 'odc_odp': 'Instalasi ODC/ODP' }
 
     const combined = [
       ...(logs || []).map(l => ({ 
@@ -293,7 +293,7 @@ export default function SerialNumber() {
       
       const snLookup = Object.fromEntries(items.map(i => [i.id, i]))
       const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
-      const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3' }
+      const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3', 'maintenance': 'Maintenance', 'odc_odp': 'Instalasi ODC/ODP', 'maintenance': 'Maintenance', 'odc_odp': 'Instalasi ODC/ODP' }
 
       const rows2 = []
       ;(allLogs || []).forEach(l => {
@@ -658,3 +658,4 @@ export default function SerialNumber() {
     </div>
   )
 }
+

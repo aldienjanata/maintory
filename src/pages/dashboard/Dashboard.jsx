@@ -28,7 +28,7 @@ import { id } from 'date-fns/locale'
 const COLORS = ['#00d4ff', '#f85149', '#3fb950', '#d29922', '#bc8cff']
 
 const SITE_LABELS = { banyumas: 'Banyumas', cilacap: 'Cilacap', cilacap_herman: 'Cilacap (Herman)' }
-const WORK_LABELS = { ikr_psb: 'IKR/PSB', maintenance: 'Maintenance' }
+const WORK_LABELS = { ikr_psb: 'IKR/PSB', maintenance: 'Maintenance', odc_odp: 'Instalasi ODC/ODP' }
 
 export default function Dashboard() {
   const { profile } = useAuth()

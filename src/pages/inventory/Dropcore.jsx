@@ -161,7 +161,9 @@ export default function Dropcore() {
     const workTypeLabels = {
       'ikr_psb': 'IKR / PSB',
       'mt': 'Maintenance',
-      'pt2': 'PT2 / PT3'
+      'pt2': 'PT2 / PT3',
+      'maintenance': 'Maintenance',
+      'odc_odp': 'Instalasi ODC/ODP'
     }
 
     const inRows = (logs || []).map(l => ({
@@ -257,7 +259,7 @@ export default function Dropcore() {
       const { data: usersData } = await supabase.from('users').select('id, full_name')
       
       const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
-      const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3' }
+      const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3', 'maintenance': 'Maintenance', 'odc_odp': 'Instalasi ODC/ODP' }
       const haspelMap = Object.fromEntries(haspels.map(h => [h.id, h]))
 
       const transactionsByHaspelId = {}

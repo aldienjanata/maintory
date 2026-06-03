@@ -21,6 +21,7 @@ const SITES = [
 const WORK_TYPES = [
   { value: 'ikr_psb', label: 'IKR/PSB' },
   { value: 'maintenance', label: 'Maintenance' },
+  { value: 'odc_odp', label: 'Instalasi ODC/ODP' }
 ]
 
 export default function Pengeluaran() {
