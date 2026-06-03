@@ -623,7 +623,7 @@ export default function Pengeluaran() {
         work_type: 'pergantian_ont',
         technicians: rep.technicians,
         note: `Pergantian ONT ID Pelanggan: ${rep.customer_id}${rep.reason ? ' - ' + rep.reason : ''}`,
-        items: rep.new_sn_id ? [{
+        items: rep.new_serial_number_id ? [{
             item_type: 'ont',
             sn: { serial_number: rep.new_sn?.serial_number }
         }] : [],
