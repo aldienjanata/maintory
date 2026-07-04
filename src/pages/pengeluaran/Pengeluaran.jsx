@@ -622,11 +622,12 @@ export default function Pengeluaran() {
       workbook.creator = 'Maintory'
       workbook.created = new Date()
 
-      showProgress('Menyiapkan Export', 'Mengambil data Pergantian ONT...', 15)
-      const { data: allExpenses } = await supabase
+      showProgress('Menyiapkan Export', 'Mengambil data...', 15)
+      const { data: allExpenses, error: expError } = await supabase
         .from('daily_expenses')
-        .select('*, items:expense_items(*, sn:serial_numbers(serial_number), haspel:dropcore_haspels(haspel_code), warehouse_item:warehouses(item_name))')
+        .select('*, items:expense_items(*, sn:serial_numbers(serial_number), haspel:dropcore_haspels(haspel_code, remaining_meters, used_meters), warehouse_item:warehouses(item_name))')
         .order('expense_date', { ascending: true })
+      if (expError) throw expError
       const { data: replacements } = await supabase.from('ont_replacements').select('*, new_sn:serial_numbers(serial_number)').order('replacement_date', { ascending: true })
       
       const applyMonthFilter = (date) => {
