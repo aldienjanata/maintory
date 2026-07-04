@@ -1416,13 +1416,20 @@ export default function Pengeluaran() {
               </p>
               <div className="form-group">
                 <label className="form-label">Pilih Bulan (opsional)</label>
-                <input
-                  type="month"
+                <select
                   className="form-input"
                   value={exportMonth}
                   onChange={e => setExportMonth(e.target.value)}
-                  placeholder="Kosongkan untuk semua data"
-                />
+                >
+                  <option value="">Semua Data</option>
+                  {Array.from({ length: 12 }).map((_, i) => {
+                    const d = new Date()
+                    d.setMonth(d.getMonth() - i)
+                    const val = format(d, 'yyyy-MM')
+                    const label = format(d, 'MMMM yyyy', { locale: id })
+                    return <option key={val} value={val}>{label}</option>
+                  })}
+                </select>
                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
                   {exportMonth ? `Akan mengexport bulan: ${exportMonth}` : 'Kosongkan untuk export semua data'}
                 </div>
