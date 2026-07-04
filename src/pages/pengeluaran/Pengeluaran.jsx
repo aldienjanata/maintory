@@ -55,6 +55,8 @@ export default function Pengeluaran() {
   const [perPage, setPerPage] = useState(20)
   const [schedPage, setSchedPage] = useState(1)
   const [schedPerPage, setSchedPerPage] = useState(20)
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false)
+  const [exportMonth, setExportMonth] = useState('')
 
   const FORM_STORAGE_KEY = 'pengeluaran_draft'
 
@@ -610,7 +612,8 @@ export default function Pengeluaran() {
 
   const paginatedSchedules = filteredSchedules.slice((schedPage - 1) * schedPerPage, schedPage * schedPerPage)
 
-  const handleExportExcel = async () => {
+  const handleExportExcel = async (monthFilter = '') => {
+    setIsExportModalOpen(false)
     try {
       showProgress('Menyiapkan Export', 'Menginisialisasi file Excel...', 10)
       const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
@@ -620,13 +623,21 @@ export default function Pengeluaran() {
       workbook.created = new Date()
 
       showProgress('Menyiapkan Export', 'Mengambil data Pergantian ONT...', 15)
-      const { data: replacements } = await supabase.from('ont_replacements').select('*, new_sn:serial_numbers(serial_number)').order('replacement_date', { ascending: false })
+      const { data: allExpenses } = await supabase
+        .from('daily_expenses')
+        .select('*, items:expense_items(*, sn:serial_numbers(serial_number), haspel:dropcore_haspels(haspel_code), warehouse_item:warehouses(item_name))')
+        .order('expense_date', { ascending: true })
+      const { data: replacements } = await supabase.from('ont_replacements').select('*, new_sn:serial_numbers(serial_number)').order('replacement_date', { ascending: true })
       
-      const filteredReplacements = (replacements || []).filter(r => {
-        const matchDate = !dateFilter || r.replacement_date === dateFilter
-        const matchSearch = !searchTerm || getTechNames(r.technicians).toLowerCase().includes(searchTerm.toLowerCase()) || r.site?.includes(searchTerm.toLowerCase()) || r.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
-        return matchDate && matchSearch
-      }).map(rep => ({
+      const applyMonthFilter = (date) => {
+        if (!monthFilter) return true
+        return (date || '').startsWith(monthFilter)
+      }
+      
+      const filteredExpensesForExport = (allExpenses || []).filter(e => applyMonthFilter(e.expense_date))
+      const filteredReplacementsForExport = (replacements || []).filter(r => applyMonthFilter(r.replacement_date))
+      
+      const filteredReplacementsForExportMapped = (filteredReplacementsForExport || []).map(rep => ({
         id: rep.id,
         expense_date: rep.replacement_date,
         site: rep.site,
@@ -640,7 +651,7 @@ export default function Pengeluaran() {
         isReplacement: true
       }))
 
-      const exportData = [...filtered, ...filteredReplacements].sort((a, b) => new Date(a.expense_date) - new Date(b.expense_date))
+      const exportData = [...filteredExpensesForExport, ...filteredReplacementsForExportMapped].sort((a, b) => new Date(a.expense_date) - new Date(b.expense_date))
 
       // ===== SHEET 1: Rekap Pengeluaran =====
       const ws1 = workbook.addWorksheet('Rekap Pengeluaran')
@@ -803,7 +814,8 @@ export default function Pengeluaran() {
       applyDataRowStyles(ws3)
 
       showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
-      await downloadWorkbook(workbook, `Pengeluaran ${new Date().toISOString().slice(0, 10)}.xlsx`)
+      const filename = monthFilter ? `Pengeluaran ${monthFilter}.xlsx` : `Pengeluaran Semua ${new Date().toISOString().slice(0, 7)}.xlsx`
+      await downloadWorkbook(workbook, filename)
       toast.success('Export berhasil!')
     } catch (err) {
       console.error(err)
@@ -822,7 +834,7 @@ export default function Pengeluaran() {
           <p>Rekap penggunaan material oleh teknisi per hari</p>
         </div>
         <div className="page-header-right">
-          <button className="btn btn-secondary" onClick={handleExportExcel}>
+          <button className="btn btn-secondary" onClick={() => setIsExportModalOpen(true)}>
             <Download size={16} /> Export
           </button>
         </div>
@@ -887,7 +899,7 @@ export default function Pengeluaran() {
           {(dateFilter || statusFilter !== 'semua') && <button className="btn btn-ghost btn-sm" onClick={() => { setDateFilter(''); setStatusFilter('semua') }}>Reset</button>}
         </div>
 
-        <div className="table-container">
+        <div>
           {loading ? (
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : combinedData.length > 0 ? (
@@ -1386,6 +1398,43 @@ export default function Pengeluaran() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Export Modal */}
+      {isExportModalOpen && createPortal(
+        <div className="modal-overlay" onClick={() => setIsExportModalOpen(false)}>
+          <div className="modal" style={{ maxWidth: '420px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Export Pengeluaran</h3>
+              <button className="btn-icon" onClick={() => setIsExportModalOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
+                Pilih rentang data yang ingin diexport ke Excel.
+              </p>
+              <div className="form-group">
+                <label className="form-label">Pilih Bulan (opsional)</label>
+                <input
+                  type="month"
+                  className="form-input"
+                  value={exportMonth}
+                  onChange={e => setExportMonth(e.target.value)}
+                  placeholder="Kosongkan untuk semua data"
+                />
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                  {exportMonth ? `Akan mengexport bulan: ${exportMonth}` : 'Kosongkan untuk export semua data'}
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => { setExportMonth(''); setIsExportModalOpen(false) }}>Batal</button>
+              <button className="btn btn-primary" onClick={() => handleExportExcel(exportMonth)}>
+                <Download size={15} /> {exportMonth ? `Export Bulan ${exportMonth}` : 'Export Semua'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )
