@@ -65,17 +65,24 @@ export default function OntReplacement() {
   }
 
   const handleSave = async () => {
-    if (!form.customer_name || !form.customer_id || !form.old_serial_number || !form.new_serial_number_id) {
+    let finalSnId = form.new_serial_number_id
+    if (!finalSnId && snSearch) {
+      const match = snList.find(s => s.serial_number.toLowerCase() === snSearch.trim().toLowerCase())
+      if (match) finalSnId = match.id
+    }
+
+    if (!form.customer_name || !form.customer_id || !form.old_serial_number || !finalSnId) {
       toast.error('Nama pelanggan, ID pelanggan, SN lama, dan SN baru wajib diisi')
       return
     }
     setSaving(true)
     try {
-      const { error } = await supabase.from('ont_replacements').insert({ ...form, created_by: profile.id })
+      const submitData = { ...form, new_serial_number_id: finalSnId, created_by: profile.id }
+      const { error } = await supabase.from('ont_replacements').insert(submitData)
       if (error) throw error
 
       // Update SN baru menjadi terpakai
-      await supabase.from('serial_numbers').update({ status: 'terpakai' }).eq('id', form.new_serial_number_id)
+      await supabase.from('serial_numbers').update({ status: 'terpakai' }).eq('id', finalSnId)
 
       await logActivity({
         userId: profile.id, username: profile.username, role,
