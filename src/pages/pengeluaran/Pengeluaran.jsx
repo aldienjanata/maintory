@@ -774,14 +774,13 @@ export default function Pengeluaran() {
             const haspelId = item.haspel_id || item.haspel?.id
             if (!haspelId) continue
             const haspelCode = item.haspel?.haspel_code || haspelId
-            const metersUsed = item.meters_used || 0
+            const metersUsed = Number(item.meters_used || 0)
 
             // Hitung kapasitas awal haspel
-            // Hanya haspel yang kapasitas awalnya = 1000m (utuh 1 haspel) yang dihitung
-            const haspelOriginalMeters = item.haspel?.initial_meters || 0
-            if (haspelOriginalMeters < HASPEL_FULL_METERS) continue // H4C-001 700m = skip
+            const haspelOriginalMeters = Number(item.haspel?.initial_meters || 0)
+            if (haspelOriginalMeters < HASPEL_FULL_METERS) continue // skip non-1000m haspels
 
-            const prevCumulative = haspelCumulative[haspelId] || 0
+            const prevCumulative = Number(haspelCumulative[haspelId] || 0)
 
             // Jika cumulative sebelumnya = 0, artinya haspel baru/baru restock → hitung 1
             if (prevCumulative === 0) {
@@ -790,8 +789,7 @@ export default function Pengeluaran() {
             }
 
             const newCumulative = prevCumulative + metersUsed
-            // Jika sudah habis (>= 1000m) → reset ke 0 agar pemakaian berikutnya
-            // (setelah restock) terhitung sebagai haspel baru lagi
+            // Jika sudah habis (>= 1000m) → reset ke 0 agar pemakaian berikutnya terhitung sebagai haspel baru lagi
             haspelCumulative[haspelId] = newCumulative >= HASPEL_FULL_METERS ? 0 : newCumulative
 
           } else if (item.item_type === 'other') {
