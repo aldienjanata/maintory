@@ -626,7 +626,7 @@ export default function Pengeluaran() {
       showProgress('Menyiapkan Export', 'Mengambil data...', 15)
       const { data: allExpenses, error: expError } = await supabase
         .from('daily_expenses')
-        .select('*, items:expense_items(*, sn:serial_numbers(serial_number), haspel:dropcore_haspels(haspel_code, remaining_meters, used_meters), warehouse_item:warehouses(item_name))')
+        .select('*, items:expense_items(*, sn:serial_numbers(serial_number), haspel:dropcore_haspels(haspel_code, initial_meters, used_meters), warehouse_item:warehouses(item_name))')
         .order('expense_date', { ascending: true })
       if (expError) throw expError
       const { data: replacements } = await supabase.from('ont_replacements').select('*, new_sn:serial_numbers(serial_number)').order('replacement_date', { ascending: true })
@@ -776,9 +776,9 @@ export default function Pengeluaran() {
             const haspelCode = item.haspel?.haspel_code || haspelId
             const metersUsed = item.meters_used || 0
 
-            // Hitung stok awal haspel: remaining + used = kapasitas awal
+            // Hitung kapasitas awal haspel
             // Hanya haspel yang kapasitas awalnya = 1000m (utuh 1 haspel) yang dihitung
-            const haspelOriginalMeters = (item.haspel?.remaining_meters || 0) + (item.haspel?.used_meters || 0)
+            const haspelOriginalMeters = item.haspel?.initial_meters || 0
             if (haspelOriginalMeters < HASPEL_FULL_METERS) continue // H4C-001 700m = skip
 
             const prevCumulative = haspelCumulative[haspelId] || 0
