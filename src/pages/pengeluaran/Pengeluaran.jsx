@@ -782,15 +782,20 @@ export default function Pengeluaran() {
 
             const prevCumulative = Number(haspelCumulative[haspelId] || 0)
 
-            // Jika cumulative sebelumnya = 0, artinya haspel baru/baru restock → hitung 1
-            if (prevCumulative === 0) {
+            // Jika cumulative sebelumnya = 0, hitung sebagai -1 agar pemakaian pertama langsung terhitung buka 1 haspel
+            const prevCycle = Math.floor((prevCumulative - 0.001) / HASPEL_FULL_METERS)
+            const newCumulative = prevCumulative + metersUsed
+            const newCycle = Math.floor((newCumulative - 0.001) / HASPEL_FULL_METERS)
+
+            const haspelsOpened = newCycle - prevCycle
+
+            if (haspelsOpened > 0) {
               const key = `${tgl}||${haspelCode}`
-              rekapMap[key] = (rekapMap[key] || 0) + 1
+              rekapMap[key] = (rekapMap[key] || 0) + haspelsOpened
             }
 
-            const newCumulative = prevCumulative + metersUsed
-            // Jika sudah habis (>= 1000m) → reset ke 0 agar pemakaian berikutnya terhitung sebagai haspel baru lagi
-            haspelCumulative[haspelId] = newCumulative >= HASPEL_FULL_METERS ? 0 : newCumulative
+            // Simpan cumulative secara terus menerus (tanpa reset)
+            haspelCumulative[haspelId] = newCumulative
 
           } else if (item.item_type === 'other') {
             const itemName = item.warehouse_item?.item_name || 'Material Lainnya'
