@@ -170,10 +170,13 @@ export default function BonBarang() {
 
   // --- BON FORM LOGIC ---
   const handleOpenAdd = (sched = null) => {
+    // Auto-fill: jika jadwal punya teknisi, pakai yang pertama
+    // (jika >1 teknisi, admin bisa ganti manual dari dropdown)
+    const firstTech = sched?.technicians?.[0] || ''
     setForm({
       dispatch_date: sched ? sched.schedule_date : format(new Date(), 'yyyy-MM-dd'),
       site: sched ? sched.site : 'banyumas',
-      technician_id: (sched?.technicians?.length === 1) ? sched.technicians[0] : '',
+      technician_id: firstTech,
       note: sched ? `Berdasarkan Jadwal ${sched.schedule_date}` : '',
       items: []
     })
@@ -712,7 +715,21 @@ export default function BonBarang() {
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Teknisi <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <Select options={technicians} value={technicians.find(t => t.id === form.technician_id) || null} onChange={val => setForm({ ...form, technician_id: val?.id || '' })} placeholder="Pilih teknisi..." styles={{ control: (b) => ({ ...b, minHeight: '40px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }) }} />
+                  <Select
+                    options={technicians}
+                    value={technicians.find(t => t.id === form.technician_id) || null}
+                    onChange={val => setForm({ ...form, technician_id: val?.id || '' })}
+                    placeholder="Pilih teknisi..."
+                    menuPortalTarget={document.body}
+                    menuPosition="fixed"
+                    styles={{
+                      control: (b) => ({ ...b, minHeight: '40px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }),
+                      menuPortal: (b) => ({ ...b, zIndex: 9999 }),
+                      menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }),
+                      option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }),
+                      singleValue: (b) => ({ ...b, color: 'var(--text-primary)' }),
+                    }}
+                  />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Lokasi</label>
@@ -751,11 +768,11 @@ export default function BonBarang() {
                           <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '2px', display: 'flex' }}><Trash2 size={15} /></button>
                         </div>
                         <div style={{ padding: '12px 14px' }}>
-                          {item.item_type === 'ont' && <Select isMulti options={ontOptions} placeholder="Pilih Serial Number ONT..." value={item.selected_onts || []} onChange={val => updateItem(item.id, 'selected_onts', val)} styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }) }} />}
-                          {item.item_type === 'dropcore' && <Select isMulti options={haspelOptions} placeholder="Pilih Haspel Dropcore..." value={item.selected_haspels || []} onChange={val => updateItem(item.id, 'selected_haspels', val)} styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }) }} />}
+                          {item.item_type === 'ont' && <Select isMulti options={ontOptions} placeholder="Pilih Serial Number ONT..." value={item.selected_onts || []} onChange={val => updateItem(item.id, 'selected_onts', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }) }} />}
+                          {item.item_type === 'dropcore' && <Select isMulti options={haspelOptions} placeholder="Pilih Haspel Dropcore..." value={item.selected_haspels || []} onChange={val => updateItem(item.id, 'selected_haspels', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }) }} />}
                           {item.item_type === 'other' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              <Select isMulti options={otherOptions} placeholder="Pilih Material..." value={item.selected_others || []} onChange={val => updateItem(item.id, 'selected_others', val)} styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }) }} />
+                              <Select isMulti options={otherOptions} placeholder="Pilih Material..." value={item.selected_others || []} onChange={val => updateItem(item.id, 'selected_others', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }) }} />
                               {(item.selected_others || []).map(opt => (
                                 <div key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 10px', background: 'var(--bg-primary)', borderRadius: '6px' }}>
                                   <span style={{ flex: 1, fontSize: '13px', color: 'var(--text-secondary)' }}>{opt.label}</span>
