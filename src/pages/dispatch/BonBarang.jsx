@@ -389,10 +389,16 @@ export default function BonBarang() {
   }).filter(h => h.sisa > 0)
   const otherOptions = otherItems.map(w => ({ value: w.id, label: `${w.item_name} (stok: ${w.initial_stock})` }))
 
-  const activeDispatches = dispatches.filter(d => d.status === 'sedang_dibawa')
-  const historyDispatches = dispatches.filter(d => d.status === 'selesai')
+  let activeDispatches = dispatches.filter(d => d.status === 'sedang_dibawa')
+  let historyDispatches = dispatches.filter(d => d.status === 'selesai')
   const dispatchedScheduleIds = dispatches.map(d => d.schedule_id).filter(Boolean)
-  const pendingSchedules = schedules.filter(s => s.status !== 'completed' && !dispatchedScheduleIds.includes(s.id))
+  let pendingSchedules = schedules.filter(s => s.status !== 'completed' && !dispatchedScheduleIds.includes(s.id))
+
+  if (role === 'teknisi') {
+    activeDispatches = activeDispatches.filter(d => d.technician_id === profile.id || (d.technicians || []).includes(profile.id))
+    historyDispatches = historyDispatches.filter(d => d.technician_id === profile.id || (d.technicians || []).includes(profile.id))
+    pendingSchedules = pendingSchedules.filter(s => (s.technicians || []).includes(profile.id))
+  }
 
   const combinedActive = [
     ...activeDispatches.map(d => ({ ...d, _type: 'dispatch' })),
