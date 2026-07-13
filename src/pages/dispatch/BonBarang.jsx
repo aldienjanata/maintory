@@ -353,8 +353,8 @@ export default function BonBarang() {
 
   // --- EXPORT ---
   const handleExport = (month) => {
-    const filtered = dispatches.filter(d => {
-      if (d.status !== 'selesai') return false
+    const baseData = [...activeDispatches, ...historyDispatches]
+    const filtered = baseData.filter(d => {
       if (!month) return true
       return d.dispatch_date?.startsWith(month)
     })
@@ -365,10 +365,37 @@ export default function BonBarang() {
       const site = SITES.find(s => s.value === d.site)?.label || d.site
       ;(d.items || []).forEach(it => {
         let itemName = '', qty = '', unit = '', keterangan = ''
-        if (it.item_type === 'ont') { itemName = `ONT: ${it.sn?.serial_number || '-'}`; qty = it.quantity_used; unit = 'Unit'; keterangan = it.quantity_used > 0 ? 'Terpakai' : 'Dikembalikan' }
-        else if (it.item_type === 'dropcore') { itemName = `Dropcore: ${it.haspel?.haspel_code || '-'}`; qty = it.meters_used; unit = 'Meter' }
-        else if (it.item_type === 'other') { itemName = it.warehouse_item?.item_name || '-'; qty = it.quantity_used; unit = 'Unit'; keterangan = `Dikembalikan: ${it.quantity_returned}` }
-        rows.push({ Tanggal: d.dispatch_date, Teknisi: techName, Lokasi: site, 'Nama Barang': itemName, Qty: qty, Satuan: unit, Keterangan: keterangan })
+        const isSelesai = d.status === 'selesai'
+        
+        if (it.item_type === 'ont') { 
+          itemName = `ONT: ${it.sn?.serial_number || '-'}`
+          qty = isSelesai ? (it.quantity_used || 0) : it.quantity_dispatched
+          unit = 'Unit'
+          keterangan = isSelesai ? (it.quantity_used > 0 ? 'Terpakai' : 'Dikembalikan') : 'Sedang Dibawa'
+        }
+        else if (it.item_type === 'dropcore') { 
+          itemName = `Dropcore: ${it.haspel?.haspel_code || '-'}`
+          qty = isSelesai ? (it.meters_used || 0) : it.quantity_dispatched
+          unit = isSelesai ? 'Meter' : 'Haspel'
+          keterangan = isSelesai ? 'Terpakai' : 'Sedang Dibawa'
+        }
+        else if (it.item_type === 'other') { 
+          itemName = it.warehouse_item?.item_name || '-'
+          qty = isSelesai ? (it.quantity_used || 0) : it.quantity_dispatched
+          unit = 'Unit'
+          keterangan = isSelesai ? `Terpakai (Sisa: ${it.quantity_returned || 0})` : 'Sedang Dibawa'
+        }
+        
+        rows.push({ 
+          Tanggal: d.dispatch_date, 
+          Teknisi: techName, 
+          Lokasi: site, 
+          'Nama Barang': itemName, 
+          Qty: qty, 
+          Satuan: unit, 
+          Status: isSelesai ? 'Selesai' : 'Sedang Dibawa',
+          Keterangan: keterangan 
+        })
       })
     })
 
