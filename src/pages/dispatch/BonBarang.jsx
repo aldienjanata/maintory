@@ -98,7 +98,7 @@ export default function BonBarang() {
         // We will fetch users separately and map them locally.
         supabase
           .from('dispatches')
-          .select('*, items:dispatch_items(*, sn:serial_numbers(serial_number), haspel:dropcore_haspels(haspel_code), warehouse_item:warehouses(item_name))')
+          .select('*, items:dispatch_items(*, sn:serial_numbers(serial_number), haspel:dropcore_haspels(*), warehouse_item:warehouses(item_name))')
           .order('created_at', { ascending: false }),
         supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }),
         supabase.from('users').select('id, full_name').in('role', ['admin', 'teknisi']).eq('is_active', true),
@@ -399,14 +399,14 @@ export default function BonBarang() {
         ])
 
         if (i % 20 === 0) {
-          showProgress('Mengekspor Data', `Memproses Rekap Bon Barang... (${i + 1}/${filteredData.length})`, 20 + ((i + 1) / filteredData.length) * 20)
+          showProgress('Mengekspor Data', `Memproses Rekap Bon Barang... (${i + 1}/${filteredData.length})`, 20 + ((i + 1) / filteredData.length) * 10)
           await new Promise(r => setTimeout(r, 0))
         }
       }
       applyDataRowStyles(ws1)
 
       // ===== SHEET 2: Detail Barang Dibawa =====
-      showProgress('Mengekspor Data', 'Memproses Detail Barang...', 45)
+      showProgress('Mengekspor Data', 'Memproses Detail Barang...', 30)
       const ws2 = workbook.addWorksheet('Detail Barang Dibawa')
       const headers2 = ['Tanggal', 'Lokasi', 'Teknisi', 'Jenis Barang', 'Kode / Serial Number', 'Qty Dibawa', 'Qty Terpakai/Sisa', 'Status Bon']
       setColumnWidths(ws2, [14, 20, 32, 16, 26, 14, 20, 16])
@@ -427,7 +427,7 @@ export default function BonBarang() {
           d.items.forEach(it => {
             let jenisBarang = ''
             let kode = ''
-            let qtyDibawa = `${it.quantity_dispatched || 0}`
+            let qtyDibawa = `${it.quantity_dispatched || 1}`
             let qtyTerpakai = isSelesai ? '-' : 'Belum Lapor'
 
             if (it.item_type === 'ont') {
@@ -453,18 +453,73 @@ export default function BonBarang() {
         }
         
         if (i % 20 === 0) {
-          showProgress('Mengekspor Data', `Memproses Detail Barang... (${i + 1}/${filteredData.length})`, 45 + ((i + 1) / filteredData.length) * 30)
+          showProgress('Mengekspor Data', `Memproses Detail Barang... (${i + 1}/${filteredData.length})`, 30 + ((i + 1) / filteredData.length) * 15)
           await new Promise(r => setTimeout(r, 0))
         }
       }
       applyDataRowStyles(ws2)
 
-      // ===== SHEET 3: Rekap Per Item =====
-      showProgress('Mengekspor Data', 'Membuat Rekap Per Item...', 80)
-      const ws3 = workbook.addWorksheet('Rekap Per Item')
-      const headers3 = ['Tanggal', 'Item', 'Total Dibawa', 'Total Terpakai (Khusus Bon Selesai)']
-      setColumnWidths(ws3, [14, 35, 18, 32])
-      applyHeaderStyle(ws3, headers3, '7C3AED') // purple
+      // ===== SHEET 3: Catatan Serial Number =====
+      showProgress('Mengekspor Data', 'Memproses Serial Number...', 45)
+      const ws3 = workbook.addWorksheet('Catatan Serial Number')
+      const headers3 = ['Tanggal', 'Lokasi', 'Teknisi', 'Serial Number', 'Status Terpakai']
+      setColumnWidths(ws3, [14, 20, 32, 26, 20])
+      applyHeaderStyle(ws3, headers3, '047857') // teal
+
+      for (let i = 0; i < filteredData.length; i++) {
+        const d = filteredData[i]
+        const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
+        const site = SITES.find(s => s.value === d.site)?.label || d.site
+        const isSelesai = d.status === 'selesai'
+
+        if (d.items && d.items.length > 0) {
+          d.items.filter(it => it.item_type === 'ont').forEach(it => {
+            const sn = it.sn?.serial_number || '-'
+            let status = 'Sedang Dibawa'
+            if (isSelesai) {
+              status = it.quantity_used > 0 ? 'Terpakai' : 'Dikembalikan'
+            }
+            ws3.addRow([d.dispatch_date, site, techName, sn, status])
+          })
+        }
+      }
+      applyDataRowStyles(ws3)
+
+      // ===== SHEET 4: Catatan Dropcore =====
+      showProgress('Mengekspor Data', 'Memproses Dropcore...', 60)
+      const ws4 = workbook.addWorksheet('Catatan Dropcore')
+      const headers4 = ['Tanggal', 'Lokasi', 'Teknisi', 'Kode Haspel', 'Keterangan', 'Qty Dibawa', 'Meter Terpakai']
+      setColumnWidths(ws4, [14, 20, 32, 26, 24, 16, 16])
+      applyHeaderStyle(ws4, headers4, 'B45309') // bronze
+
+      for (let i = 0; i < filteredData.length; i++) {
+        const d = filteredData[i]
+        const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
+        const site = SITES.find(s => s.value === d.site)?.label || d.site
+        const isSelesai = d.status === 'selesai'
+
+        if (d.items && d.items.length > 0) {
+          d.items.filter(it => it.item_type === 'dropcore').forEach(it => {
+            const haspel = it.haspel?.haspel_code || '-'
+            const usedThisDispatch = isSelesai ? (it.meters_used || 0) : 0
+            const currentUsed = it.haspel?.used_meters || 0
+            // Jika currentUsed sama dengan usedThisDispatch, berarti haspel ini belum dipakai orang lain sblmnya
+            const isUtuh = (currentUsed === 0 || currentUsed === usedThisDispatch)
+            const ket = isUtuh ? 'Haspel Utuh (1000m)' : 'Sisa Haspel / Potongan'
+            const meterTerpakai = isSelesai ? `${usedThisDispatch} m` : '-'
+            
+            ws4.addRow([d.dispatch_date, site, techName, haspel, ket, `${it.quantity_dispatched || 1} Haspel`, meterTerpakai])
+          })
+        }
+      }
+      applyDataRowStyles(ws4)
+
+      // ===== SHEET 5: Rekap Per Item =====
+      showProgress('Mengekspor Data', 'Membuat Rekap Per Item...', 75)
+      const ws5 = workbook.addWorksheet('Rekap Per Item')
+      const headers5 = ['Tanggal', 'Item', 'Total Dibawa', 'Total Terpakai (Khusus Bon Selesai)']
+      setColumnWidths(ws5, [14, 35, 18, 32])
+      applyHeaderStyle(ws5, headers5, '7C3AED') // purple
 
       const rekapMap = {}
 
@@ -480,15 +535,19 @@ export default function BonBarang() {
 
           if (it.item_type === 'ont') {
             itemName = `ONT: ${it.sn?.serial_number || '-'}`
-            qtyDispatched = it.quantity_dispatched || 0
+            qtyDispatched = it.quantity_dispatched || 1
             qtyUsed = isSelesai ? (it.quantity_used || 0) : 0
           } else if (it.item_type === 'dropcore') {
-            itemName = `Dropcore: ${it.haspel?.haspel_code || '-'}`
-            qtyDispatched = it.quantity_dispatched || 0
-            qtyUsed = isSelesai ? (it.meters_used || 0) : 0
+            itemName = `Dropcore` // Group by generic name so total Dropcore is summed
+            const usedThisDispatch = isSelesai ? (it.meters_used || 0) : 0
+            const currentUsed = it.haspel?.used_meters || 0
+            const isUtuh = (currentUsed === 0 || currentUsed === usedThisDispatch)
+            
+            qtyDispatched = isUtuh ? 1 : 0 // Hanya hitung haspel jika utuh
+            qtyUsed = usedThisDispatch // Tetap hitung meternya
           } else if (it.item_type === 'other') {
             itemName = it.warehouse_item?.item_name || '-'
-            qtyDispatched = it.quantity_dispatched || 0
+            qtyDispatched = it.quantity_dispatched || 1
             qtyUsed = isSelesai ? (it.quantity_used || 0) : 0
           }
 
@@ -512,12 +571,12 @@ export default function BonBarang() {
           dispStr += ' Haspel'
           usedStr += ' Meter'
         }
-        ws3.addRow([r.date, r.name, dispStr, usedStr])
+        ws5.addRow([r.date, r.name, dispStr, usedStr])
       }
-      applyDataRowStyles(ws3)
+      applyDataRowStyles(ws5)
 
       showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
-      const filename = monthFilter ? `Bon_Barang_${monthFilter}.xlsx` : `Bon_Barang_Semua_${new Date().toISOString().slice(0, 7)}.xlsx`
+      const filename = monthFilter ? `Bon Barang ${monthFilter}.xlsx` : `Bon Barang Semua ${new Date().toISOString().slice(0, 7)}.xlsx`
       await downloadWorkbook(workbook, filename)
       toast.success('Export berhasil!')
       
