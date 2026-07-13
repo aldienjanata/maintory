@@ -10,6 +10,7 @@ import Maintenance from './pages/maintenance/Maintenance'
 import StokGudang from './pages/inventory/StokGudang'
 import SerialNumber from './pages/inventory/SerialNumber'
 import Dropcore from './pages/inventory/Dropcore'
+import BonBarang from './pages/dispatch/BonBarang'
 import Pengeluaran from './pages/pengeluaran/Pengeluaran'
 import Dismantle from './pages/dismantle/Dismantle'
 import OntReplacement from './pages/ont/OntReplacement'
@@ -70,6 +71,7 @@ function App() {
           <Route path="inventory/stok" element={<StokGudang />} />
           <Route path="inventory/sn" element={<SerialNumber />} />
           <Route path="inventory/dropcore" element={<Dropcore />} />
+          <Route path="bon-barang" element={<BonBarang />} />
           <Route path="pengeluaran" element={<Pengeluaran />} />
           <Route path="dismantle" element={<Dismantle />} />
           <Route path="ont" element={<OntReplacement />} />

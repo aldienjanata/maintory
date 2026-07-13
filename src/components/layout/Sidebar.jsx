@@ -13,7 +13,8 @@ import {
   ArrowDownToLine,
   RefreshCcw,
   History,
-  Settings
+  Settings,
+  ClipboardList
 } from 'lucide-react'
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -29,6 +30,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { label: 'Serial Number', path: '/inventory/sn', icon: <Hash />, section: 'INVENTORY' },
     { label: 'Dropcore', path: '/inventory/dropcore', icon: <Cable />, section: 'INVENTORY' },
     
+    { label: 'Bon Barang', path: '/bon-barang', icon: <ClipboardList />, section: 'OPERATIONS' },
     { label: 'Pengeluaran', path: '/pengeluaran', icon: <Truck />, section: 'OPERATIONS' },
     { label: 'Dismantle', path: '/dismantle', icon: <ArrowDownToLine />, section: 'OPERATIONS' },
     { label: 'Pergantian ONT', path: '/ont', icon: <RefreshCcw />, section: 'OPERATIONS' },

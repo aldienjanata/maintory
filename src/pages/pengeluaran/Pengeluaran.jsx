@@ -12,6 +12,7 @@ import Pagination from '../../components/common/Pagination'
 import Select from 'react-select'
 import { useProgress } from '../../contexts/ProgressContext'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 
 const SITES = [
   { value: 'banyumas', label: 'Banyumas' },
@@ -29,6 +30,7 @@ export default function Pengeluaran() {
   const { profile } = useAuth()
   const role = profile?.role || 'teknisi'
   const { showProgress, hideProgress } = useProgress()
+  const navigate = useNavigate()
 
   const [expenses, setExpenses] = useState([])
   const [technicians, setTechnicians] = useState([])
@@ -191,23 +193,8 @@ export default function Pengeluaran() {
   }
 
   const handleOpenAddExpense = (sched = null) => {
-    resetForm()
-    if (sched) {
-      setSelectedScheduleId(sched.id)
-      setForm(f => ({ ...f, expense_date: sched.schedule_date, site: sched.site, work_type: sched.work_type, technicians: sched.technicians }))
-      setIsModalOpen(true)
-    } else if (myTodaySchedule) {
-      if (myTodaySchedule.status === 'completed' && !myTodaySchedule.allow_extra_expense) {
-        toast.error('Tim Anda sudah mengisi pengeluaran hari ini. Hubungi admin untuk menambah pengeluaran.')
-        return
-      }
-      setSelectedScheduleId(myTodaySchedule.id)
-      setForm(f => ({ ...f, expense_date: myTodaySchedule.schedule_date, site: myTodaySchedule.site, work_type: myTodaySchedule.work_type, technicians: myTodaySchedule.technicians }))
-      setIsModalOpen(true)
-    } else {
-      setSelectedScheduleId('')
-      setIsModalOpen(true)
-    }
+    toast('Silakan gunakan menu Bon Barang untuk input pengeluaran', { icon: 'ℹ️' })
+    navigate('/bon-barang')
   }
 
   const toggleScheduleTech = (techId) => setScheduleForm(f => ({ ...f, technicians: f.technicians.includes(techId) ? f.technicians.filter(t => t !== techId) : [...f.technicians, techId] }))
@@ -833,6 +820,14 @@ export default function Pengeluaran() {
 
   return (
     <div>
+      <div className="alert alert-info mb-4" style={{ backgroundColor: 'var(--bg-card)', borderLeft: '4px solid var(--accent)', padding: '12px 16px', borderRadius: 'var(--radius-md)' }}>
+        <h4 style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <AlertCircle size={18} /> Informasi Penting
+        </h4>
+        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)' }}>
+          Mulai sekarang, penginputan barang keluar <strong>wajib dilakukan melalui menu Bon Barang</strong>. Halaman ini hanya digunakan untuk melihat Riwayat Pengeluaran dan Export Data.
+        </p>
+      </div>
       <div className="page-header">
         <div className="page-header-left">
           <h2>Pengeluaran Harian</h2>
