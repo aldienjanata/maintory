@@ -9,7 +9,7 @@ import {
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import Select from 'react-select'
-import * as XLSX from 'xlsx'
+import { useProgress } from '../../contexts/ProgressContext'
 import Pagination from '../../components/common/Pagination'
 
 const SITES = [
@@ -30,6 +30,7 @@ const ITEM_TYPE_COLORS = { ont: 'var(--accent)', dropcore: 'var(--warning)', oth
 export default function BonBarang() {
   const { profile } = useAuth()
   const role = profile?.role || 'teknisi'
+  const { showProgress, hideProgress } = useProgress()
 
   const [activeTab, setActiveTab] = useState('sedang_dibawa')
   const [dispatches, setDispatches] = useState([])
@@ -352,60 +353,180 @@ export default function BonBarang() {
   }
 
   // --- EXPORT ---
-  const handleExport = (month) => {
-    const baseData = [...activeDispatches, ...historyDispatches]
-    const filtered = baseData.filter(d => {
-      if (!month) return true
-      return d.dispatch_date?.startsWith(month)
-    })
-
-    const rows = []
-    filtered.forEach(d => {
-      const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
-      const site = SITES.find(s => s.value === d.site)?.label || d.site
-      ;(d.items || []).forEach(it => {
-        let itemName = '', qty = '', unit = '', keterangan = ''
-        const isSelesai = d.status === 'selesai'
-        
-        if (it.item_type === 'ont') { 
-          itemName = `ONT: ${it.sn?.serial_number || '-'}`
-          qty = isSelesai ? (it.quantity_used || 0) : it.quantity_dispatched
-          unit = 'Unit'
-          keterangan = isSelesai ? (it.quantity_used > 0 ? 'Terpakai' : 'Dikembalikan') : 'Sedang Dibawa'
-        }
-        else if (it.item_type === 'dropcore') { 
-          itemName = `Dropcore: ${it.haspel?.haspel_code || '-'}`
-          qty = isSelesai ? (it.meters_used || 0) : it.quantity_dispatched
-          unit = isSelesai ? 'Meter' : 'Haspel'
-          keterangan = isSelesai ? 'Terpakai' : 'Sedang Dibawa'
-        }
-        else if (it.item_type === 'other') { 
-          itemName = it.warehouse_item?.item_name || '-'
-          qty = isSelesai ? (it.quantity_used || 0) : it.quantity_dispatched
-          unit = 'Unit'
-          keterangan = isSelesai ? `Terpakai (Sisa: ${it.quantity_returned || 0})` : 'Sedang Dibawa'
-        }
-        
-        rows.push({ 
-          Tanggal: d.dispatch_date, 
-          Teknisi: techName, 
-          Lokasi: site, 
-          'Nama Barang': itemName, 
-          Qty: qty, 
-          Satuan: unit, 
-          Status: isSelesai ? 'Selesai' : 'Sedang Dibawa',
-          Keterangan: keterangan 
-        })
-      })
-    })
-
-    if (rows.length === 0) { toast.error('Tidak ada data untuk diexport'); return }
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Bon Barang')
-    XLSX.writeFile(wb, `BonBarang_${month || 'Semua'}.xlsx`)
-    toast.success('Export berhasil!')
+  const handleExport = async (monthFilter = '') => {
     setIsExportModalOpen(false)
+    try {
+      showProgress('Menyiapkan Export', 'Menginisialisasi file Excel...', 10)
+      const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
+      const ExcelJS = (await import('exceljs')).default
+      const workbook = new ExcelJS.Workbook()
+      workbook.creator = 'Maintory'
+      workbook.created = new Date()
+
+      showProgress('Menyiapkan Export', 'Mempersiapkan data...', 20)
+      
+      const baseData = [...activeDispatches, ...historyDispatches]
+      const filteredData = baseData.filter(d => {
+        if (!monthFilter) return true
+        return d.dispatch_date?.startsWith(monthFilter)
+      }).sort((a, b) => new Date(a.dispatch_date) - new Date(b.dispatch_date))
+
+      if (filteredData.length === 0) {
+        hideProgress()
+        toast.error('Tidak ada data untuk diexport')
+        return
+      }
+
+      // ===== SHEET 1: Rekap Bon Barang =====
+      const ws1 = workbook.addWorksheet('Rekap Bon Barang')
+      const headers1 = ['Tanggal', 'Lokasi', 'Teknisi', 'Jumlah Item', 'Status', 'Catatan']
+      setColumnWidths(ws1, [14, 20, 32, 14, 16, 30])
+      applyHeaderStyle(ws1, headers1, '0369A1') // blue
+
+      for (let i = 0; i < filteredData.length; i++) {
+        const d = filteredData[i]
+        const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
+        const site = SITES.find(s => s.value === d.site)?.label || d.site
+        const statusLabel = d.status === 'sedang_dibawa' ? 'Sedang Dibawa' : 'Selesai'
+        
+        ws1.addRow([
+          d.dispatch_date,
+          site,
+          techName,
+          d.items?.length || 0,
+          statusLabel,
+          d.notes || ''
+        ])
+
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses Rekap Bon Barang... (${i + 1}/${filteredData.length})`, 20 + ((i + 1) / filteredData.length) * 20)
+          await new Promise(r => setTimeout(r, 0))
+        }
+      }
+      applyDataRowStyles(ws1)
+
+      // ===== SHEET 2: Detail Barang Dibawa =====
+      showProgress('Mengekspor Data', 'Memproses Detail Barang...', 45)
+      const ws2 = workbook.addWorksheet('Detail Barang Dibawa')
+      const headers2 = ['Tanggal', 'Lokasi', 'Teknisi', 'Jenis Barang', 'Kode / Serial Number', 'Qty Dibawa', 'Qty Terpakai/Sisa', 'Status Bon']
+      setColumnWidths(ws2, [14, 20, 32, 16, 26, 14, 20, 16])
+      applyHeaderStyle(ws2, headers2, '065F46') // green
+
+      let ws2RowIdx = 2
+      for (let i = 0; i < filteredData.length; i++) {
+        const d = filteredData[i]
+        const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
+        const site = SITES.find(s => s.value === d.site)?.label || d.site
+        const isSelesai = d.status === 'selesai'
+        const statusLabel = isSelesai ? 'Selesai' : 'Sedang Dibawa'
+
+        if (!d.items || d.items.length === 0) {
+          ws2.addRow([d.dispatch_date, site, techName, '-', '-', '-', '-', statusLabel])
+          ws2RowIdx++
+        } else {
+          d.items.forEach(it => {
+            let jenisBarang = ''
+            let kode = ''
+            let qtyDibawa = `${it.quantity_dispatched || 0}`
+            let qtyTerpakai = isSelesai ? '-' : 'Belum Lapor'
+
+            if (it.item_type === 'ont') {
+              jenisBarang = 'ONT'
+              kode = it.sn?.serial_number || '-'
+              qtyDibawa += ' Unit'
+              if (isSelesai) qtyTerpakai = it.quantity_used > 0 ? 'Terpakai' : 'Dikembalikan'
+            } else if (it.item_type === 'dropcore') {
+              jenisBarang = 'Dropcore'
+              kode = it.haspel?.haspel_code || '-'
+              qtyDibawa += ' Haspel'
+              if (isSelesai) qtyTerpakai = `${it.meters_used || 0} Meter Terpakai`
+            } else if (it.item_type === 'other') {
+              jenisBarang = 'Material Lain'
+              kode = it.warehouse_item?.item_name || '-'
+              qtyDibawa += ' Unit'
+              if (isSelesai) qtyTerpakai = `${it.quantity_used || 0} Dipakai (Sisa: ${it.quantity_returned || 0})`
+            }
+
+            ws2.addRow([d.dispatch_date, site, techName, jenisBarang, kode, qtyDibawa, qtyTerpakai, statusLabel])
+          })
+          ws2RowIdx += d.items.length
+        }
+        
+        if (i % 20 === 0) {
+          showProgress('Mengekspor Data', `Memproses Detail Barang... (${i + 1}/${filteredData.length})`, 45 + ((i + 1) / filteredData.length) * 30)
+          await new Promise(r => setTimeout(r, 0))
+        }
+      }
+      applyDataRowStyles(ws2)
+
+      // ===== SHEET 3: Rekap Per Item =====
+      showProgress('Mengekspor Data', 'Membuat Rekap Per Item...', 80)
+      const ws3 = workbook.addWorksheet('Rekap Per Item')
+      const headers3 = ['Tanggal', 'Item', 'Total Dibawa', 'Total Terpakai (Khusus Bon Selesai)']
+      setColumnWidths(ws3, [14, 35, 18, 32])
+      applyHeaderStyle(ws3, headers3, '7C3AED') // purple
+
+      const rekapMap = {}
+
+      for (const d of filteredData) {
+        if (!d.items) continue
+        const dateStr = d.dispatch_date || ''
+        const isSelesai = d.status === 'selesai'
+
+        for (const it of d.items) {
+          let itemName = ''
+          let qtyDispatched = 0
+          let qtyUsed = 0
+
+          if (it.item_type === 'ont') {
+            itemName = `ONT: ${it.sn?.serial_number || '-'}`
+            qtyDispatched = it.quantity_dispatched || 0
+            qtyUsed = isSelesai ? (it.quantity_used || 0) : 0
+          } else if (it.item_type === 'dropcore') {
+            itemName = `Dropcore: ${it.haspel?.haspel_code || '-'}`
+            qtyDispatched = it.quantity_dispatched || 0
+            qtyUsed = isSelesai ? (it.meters_used || 0) : 0
+          } else if (it.item_type === 'other') {
+            itemName = it.warehouse_item?.item_name || '-'
+            qtyDispatched = it.quantity_dispatched || 0
+            qtyUsed = isSelesai ? (it.quantity_used || 0) : 0
+          }
+
+          const key = `${dateStr}||${itemName}||${it.item_type}`
+          if (!rekapMap[key]) rekapMap[key] = { date: dateStr, name: itemName, type: it.item_type, dispatched: 0, used: 0 }
+          
+          rekapMap[key].dispatched += qtyDispatched
+          rekapMap[key].used += qtyUsed
+        }
+      }
+
+      const rekapArray = Object.values(rekapMap).sort((a, b) => a.date.localeCompare(b.date))
+      
+      for (const r of rekapArray) {
+        let dispStr = r.dispatched
+        let usedStr = r.used
+        if (r.type === 'ont' || r.type === 'other') {
+          dispStr += ' Unit'
+          usedStr += ' Unit'
+        } else if (r.type === 'dropcore') {
+          dispStr += ' Haspel'
+          usedStr += ' Meter'
+        }
+        ws3.addRow([r.date, r.name, dispStr, usedStr])
+      }
+      applyDataRowStyles(ws3)
+
+      showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
+      const filename = monthFilter ? `Bon_Barang_${monthFilter}.xlsx` : `Bon_Barang_Semua_${new Date().toISOString().slice(0, 7)}.xlsx`
+      await downloadWorkbook(workbook, filename)
+      toast.success('Export berhasil!')
+      
+    } catch (err) {
+      console.error(err)
+      toast.error('Gagal export: ' + err.message)
+    } finally {
+      hideProgress()
+    }
   }
 
   // --- DERIVED DATA ---
