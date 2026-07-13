@@ -521,7 +521,7 @@ export default function BonBarang() {
               </div>
               {paginatedSchedules.length > 0 ? (
                 <>
-                  <div className="mobile-card-list" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 360px), 1fr))', gap: '10px' }}>
+                  <div className="mobile-card-list" style={{ gap: '10px' }}>
                     {paginatedSchedules.map(s => {
                       const isExp = expandedId === `sched-${s.id}`
                       const linked = dispatches.filter(d => d.schedule_id === s.id)
@@ -576,7 +576,7 @@ export default function BonBarang() {
             <>
               {paginatedHistory.length > 0 ? (
                 <>
-                  <div className="mobile-card-list" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 360px), 1fr))', gap: '10px' }}>
+                  <div className="mobile-card-list" style={{ gap: '10px' }}>
                     {paginatedHistory.map(d => <BonCard key={d.id} d={d} role={role} expandedId={expandedId} setExpandedId={setExpandedId} handleOpenLapor={handleOpenLapor} handleDelete={handleDelete} />)}
                   </div>
                   <Pagination page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} totalItems={historyDispatches.length} />
@@ -590,7 +590,7 @@ export default function BonBarang() {
             <>
               {paginatedCombined.length > 0 ? (
                 <>
-                  <div className="mobile-card-list" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 360px), 1fr))', gap: '10px' }}>
+                  <div className="mobile-card-list" style={{ gap: '10px' }}>
                     {paginatedCombined.map(item => {
                       if (item._type === 'schedule') {
                         // Pending schedule card — shows "Belum Dibuat" with "Buat Bon" button
