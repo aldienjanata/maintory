@@ -60,7 +60,7 @@ export default function BonBarang() {
   const [form, setForm] = useState({
     dispatch_date: format(new Date(), 'yyyy-MM-dd'),
     site: 'banyumas',
-    technician_id: '',
+    technicians: [], // <-- NOW AN ARRAY
     note: '',
     items: []
   })
@@ -93,9 +93,11 @@ export default function BonBarang() {
     setLoading(true)
     try {
       const [dispRes, schedRes, techRes, snRes, haspelRes, otherRes] = await Promise.all([
+        // Note: we might not have a reliable foreign key to users if we use UUID array `technicians`
+        // We will fetch users separately and map them locally.
         supabase
           .from('dispatches')
-          .select('*, items:dispatch_items(*, sn:serial_numbers(serial_number), haspel:dropcore_haspels(haspel_code), warehouse_item:warehouses(item_name)), techs:users!technician_id(full_name)')
+          .select('*, items:dispatch_items(*, sn:serial_numbers(serial_number), haspel:dropcore_haspels(haspel_code), warehouse_item:warehouses(item_name))')
           .order('created_at', { ascending: false }),
         supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }),
         supabase.from('users').select('id, full_name').in('role', ['admin', 'teknisi']).eq('is_active', true),
@@ -170,13 +172,11 @@ export default function BonBarang() {
 
   // --- BON FORM LOGIC ---
   const handleOpenAdd = (sched = null) => {
-    // Auto-fill: jika jadwal punya teknisi, pakai yang pertama
-    // (jika >1 teknisi, admin bisa ganti manual dari dropdown)
-    const firstTech = sched?.technicians?.[0] || ''
+    // Auto-fill all technicians from schedule
     setForm({
       dispatch_date: sched ? sched.schedule_date : format(new Date(), 'yyyy-MM-dd'),
       site: sched ? sched.site : 'banyumas',
-      technician_id: firstTech,
+      technicians: sched?.technicians || [],
       note: sched ? `Berdasarkan Jadwal ${sched.schedule_date}` : '',
       items: []
     })
@@ -193,7 +193,7 @@ export default function BonBarang() {
   }
 
   const handleSaveBon = async () => {
-    if (!form.technician_id) { toast.error('Pilih teknisi terlebih dahulu'); return }
+    if (form.technicians.length === 0) { toast.error('Pilih minimal 1 teknisi'); return }
     if (form.items.length === 0) { toast.error('Tambahkan minimal 1 barang'); return }
     setSaving(true)
     try {
@@ -212,15 +212,17 @@ export default function BonBarang() {
       }
       if (itemsToInsert.length === 0) { toast.error('Belum ada item valid yang dipilih'); setSaving(false); return }
 
+      // We still map technician_id to form.technicians[0] as fallback for older schemas if needed, 
+      // but also insert the actual `technicians` array column.
       const dispatchPayload = {
         dispatch_date: form.dispatch_date,
-        technician_id: form.technician_id,
+        technician_id: form.technicians[0], 
+        technicians: form.technicians,
         site: form.site,
         notes: form.note,
         status: 'sedang_dibawa',
         created_by: profile.id
       }
-      // Only include schedule_id if provided (column may not exist yet)
       if (selectedScheduleId) dispatchPayload.schedule_id = selectedScheduleId
 
       const { data: dData, error: dErr } = await supabase.from('dispatches').insert(dispatchPayload).select('id').single()
@@ -292,7 +294,8 @@ export default function BonBarang() {
         const { data: expData, error: expErr } = await supabase.from('daily_expenses').insert({
           expense_date: format(new Date(), 'yyyy-MM-dd'),
           site: selectedDispatch.site,
-          technicians: [selectedDispatch.technician_id],
+          // Support both legacy technician_id array or new technicians array
+          technicians: selectedDispatch.technicians && selectedDispatch.technicians.length > 0 ? selectedDispatch.technicians : [selectedDispatch.technician_id],
           work_type: 'ikr_psb',
           note: 'Otomatis dari Laporan Bon Barang',
           created_by: profile.id
@@ -358,7 +361,7 @@ export default function BonBarang() {
 
     const rows = []
     filtered.forEach(d => {
-      const techName = d.techs?.full_name || '-'
+      const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
       const site = SITES.find(s => s.value === d.site)?.label || d.site
       ;(d.items || []).forEach(it => {
         let itemName = '', qty = '', unit = '', keterangan = ''
@@ -386,25 +389,24 @@ export default function BonBarang() {
   }).filter(h => h.sisa > 0)
   const otherOptions = otherItems.map(w => ({ value: w.id, label: `${w.item_name} (stok: ${w.initial_stock})` }))
 
-  // For "Sedang Dibawa": show BOTH active dispatches AND pending schedules (that have no bon yet)
   const activeDispatches = dispatches.filter(d => d.status === 'sedang_dibawa')
   const historyDispatches = dispatches.filter(d => d.status === 'selesai')
   const dispatchedScheduleIds = dispatches.map(d => d.schedule_id).filter(Boolean)
   const pendingSchedules = schedules.filter(s => s.status !== 'completed' && !dispatchedScheduleIds.includes(s.id))
 
-  // Combined list for "Sedang Dibawa" tab: active dispatches + pending schedules
   const combinedActive = [
     ...activeDispatches.map(d => ({ ...d, _type: 'dispatch' })),
     ...pendingSchedules.map(s => ({ ...s, _type: 'schedule' }))
-  ]
+  ].sort((a, b) => new Date(b.dispatch_date || b.schedule_date) - new Date(a.dispatch_date || a.schedule_date))
 
-  // Pagination slices
   const paginatedCombined = combinedActive.slice((page - 1) * perPage, page * perPage)
   const paginatedHistory = historyDispatches.slice((page - 1) * perPage, page * perPage)
   const paginatedSchedules = schedules.slice((schedPage - 1) * schedPerPage, schedPage * schedPerPage)
 
-  const getTechNames = (techIds = []) =>
-    techIds.map(tid => technicians.find(t => t.id === tid)?.full_name || tid).filter(Boolean).join(', ')
+  const getTechNames = (techIds = []) => {
+    if (!techIds || techIds.length === 0) return '-'
+    return techIds.map(tid => technicians.find(t => t.id === tid)?.full_name || tid).filter(Boolean).join(', ')
+  }
 
   const openScheduleModal = () => {
     setScheduleForm({ schedule_date: format(new Date(), 'yyyy-MM-dd'), site: 'banyumas', work_type: 'ikr_psb', technicians: [], note: '' })
@@ -451,7 +453,7 @@ export default function BonBarang() {
         ))}
       </div>
 
-      {/* Banner jadwal hari ini (teknisi) */}
+      {/* Banners */}
       {myTodaySchedule && myTodaySchedule.status !== 'completed' && (
         <div style={{ padding: '14px 16px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '10px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
           <AlertCircle size={20} style={{ color: 'var(--accent)', flexShrink: 0 }} />
@@ -466,8 +468,6 @@ export default function BonBarang() {
           </button>
         </div>
       )}
-
-      {/* Banner tunggakan */}
       {myPendingSchedules.length > 0 && (
         <div style={{ padding: '14px 16px', background: 'rgba(239,68,68,0.06)', border: '1px solid var(--danger)', borderRadius: '10px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
           <AlertCircle size={20} style={{ color: 'var(--danger)', flexShrink: 0 }} />
@@ -494,17 +494,13 @@ export default function BonBarang() {
           {[
             { key: 'sedang_dibawa', label: `Sedang Dibawa (${combinedActive.length})`, icon: <Package size={13} /> },
             { key: 'riwayat', label: `Riwayat (${historyDispatches.length})`, icon: <PackageCheck size={13} /> },
-            ...(role === 'admin' || role === 'superadmin'
-              ? [{ key: 'jadwal', label: `Jadwal (${schedules.length})`, icon: <CalendarDays size={13} /> }]
-              : [])
+            ...(role === 'admin' || role === 'superadmin' ? [{ key: 'jadwal', label: `Jadwal (${schedules.length})`, icon: <CalendarDays size={13} /> }] : [])
           ].map(tab => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '12px 16px', background: 'none', border: 'none',
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '12px 16px', background: 'none', border: 'none',
               borderBottom: activeTab === tab.key ? '2px solid var(--accent)' : '2px solid transparent',
               color: activeTab === tab.key ? 'var(--text-primary)' : 'var(--text-secondary)',
-              fontWeight: activeTab === tab.key ? 700 : 400,
-              cursor: 'pointer', fontSize: '13px', whiteSpace: 'nowrap', transition: 'all 0.15s'
+              fontWeight: activeTab === tab.key ? 700 : 400, cursor: 'pointer', fontSize: '13px', whiteSpace: 'nowrap', transition: 'all 0.15s'
             }}>
               {tab.icon} {tab.label}
             </button>
@@ -522,65 +518,120 @@ export default function BonBarang() {
                   <Plus size={14} /> Tambah Jadwal
                 </button>
               </div>
-              {paginatedSchedules.length > 0 ? (
+              {schedules.length > 0 ? (
                 <>
-                  <div className="mobile-card-list" style={{ gap: '10px' }}>
-                    {paginatedSchedules.map(s => {
-                      const isExp = expandedId === `sched-${s.id}`
-                      const linked = dispatches.filter(d => d.schedule_id === s.id)
-                      return (
-                        <div key={s.id} className="mobile-card" style={{ borderLeft: `4px solid ${s.status === 'completed' ? 'var(--success)' : 'var(--warning)'}` }}>
-                          <div className="mobile-card-header" onClick={() => setExpandedId(isExp ? null : `sched-${s.id}`)} style={{ cursor: 'pointer' }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div className="mobile-card-title">{format(new Date(s.schedule_date), 'dd MMM yyyy', { locale: id })}</div>
-                              <div className="mobile-card-subtitle" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {SITES.find(x => x.value === s.site)?.label} — {WORK_TYPES.find(x => x.value === s.work_type)?.label}
-                              </div>
-                            </div>
-                            <span className={`badge ${s.status === 'completed' ? 'badge-success' : 'badge-warning'}`} style={{ flexShrink: 0 }}>
-                              {s.status === 'completed' ? 'Selesai' : 'Belum Dibuat'}
-                            </span>
-                          </div>
-                          {isExp && (
-                            <div className="mobile-card-body">
-                              <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(s.technicians) || '-'}</span></div>
-                              <div className="mobile-info-row"><span className="mobile-info-label">Pekerjaan</span><span className="mobile-info-value">{WORK_TYPES.find(x => x.value === s.work_type)?.label}</span></div>
-                              {s.note && <div className="mobile-info-row"><span className="mobile-info-label">Catatan</span><span className="mobile-info-value">{s.note}</span></div>}
-                              {linked.length > 0 && <div className="mobile-info-row"><span className="mobile-info-label">Bon Terkait</span><span className="mobile-info-value">{linked.length} bon</span></div>}
-                              <div className="mobile-card-actions" style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                  <div className="desktop-only table-responsive">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Tanggal</th>
+                          <th>Lokasi</th>
+                          <th>Pekerjaan</th>
+                          <th>Tim Teknisi</th>
+                          <th>Status</th>
+                          <th className="text-right">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedSchedules.map(s => (
+                          <tr key={s.id}>
+                            <td>{format(new Date(s.schedule_date), 'dd MMM yyyy', { locale: id })}</td>
+                            <td>{SITES.find(x => x.value === s.site)?.label}</td>
+                            <td>{WORK_TYPES.find(x => x.value === s.work_type)?.label}</td>
+                            <td>{getTechNames(s.technicians) || '-'}</td>
+                            <td>
+                              <span className={`badge ${s.status === 'completed' ? 'badge-success' : 'badge-warning'}`}>
+                                {s.status === 'completed' ? 'Selesai' : 'Belum Dibuat'}
+                              </span>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
                                 {s.status !== 'completed' && (
-                                  <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => handleOpenAdd(s)}>
-                                    <Plus size={13} /> Buat Bon dari Jadwal
-                                  </button>
+                                  <button className="btn btn-secondary btn-sm" onClick={() => handleOpenAdd(s)} title="Buat Bon"><Plus size={14} /></button>
                                 )}
                                 {role === 'superadmin' && (
-                                  <button className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDeleteSchedule(s)}>
-                                    <Trash2 size={13} />
-                                  </button>
+                                  <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDeleteSchedule(s)} title="Hapus"><Trash2 size={14} /></button>
                                 )}
                               </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mobile-only">
+                    <div className="mobile-card-list" style={{ gap: '10px' }}>
+                      {paginatedSchedules.map(s => {
+                        const isExp = expandedId === `sched-${s.id}`
+                        return (
+                          <div key={s.id} className="mobile-card" style={{ borderLeft: `4px solid ${s.status === 'completed' ? 'var(--success)' : 'var(--warning)'}` }}>
+                            <div className="mobile-card-header" onClick={() => setExpandedId(isExp ? null : `sched-${s.id}`)} style={{ cursor: 'pointer' }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div className="mobile-card-title">{format(new Date(s.schedule_date), 'dd MMM yyyy', { locale: id })}</div>
+                                <div className="mobile-card-subtitle" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {SITES.find(x => x.value === s.site)?.label} — {WORK_TYPES.find(x => x.value === s.work_type)?.label}
+                                </div>
+                              </div>
+                              <span className={`badge ${s.status === 'completed' ? 'badge-success' : 'badge-warning'}`} style={{ flexShrink: 0 }}>{s.status === 'completed' ? 'Selesai' : 'Belum Dibuat'}</span>
                             </div>
-                          )}
-                        </div>
-                      )
-                    })}
+                            {isExp && (
+                              <div className="mobile-card-body">
+                                <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(s.technicians) || '-'}</span></div>
+                                <div className="mobile-info-row"><span className="mobile-info-label">Pekerjaan</span><span className="mobile-info-value">{WORK_TYPES.find(x => x.value === s.work_type)?.label}</span></div>
+                                {s.note && <div className="mobile-info-row"><span className="mobile-info-label">Catatan</span><span className="mobile-info-value">{s.note}</span></div>}
+                                <div className="mobile-card-actions" style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                                  {s.status !== 'completed' && (
+                                    <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => handleOpenAdd(s)}>
+                                      <Plus size={13} /> Buat Bon dari Jadwal
+                                    </button>
+                                  )}
+                                  {role === 'superadmin' && (
+                                    <button className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDeleteSchedule(s)}>
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
                   <Pagination page={schedPage} setPage={setSchedPage} perPage={schedPerPage} setPerPage={setSchedPerPage} totalItems={schedules.length} />
                 </>
               ) : (
-                <div className="empty-state">
-                  <CalendarDays size={44} /><h3>Belum Ada Jadwal</h3>
-                  <p>Klik "Tambah Jadwal" untuk menjadwalkan tugas teknisi.</p>
-                </div>
+                <div className="empty-state"><CalendarDays size={44} /><h3>Belum Ada Jadwal</h3><p>Klik "Tambah Jadwal" untuk menjadwalkan tugas teknisi.</p></div>
               )}
             </>
           ) : activeTab === 'riwayat' ? (
             /* ===== RIWAYAT TAB ===== */
             <>
-              {paginatedHistory.length > 0 ? (
+              {historyDispatches.length > 0 ? (
                 <>
-                  <div className="mobile-card-list" style={{ gap: '10px' }}>
-                    {paginatedHistory.map(d => <BonCard key={d.id} d={d} role={role} expandedId={expandedId} setExpandedId={setExpandedId} handleOpenLapor={handleOpenLapor} handleDelete={handleDelete} />)}
+                  <div className="desktop-only table-responsive">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Tanggal</th>
+                          <th>Teknisi</th>
+                          <th>Lokasi</th>
+                          <th>Item</th>
+                          <th>Status</th>
+                          <th className="text-right">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedHistory.map(d => (
+                          <BonTableRow key={d.id} d={d} role={role} getTechNames={getTechNames} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} handleOpenLapor={handleOpenLapor} handleDelete={handleDelete} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mobile-only">
+                    <div className="mobile-card-list" style={{ gap: '10px' }}>
+                      {paginatedHistory.map(d => <BonCard key={d.id} d={d} role={role} getTechNames={getTechNames} expandedId={expandedId} setExpandedId={setExpandedId} handleOpenLapor={handleOpenLapor} handleDelete={handleDelete} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} />)}
+                    </div>
                   </div>
                   <Pagination page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} totalItems={historyDispatches.length} />
                 </>
@@ -589,50 +640,83 @@ export default function BonBarang() {
               )}
             </>
           ) : (
-            /* ===== SEDANG DIBAWA TAB — combines dispatches + pending schedules ===== */
+            /* ===== SEDANG DIBAWA TAB ===== */
             <>
-              {paginatedCombined.length > 0 ? (
+              {combinedActive.length > 0 ? (
                 <>
-                  <div className="mobile-card-list" style={{ gap: '10px' }}>
-                    {paginatedCombined.map(item => {
-                      if (item._type === 'schedule') {
-                        // Pending schedule card — shows "Belum Dibuat" with "Buat Bon" button
-                        const isExp = expandedId === `ps-${item.id}`
-                        return (
-                          <div key={`ps-${item.id}`} className="mobile-card" style={{ borderLeft: '4px solid var(--warning)' }}>
-                            <div className="mobile-card-header" onClick={() => setExpandedId(isExp ? null : `ps-${item.id}`)} style={{ cursor: 'pointer' }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div className="mobile-card-title">{format(new Date(item.schedule_date), 'dd MMM yyyy', { locale: id })}</div>
-                                <div className="mobile-card-subtitle">{getTechNames(item.technicians) || 'Semua Teknisi'}</div>
-                              </div>
-                              <span className="badge badge-warning" style={{ flexShrink: 0 }}>Belum Dibuat</span>
-                            </div>
-                            {isExp && (
-                              <div className="mobile-card-body">
-                                <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site}</span></div>
-                                <div className="mobile-info-row"><span className="mobile-info-label">Pekerjaan</span><span className="mobile-info-value">{WORK_TYPES.find(w => w.value === item.work_type)?.label}</span></div>
-                                {item.note && <div className="mobile-info-row"><span className="mobile-info-label">Catatan</span><span className="mobile-info-value">{item.note}</span></div>}
-                                <div className="mobile-card-actions" style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
-                                  <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => handleOpenAdd(item)}>
-                                    <Plus size={13} /> Buat Bon dari Jadwal Ini
-                                  </button>
+                  <div className="desktop-only table-responsive">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Tanggal</th>
+                          <th>Teknisi</th>
+                          <th>Lokasi / Pekerjaan</th>
+                          <th>Item</th>
+                          <th>Status</th>
+                          <th className="text-right">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedCombined.map(item => {
+                          if (item._type === 'schedule') {
+                            return (
+                              <tr key={`ps-${item.id}`}>
+                                <td>{format(new Date(item.schedule_date), 'dd MMM yyyy', { locale: id })}</td>
+                                <td><span style={{ color: 'var(--text-secondary)' }}>{getTechNames(item.technicians) || 'Belum dipilih'}</span></td>
+                                <td>
+                                  <div>{SITES.find(s => s.value === item.site)?.label || item.site}</div>
+                                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{WORK_TYPES.find(w => w.value === item.work_type)?.label}</div>
+                                </td>
+                                <td><span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>Belum dibuat bon</span></td>
+                                <td><span className="badge badge-warning">Belum Dibuat</span></td>
+                                <td>
+                                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                                    <button className="btn btn-primary btn-sm" onClick={() => handleOpenAdd(item)}><Plus size={14} /> Buat Bon</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          }
+                          return <BonTableRow key={item.id} d={item} role={role} getTechNames={getTechNames} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} handleOpenLapor={handleOpenLapor} handleDelete={handleDelete} />
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mobile-only">
+                    <div className="mobile-card-list" style={{ gap: '10px' }}>
+                      {paginatedCombined.map(item => {
+                        if (item._type === 'schedule') {
+                          const isExp = expandedId === `ps-${item.id}`
+                          return (
+                            <div key={`ps-${item.id}`} className="mobile-card" style={{ borderLeft: '4px solid var(--warning)' }}>
+                              <div className="mobile-card-header" onClick={() => setExpandedId(isExp ? null : `ps-${item.id}`)} style={{ cursor: 'pointer' }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div className="mobile-card-title">{format(new Date(item.schedule_date), 'dd MMM yyyy', { locale: id })}</div>
+                                  <div className="mobile-card-subtitle">{getTechNames(item.technicians) || 'Belum dipilih'}</div>
                                 </div>
+                                <span className="badge badge-warning" style={{ flexShrink: 0 }}>Belum Dibuat</span>
                               </div>
-                            )}
-                          </div>
-                        )
-                      }
-                      // Active dispatch card
-                      return <BonCard key={item.id} d={item} role={role} expandedId={expandedId} setExpandedId={setExpandedId} handleOpenLapor={handleOpenLapor} handleDelete={handleDelete} />
-                    })}
+                              {isExp && (
+                                <div className="mobile-card-body">
+                                  <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site}</span></div>
+                                  <div className="mobile-info-row"><span className="mobile-info-label">Pekerjaan</span><span className="mobile-info-value">{WORK_TYPES.find(w => w.value === item.work_type)?.label}</span></div>
+                                  {item.note && <div className="mobile-info-row"><span className="mobile-info-label">Catatan</span><span className="mobile-info-value">{item.note}</span></div>}
+                                  <div className="mobile-card-actions" style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                                    <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => handleOpenAdd(item)}><Plus size={13} /> Buat Bon dari Jadwal Ini</button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        }
+                        return <BonCard key={item.id} d={item} role={role} getTechNames={getTechNames} expandedId={expandedId} setExpandedId={setExpandedId} handleOpenLapor={handleOpenLapor} handleDelete={handleDelete} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} />
+                      })}
+                    </div>
                   </div>
                   <Pagination page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} totalItems={combinedActive.length} />
                 </>
               ) : (
-                <div className="empty-state">
-                  <ClipboardList size={44} /><h3>Tidak Ada Yang Perlu Dikerjakan</h3>
-                  <p>Semua jadwal sudah selesai atau belum ada bon yang aktif.</p>
-                </div>
+                <div className="empty-state"><ClipboardList size={44} /><h3>Tidak Ada Yang Perlu Dikerjakan</h3><p>Semua jadwal sudah selesai atau belum ada bon yang aktif.</p></div>
               )}
             </>
           )}
@@ -644,10 +728,7 @@ export default function BonBarang() {
         <div className="modal-overlay">
           <div className="modal modal-lg">
             <div className="modal-header">
-              <div>
-                <h3 style={{ margin: 0 }}>Tambah Jadwal Tim Teknisi</h3>
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Jadwal akan muncul sebagai notifikasi bagi teknisi</p>
-              </div>
+              <div><h3 style={{ margin: 0 }}>Tambah Jadwal Tim Teknisi</h3><p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Jadwal akan muncul sebagai notifikasi bagi teknisi</p></div>
               <button className="btn-icon" onClick={() => setIsScheduleModalOpen(false)}><X size={18} /></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -673,9 +754,7 @@ export default function BonBarang() {
                 <label className="form-label">Anggota Tim Teknisi <span style={{ color: 'var(--danger)' }}>*</span></label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
                   {technicians.map(t => (
-                    <button key={t.id} type="button" onClick={() => toggleScheduleTech(t.id)}
-                      className={`badge ${scheduleForm.technicians.includes(t.id) ? 'badge-accent' : 'badge-muted'}`}
-                      style={{ border: 'none', cursor: 'pointer', padding: '6px 12px', fontSize: '13px' }}>
+                    <button key={t.id} type="button" onClick={() => toggleScheduleTech(t.id)} className={`badge ${scheduleForm.technicians.includes(t.id) ? 'badge-accent' : 'badge-muted'}`} style={{ border: 'none', cursor: 'pointer', padding: '6px 12px', fontSize: '13px' }}>
                       {scheduleForm.technicians.includes(t.id) ? '✓ ' : ''}{t.full_name}
                     </button>
                   ))}
@@ -688,9 +767,7 @@ export default function BonBarang() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setIsScheduleModalOpen(false)}>Batal</button>
-              <button className="btn btn-primary" onClick={handleSaveSchedule} disabled={schedSaving}>
-                {schedSaving ? <span className="spinner" style={{ width: '15px', height: '15px', borderWidth: '2px' }} /> : 'Simpan Jadwal'}
-              </button>
+              <button className="btn btn-primary" onClick={handleSaveSchedule} disabled={schedSaving}>{schedSaving ? '...' : 'Simpan Jadwal'}</button>
             </div>
           </div>
         </div>
@@ -701,10 +778,7 @@ export default function BonBarang() {
         <div className="modal-overlay">
           <div className="modal modal-lg" style={{ display: 'flex', flexDirection: 'column', maxHeight: '93vh' }}>
             <div className="modal-header">
-              <div>
-                <h3 style={{ margin: 0 }}>Buat Bon Barang{selectedScheduleId ? ' (dari Jadwal)' : ''}</h3>
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Catat barang yang akan dibawa ke lapangan</p>
-              </div>
+              <div><h3 style={{ margin: 0 }}>Buat Bon Barang{selectedScheduleId ? ' (dari Jadwal)' : ''}</h3><p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Catat barang yang akan dibawa ke lapangan</p></div>
               <button className="btn-close" onClick={() => setIsModalOpen(false)}><X size={20} /></button>
             </div>
             <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
@@ -713,22 +787,16 @@ export default function BonBarang() {
                   <label className="form-label">Tanggal</label>
                   <input type="date" className="form-input" value={form.dispatch_date} onChange={e => setForm({ ...form, dispatch_date: e.target.value })} />
                 </div>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">Teknisi <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <Select
-                    options={technicians}
-                    value={technicians.find(t => t.id === form.technician_id) || null}
-                    onChange={val => setForm({ ...form, technician_id: val?.id || '' })}
-                    placeholder="Pilih teknisi..."
-                    menuPortalTarget={document.body}
-                    menuPosition="fixed"
-                    styles={{
-                      control: (b) => ({ ...b, minHeight: '40px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }),
-                      menuPortal: (b) => ({ ...b, zIndex: 9999 }),
-                      menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }),
-                      option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }),
-                      singleValue: (b) => ({ ...b, color: 'var(--text-primary)' }),
-                    }}
+                <div className="form-group" style={{ margin: 0, gridColumn: 'span 2' }}>
+                  <label className="form-label">Teknisi (Bisa lebih dari 1) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <Select 
+                    isMulti
+                    options={technicians} 
+                    value={technicians.filter(t => form.technicians.includes(t.id))} 
+                    onChange={vals => setForm({ ...form, technicians: vals ? vals.map(v => v.id) : [] })} 
+                    placeholder="Pilih teknisi..." 
+                    menuPortalTarget={document.body} menuPosition="fixed" 
+                    styles={{ control: (b) => ({ ...b, minHeight: '40px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }) }} 
                   />
                 </div>
                 <div className="form-group" style={{ margin: 0 }}>
@@ -737,7 +805,7 @@ export default function BonBarang() {
                     {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>
-                <div className="form-group" style={{ margin: 0 }}>
+                <div className="form-group" style={{ margin: 0, gridColumn: '1 / -1' }}>
                   <label className="form-label">Catatan</label>
                   <input type="text" className="form-input" placeholder="Opsional..." value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
                 </div>
@@ -753,26 +821,21 @@ export default function BonBarang() {
                   </div>
                 </div>
                 {form.items.length === 0 ? (
-                  <div style={{ padding: '28px', textAlign: 'center', border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                    Klik tombol di atas untuk menambahkan barang
-                  </div>
+                  <div style={{ padding: '28px', textAlign: 'center', border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)', fontSize: '13px' }}>Klik tombol di atas untuk menambahkan barang</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {form.items.map((item, idx) => (
                       <div key={item.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: ITEM_TYPE_COLORS[item.item_type] }} />
-                            <span style={{ fontWeight: 600, fontSize: '13px' }}>{ITEM_TYPE_LABELS[item.item_type]} #{idx + 1}</span>
-                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: ITEM_TYPE_COLORS[item.item_type] }} /><span style={{ fontWeight: 600, fontSize: '13px' }}>{ITEM_TYPE_LABELS[item.item_type]} #{idx + 1}</span></div>
                           <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '2px', display: 'flex' }}><Trash2 size={15} /></button>
                         </div>
                         <div style={{ padding: '12px 14px' }}>
-                          {item.item_type === 'ont' && <Select isMulti options={ontOptions} placeholder="Pilih Serial Number ONT..." value={item.selected_onts || []} onChange={val => updateItem(item.id, 'selected_onts', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }) }} />}
-                          {item.item_type === 'dropcore' && <Select isMulti options={haspelOptions} placeholder="Pilih Haspel Dropcore..." value={item.selected_haspels || []} onChange={val => updateItem(item.id, 'selected_haspels', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }) }} />}
+                          {item.item_type === 'ont' && <Select isMulti options={ontOptions} placeholder="Pilih Serial Number ONT..." value={item.selected_onts || []} onChange={val => updateItem(item.id, 'selected_onts', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }) }} />}
+                          {item.item_type === 'dropcore' && <Select isMulti options={haspelOptions} placeholder="Pilih Haspel Dropcore..." value={item.selected_haspels || []} onChange={val => updateItem(item.id, 'selected_haspels', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }) }} />}
                           {item.item_type === 'other' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              <Select isMulti options={otherOptions} placeholder="Pilih Material..." value={item.selected_others || []} onChange={val => updateItem(item.id, 'selected_others', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }) }} />
+                              <Select isMulti options={otherOptions} placeholder="Pilih Material..." value={item.selected_others || []} onChange={val => updateItem(item.id, 'selected_others', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }) }} />
                               {(item.selected_others || []).map(opt => (
                                 <div key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 10px', background: 'var(--bg-primary)', borderRadius: '6px' }}>
                                   <span style={{ flex: 1, fontSize: '13px', color: 'var(--text-secondary)' }}>{opt.label}</span>
@@ -788,12 +851,7 @@ export default function BonBarang() {
                 )}
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
-              <button className="btn btn-primary" disabled={saving} onClick={handleSaveBon}>
-                {saving ? 'Menyimpan...' : 'Simpan Bon & Kunci Stok'}
-              </button>
-            </div>
+            <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button><button className="btn btn-primary" disabled={saving} onClick={handleSaveBon}>{saving ? 'Menyimpan...' : 'Simpan Bon & Kunci Stok'}</button></div>
           </div>
         </div>
       )}
@@ -803,61 +861,40 @@ export default function BonBarang() {
         <div className="modal-overlay">
           <div className="modal" style={{ width: '540px', maxWidth: '96%', maxHeight: '93vh', display: 'flex', flexDirection: 'column' }}>
             <div className="modal-header">
-              <div>
-                <h3 style={{ margin: 0 }}>Lapor Pemakaian</h3>
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {selectedDispatch.techs?.full_name} · {format(new Date(selectedDispatch.dispatch_date), 'dd MMM yyyy', { locale: id })}
-                </p>
-              </div>
+              <div><h3 style={{ margin: 0 }}>Lapor Pemakaian</h3><p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>{getTechNames(selectedDispatch.technicians && selectedDispatch.technicians.length > 0 ? selectedDispatch.technicians : [selectedDispatch.technician_id])} · {format(new Date(selectedDispatch.dispatch_date), 'dd MMM yyyy', { locale: id })}</p></div>
               <button className="btn-close" onClick={() => setIsLaporModalOpen(false)}><X size={20} /></button>
             </div>
             <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
-              <div style={{ padding: '10px 14px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 'var(--radius-md)', marginBottom: '14px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                💡 Centang / isi barang yang <strong>benar-benar terpakai</strong>. Sisa akan otomatis dikembalikan ke gudang.
-              </div>
+              <div style={{ padding: '10px 14px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 'var(--radius-md)', marginBottom: '14px', fontSize: '13px', color: 'var(--text-secondary)' }}>💡 Centang / isi barang yang <strong>benar-benar terpakai</strong>. Sisa otomatis dikembalikan ke gudang.</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {selectedDispatch.items.map((it) => (
                   <div key={it.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 14px', background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)' }}>
-                      <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: ITEM_TYPE_COLORS[it.item_type] }} />
-                      <span style={{ fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.3px', color: ITEM_TYPE_COLORS[it.item_type] }}>{ITEM_TYPE_LABELS[it.item_type]}</span>
+                      <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: ITEM_TYPE_COLORS[it.item_type] }} /><span style={{ fontWeight: 600, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.3px', color: ITEM_TYPE_COLORS[it.item_type] }}>{ITEM_TYPE_LABELS[it.item_type]}</span>
                     </div>
                     <div style={{ padding: '12px 14px' }}>
                       {it.item_type === 'ont' && (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-                          <div>
-                            <div style={{ fontWeight: 600 }}>{it.sn?.serial_number || '-'}</div>
-                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Centang jika terpasang</div>
-                          </div>
+                          <div><div style={{ fontWeight: 600 }}>{it.sn?.serial_number || '-'}</div><div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Centang jika terpasang</div></div>
                           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '6px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: laporForm[it.id]?.used ? 'rgba(16,185,129,0.1)' : 'var(--bg-primary)' }}>
                             <input type="checkbox" checked={laporForm[it.id]?.used || false} onChange={e => setLaporForm({ ...laporForm, [it.id]: { used: e.target.checked } })} style={{ width: '16px', height: '16px', accentColor: 'var(--success)' }} />
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: laporForm[it.id]?.used ? 'var(--success)' : 'var(--text-secondary)' }}>
-                              {laporForm[it.id]?.used ? 'Terpakai ✓' : 'Kembali'}
-                            </span>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: laporForm[it.id]?.used ? 'var(--success)' : 'var(--text-secondary)' }}>{laporForm[it.id]?.used ? 'Terpakai ✓' : 'Kembali'}</span>
                           </label>
                         </div>
                       )}
                       {it.item_type === 'dropcore' && (
                         <div>
                           <div style={{ fontWeight: 600, marginBottom: '8px' }}>{it.haspel?.haspel_code || '-'}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Meter terpakai:</span>
-                            <input type="number" className="form-input" style={{ width: '100px', height: '36px', textAlign: 'center' }} min="0" placeholder="0" value={laporForm[it.id]?.meters_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { meters_used: e.target.value } })} />
-                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>meter</span>
-                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}><span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Meter terpakai:</span><input type="number" className="form-input" style={{ width: '100px', height: '36px', textAlign: 'center' }} min="0" placeholder="0" value={laporForm[it.id]?.meters_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { meters_used: e.target.value } })} /><span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>meter</span></div>
                         </div>
                       )}
                       {it.item_type === 'other' && (
                         <div>
                           <div style={{ fontWeight: 600, marginBottom: '8px' }}>{it.warehouse_item?.item_name || 'Barang'}</div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Qty terpakai:</span>
-                            <input type="number" className="form-input" style={{ width: '75px', height: '36px', textAlign: 'center' }} min="0" max={it.quantity_dispatched} placeholder="0" value={laporForm[it.id]?.qty_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { qty_used: e.target.value } })} />
-                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>dari {it.quantity_dispatched}</span>
+                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Qty terpakai:</span><input type="number" className="form-input" style={{ width: '75px', height: '36px', textAlign: 'center' }} min="0" max={it.quantity_dispatched} placeholder="0" value={laporForm[it.id]?.qty_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { qty_used: e.target.value } })} /><span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>dari {it.quantity_dispatched}</span>
                             {Number(laporForm[it.id]?.qty_used || 0) < Number(it.quantity_dispatched) && (
-                              <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: 'auto' }}>
-                                {Number(it.quantity_dispatched) - Number(laporForm[it.id]?.qty_used || 0)} kembali
-                              </span>
+                              <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: 'auto' }}>{Number(it.quantity_dispatched) - Number(laporForm[it.id]?.qty_used || 0)} kembali</span>
                             )}
                           </div>
                         </div>
@@ -867,12 +904,7 @@ export default function BonBarang() {
                 ))}
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setIsLaporModalOpen(false)}>Batal</button>
-              <button className="btn btn-primary" disabled={laporSaving} onClick={handleSaveLapor}>
-                {laporSaving ? 'Menyimpan...' : '✓ Selesaikan & Kembalikan Stok'}
-              </button>
-            </div>
+            <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setIsLaporModalOpen(false)}>Batal</button><button className="btn btn-primary" disabled={laporSaving} onClick={handleSaveLapor}>{laporSaving ? '...' : '✓ Selesaikan'}</button></div>
           </div>
         </div>
       )}
@@ -881,33 +913,19 @@ export default function BonBarang() {
       {isExportModalOpen && (
         <div className="modal-overlay" onClick={() => setIsExportModalOpen(false)}>
           <div className="modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Export Bon Barang</h3>
-              <button className="btn-icon" onClick={() => setIsExportModalOpen(false)}><X size={18} /></button>
-            </div>
+            <div className="modal-header"><h3>Export Bon Barang</h3><button className="btn-icon" onClick={() => setIsExportModalOpen(false)}><X size={18} /></button></div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: 0 }}>Export riwayat bon barang yang sudah selesai ke file Excel.</p>
               <div className="form-group">
                 <label className="form-label">Pilih Bulan (opsional)</label>
                 <select className="form-input" value={exportMonth} onChange={e => setExportMonth(e.target.value)}>
                   <option value="">Semua Data</option>
-                  {Array.from({ length: 12 }).map((_, i) => {
-                    const d = new Date(); d.setMonth(d.getMonth() - i)
-                    const val = format(d, 'yyyy-MM')
-                    return <option key={val} value={val}>{format(d, 'MMMM yyyy', { locale: id })}</option>
-                  })}
+                  {Array.from({ length: 12 }).map((_, i) => { const d = new Date(); d.setMonth(d.getMonth() - i); const val = format(d, 'yyyy-MM'); return <option key={val} value={val}>{format(d, 'MMMM yyyy', { locale: id })}</option> })}
                 </select>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
-                  {exportMonth ? `Export bulan: ${exportMonth}` : 'Kosongkan untuk export semua data'}
-                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>{exportMonth ? `Export bulan: ${exportMonth}` : 'Kosongkan untuk export semua data'}</div>
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setIsExportModalOpen(false)}>Batal</button>
-              <button className="btn btn-primary" onClick={() => handleExport(exportMonth)}>
-                <Download size={15} /> {exportMonth ? `Export ${exportMonth}` : 'Export Semua'}
-              </button>
-            </div>
+            <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setIsExportModalOpen(false)}>Batal</button><button className="btn btn-primary" onClick={() => handleExport(exportMonth)}><Download size={15} /> Export</button></div>
           </div>
         </div>
       )}
@@ -915,59 +933,85 @@ export default function BonBarang() {
   )
 }
 
-// Reusable bon dispatch card component
-function BonCard({ d, role, expandedId, setExpandedId, handleOpenLapor, handleDelete }) {
+// Reusable Components
+function BonTableRow({ d, role, getTechNames, SITES, ITEM_TYPE_COLORS, handleOpenLapor, handleDelete }) {
+  const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
+  return (
+    <tr>
+      <td>
+        <div style={{ fontWeight: 600 }}>{format(new Date(d.dispatch_date), 'dd MMM yyyy', { locale: id })}</div>
+      </td>
+      <td>
+        <div style={{ color: 'var(--accent)', fontWeight: 500 }}>{techName}</div>
+      </td>
+      <td>
+        <div>{SITES.find(s => s.value === d.site)?.label || d.site}</div>
+        {d.notes && <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{d.notes}</div>}
+      </td>
+      <td>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {(d.items || []).slice(0, 3).map((it, i) => {
+            let name = ''
+            if (it.item_type === 'ont') name = it.sn?.serial_number || '-'
+            else if (it.item_type === 'dropcore') name = it.haspel?.haspel_code || '-'
+            else if (it.item_type === 'other') name = it.warehouse_item?.item_name || 'Barang'
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: ITEM_TYPE_COLORS[it.item_type], flexShrink: 0 }} />
+                <span>{name}</span>
+              </div>
+            )
+          })}
+          {(d.items?.length || 0) > 3 && <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>+ {(d.items?.length || 0) - 3} item lainnya</div>}
+        </div>
+      </td>
+      <td>
+        <span className={`badge ${d.status === 'sedang_dibawa' ? 'badge-warning' : 'badge-success'}`}>
+          {d.status === 'sedang_dibawa' ? 'Dibawa' : 'Selesai'}
+        </span>
+      </td>
+      <td>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+          {d.status === 'sedang_dibawa' && <button className="btn btn-primary btn-sm" onClick={() => handleOpenLapor(d)}><CheckCircle size={14} /> Lapor</button>}
+          {(role === 'superadmin' || role === 'admin') && <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(d)} title="Batalkan"><Trash2 size={14} /></button>}
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+function BonCard({ d, role, getTechNames, expandedId, setExpandedId, handleOpenLapor, handleDelete, SITES, ITEM_TYPE_COLORS }) {
   const isExpanded = expandedId === d.id
-  const ITEM_TYPE_COLORS = { ont: 'var(--accent)', dropcore: 'var(--warning)', other: 'var(--success)' }
-  const SITES = [
-    { value: 'banyumas', label: 'Banyumas' },
-    { value: 'cilacap', label: 'Cilacap' },
-    { value: 'cilacap_herman', label: 'Cilacap (Herman)' }
-  ]
+  const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
   return (
     <div className="mobile-card" style={{ borderLeft: `4px solid ${d.status === 'sedang_dibawa' ? 'var(--warning)' : 'var(--success)'}` }}>
       <div className="mobile-card-header" onClick={() => setExpandedId(isExpanded ? null : d.id)} style={{ cursor: 'pointer' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="mobile-card-title">{format(new Date(d.dispatch_date), 'dd MMM yyyy', { locale: id })}</div>
-          <div className="mobile-card-subtitle" style={{ fontWeight: 600, color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.techs?.full_name || 'Teknisi'}</div>
+          <div className="mobile-card-subtitle" style={{ fontWeight: 600, color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{techName}</div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
-          <span className={`badge ${d.status === 'sedang_dibawa' ? 'badge-warning' : 'badge-success'}`}>
-            {d.status === 'sedang_dibawa' ? 'Dibawa' : 'Selesai'}
-          </span>
+          <span className={`badge ${d.status === 'sedang_dibawa' ? 'badge-warning' : 'badge-success'}`}>{d.status === 'sedang_dibawa' ? 'Dibawa' : 'Selesai'}</span>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{d.items?.length || 0} item</span>
         </div>
       </div>
       {isExpanded && (
         <div className="mobile-card-body">
-          <div className="mobile-info-row">
-            <span className="mobile-info-label">Lokasi</span>
-            <span className="mobile-info-value">{SITES.find(s => s.value === d.site)?.label || d.site}</span>
-          </div>
+          <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === d.site)?.label || d.site}</span></div>
           {d.notes && <div className="mobile-info-row"><span className="mobile-info-label">Catatan</span><span className="mobile-info-value">{d.notes}</span></div>}
           <div style={{ marginTop: '10px' }}>
             <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 700, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Daftar Barang</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
               {d.items?.map((it, i) => {
                 let name = '', detail = '', badge = null
-                if (it.item_type === 'ont') {
-                  name = it.sn?.serial_number || '-'
-                  if (d.status === 'selesai') badge = it.quantity_used > 0
-                    ? <span className="badge badge-danger" style={{ fontSize: '10px', padding: '1px 5px' }}>Terpakai</span>
-                    : <span className="badge badge-success" style={{ fontSize: '10px', padding: '1px 5px' }}>Kembali</span>
-                } else if (it.item_type === 'dropcore') {
-                  name = it.haspel?.haspel_code || '-'
-                  if (d.status === 'selesai') detail = `${it.meters_used}m terpakai`
-                } else if (it.item_type === 'other') {
-                  name = it.warehouse_item?.item_name || 'Barang'
-                  detail = d.status === 'selesai' ? `${it.quantity_used} terpakai` : `× ${it.quantity_dispatched}`
-                }
+                if (it.item_type === 'ont') { name = it.sn?.serial_number || '-'; if (d.status === 'selesai') badge = it.quantity_used > 0 ? <span className="badge badge-danger" style={{ fontSize: '10px', padding: '1px 5px' }}>Terpakai</span> : <span className="badge badge-success" style={{ fontSize: '10px', padding: '1px 5px' }}>Kembali</span> }
+                else if (it.item_type === 'dropcore') { name = it.haspel?.haspel_code || '-'; if (d.status === 'selesai') detail = `${it.meters_used}m terpakai` }
+                else if (it.item_type === 'other') { name = it.warehouse_item?.item_name || 'Barang'; detail = d.status === 'selesai' ? `${it.quantity_used} terpakai` : `× ${it.quantity_dispatched}` }
                 return (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 10px', background: 'var(--bg-primary)', borderRadius: '6px' }}>
                     <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: ITEM_TYPE_COLORS[it.item_type], flexShrink: 0 }} />
                     <span style={{ fontSize: '12px', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                    {detail && <span style={{ fontSize: '11px', color: 'var(--text-secondary)', flexShrink: 0 }}>{detail}</span>}
-                    {badge}
+                    {detail && <span style={{ fontSize: '11px', color: 'var(--text-secondary)', flexShrink: 0 }}>{detail}</span>}{badge}
                   </div>
                 )
               })}
@@ -975,14 +1019,8 @@ function BonCard({ d, role, expandedId, setExpandedId, handleOpenLapor, handleDe
           </div>
           {d.status === 'sedang_dibawa' && (
             <div className="mobile-card-actions" style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
-              <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => handleOpenLapor(d)}>
-                <CheckCircle size={13} /> Lapor Pemakaian
-              </button>
-              {(role === 'superadmin' || role === 'admin') && (
-                <button className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(d)} title="Batalkan">
-                  <Trash2 size={13} />
-                </button>
-              )}
+              <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => handleOpenLapor(d)}><CheckCircle size={13} /> Lapor Pemakaian</button>
+              {(role === 'superadmin' || role === 'admin') && <button className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(d)} title="Batalkan"><Trash2 size={13} /></button>}
             </div>
           )}
         </div>
