@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import {
-  Plus, ClipboardList, CheckCircle, X, Trash2,
+  Plus, ClipboardList, CheckCircle, X, Trash2, Edit2,
   PackageCheck, Package, CalendarDays, AlertCircle, Download
 } from 'lucide-react'
 import { format } from 'date-fns'
@@ -58,6 +58,7 @@ export default function BonBarang() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [selectedScheduleId, setSelectedScheduleId] = useState('')
+  const [editingDispatchId, setEditingDispatchId] = useState(null)
   const [form, setForm] = useState({
     dispatch_date: format(new Date(), 'yyyy-MM-dd'),
     site: 'banyumas',
@@ -173,7 +174,7 @@ export default function BonBarang() {
 
   // --- BON FORM LOGIC ---
   const handleOpenAdd = (sched = null) => {
-    // Auto-fill all technicians from schedule
+    setEditingDispatchId(null)
     setForm({
       dispatch_date: sched ? sched.schedule_date : format(new Date(), 'yyyy-MM-dd'),
       site: sched ? sched.site : 'banyumas',
@@ -182,6 +183,50 @@ export default function BonBarang() {
       items: []
     })
     setSelectedScheduleId(sched ? sched.id : '')
+    setIsModalOpen(true)
+  }
+
+  const handleOpenEdit = (dispatch) => {
+    setEditingDispatchId(dispatch.id)
+    
+    const onts = dispatch.items.filter(i => i.item_type === 'ont')
+    const dcs = dispatch.items.filter(i => i.item_type === 'dropcore')
+    const others = dispatch.items.filter(i => i.item_type === 'other')
+
+    const newItems = []
+    if (onts.length > 0) {
+      newItems.push({
+        id: 'edit_ont',
+        item_type: 'ont',
+        selected_onts: onts.map(o => ({ value: o.serial_number_id, label: o.sn?.serial_number }))
+      })
+    }
+    if (dcs.length > 0) {
+      newItems.push({
+        id: 'edit_dc',
+        item_type: 'dropcore',
+        selected_haspels: dcs.map(d => ({ value: d.haspel_id, label: d.haspel?.haspel_code }))
+      })
+    }
+    if (others.length > 0) {
+      const otherQuantities = {}
+      others.forEach(o => { otherQuantities[o.warehouse_item_id] = o.quantity_dispatched })
+      newItems.push({
+        id: 'edit_other',
+        item_type: 'other',
+        selected_others: others.map(o => ({ value: o.warehouse_item_id, label: o.warehouse_item?.item_name })),
+        other_quantities: otherQuantities
+      })
+    }
+
+    setForm({
+      dispatch_date: dispatch.dispatch_date,
+      site: dispatch.site,
+      technicians: dispatch.technicians && dispatch.technicians.length > 0 ? dispatch.technicians : [dispatch.technician_id],
+      note: dispatch.notes || '',
+      items: newItems
+    })
+    setSelectedScheduleId(dispatch.schedule_id || '')
     setIsModalOpen(true)
   }
 
@@ -226,11 +271,52 @@ export default function BonBarang() {
       }
       if (selectedScheduleId) dispatchPayload.schedule_id = selectedScheduleId
 
-      const { data: dData, error: dErr } = await supabase.from('dispatches').insert(dispatchPayload).select('id').single()
-      if (dErr) throw dErr
+      if (editingDispatchId) {
+        const oldDispatch = dispatches.find(d => d.id === editingDispatchId)
+        if (oldDispatch) {
+          // 1. REVERT OLD STOCK
+          const oldOnt = [], oldDc = [], oldWh = []
+          for (const it of oldDispatch.items) {
+            if (it.item_type === 'ont') oldOnt.push(it.serial_number_id)
+            if (it.item_type === 'dropcore') oldDc.push(it.haspel_id)
+            if (it.item_type === 'other') oldWh.push({ id: it.warehouse_item_id, qty: it.quantity_dispatched })
+          }
+          if (oldOnt.length > 0) await supabase.from('serial_numbers').update({ status: 'tersedia' }).in('id', oldOnt)
+          if (oldDc.length > 0) await supabase.from('dropcore_haspels').update({ status: 'tersedia' }).in('id', oldDc)
+          for (const wh of oldWh) {
+            const { data: wData } = await supabase.from('warehouses').select('initial_stock, stock_on_hold').eq('id', wh.id).single()
+            if (wData) {
+              await supabase.from('warehouses').update({ 
+                initial_stock: Number(wData.initial_stock || 0) + Number(wh.qty), 
+                stock_on_hold: Math.max(0, Number(wData.stock_on_hold || 0) - Number(wh.qty)) 
+              }).eq('id', wh.id)
+            }
+          }
+          
+          // 2. DELETE OLD ITEMS
+          await supabase.from('dispatch_items').delete().eq('dispatch_id', editingDispatchId)
+          
+          // 3. UPDATE DISPATCH
+          await supabase.from('dispatches').update({
+            dispatch_date: form.dispatch_date,
+            technician_id: form.technicians[0],
+            technicians: form.technicians,
+            site: form.site,
+            notes: form.note,
+            schedule_id: selectedScheduleId || null
+          }).eq('id', editingDispatchId)
 
-      const { error: iErr } = await supabase.from('dispatch_items').insert(itemsToInsert.map(i => ({ ...i, dispatch_id: dData.id })))
-      if (iErr) throw iErr
+          // 4. INSERT NEW ITEMS
+          const { error: iErr } = await supabase.from('dispatch_items').insert(itemsToInsert.map(i => ({ ...i, dispatch_id: editingDispatchId })))
+          if (iErr) throw iErr
+        }
+      } else {
+        const { data: dData, error: dErr } = await supabase.from('dispatches').insert(dispatchPayload).select('id').single()
+        if (dErr) throw dErr
+
+        const { error: iErr } = await supabase.from('dispatch_items').insert(itemsToInsert.map(i => ({ ...i, dispatch_id: dData.id })))
+        if (iErr) throw iErr
+      }
 
       if (ontIds.length > 0) await supabase.from('serial_numbers').update({ status: 'dibawa teknisi' }).in('id', ontIds)
       if (dcIds.length > 0) await supabase.from('dropcore_haspels').update({ status: 'dibawa teknisi' }).in('id', dcIds)
@@ -836,14 +922,14 @@ export default function BonBarang() {
                       </thead>
                       <tbody>
                         {paginatedHistory.map(d => (
-                          <BonTableRow key={d.id} d={d} role={role} getTechNames={getTechNames} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} handleOpenLapor={handleOpenLapor} handleDelete={handleDelete} />
+                          <BonTableRow key={d.id} d={d} role={role} getTechNames={getTechNames} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} handleOpenLapor={handleOpenLapor} handleOpenEdit={handleOpenEdit} handleDelete={handleDelete} />
                         ))}
                       </tbody>
                     </table>
                   </div>
                   <div className="mobile-only">
                     <div className="mobile-card-list" style={{ gap: '10px' }}>
-                      {paginatedHistory.map(d => <BonCard key={d.id} d={d} role={role} getTechNames={getTechNames} expandedId={expandedId} setExpandedId={setExpandedId} handleOpenLapor={handleOpenLapor} handleDelete={handleDelete} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} />)}
+                      {paginatedHistory.map(d => <BonCard key={d.id} d={d} role={role} getTechNames={getTechNames} expandedId={expandedId} setExpandedId={setExpandedId} handleOpenLapor={handleOpenLapor} handleOpenEdit={handleOpenEdit} handleDelete={handleDelete} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} />)}
                     </div>
                   </div>
                   <Pagination page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} totalItems={historyDispatches.length} />
@@ -890,7 +976,7 @@ export default function BonBarang() {
                               </tr>
                             )
                           }
-                          return <BonTableRow key={item.id} d={item} role={role} getTechNames={getTechNames} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} handleOpenLapor={handleOpenLapor} handleDelete={handleDelete} />
+                          return <BonTableRow key={item.id} d={item} role={role} getTechNames={getTechNames} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} handleOpenLapor={handleOpenLapor} handleOpenEdit={handleOpenEdit} handleDelete={handleDelete} />
                         })}
                       </tbody>
                     </table>
@@ -922,7 +1008,7 @@ export default function BonBarang() {
                             </div>
                           )
                         }
-                        return <BonCard key={item.id} d={item} role={role} getTechNames={getTechNames} expandedId={expandedId} setExpandedId={setExpandedId} handleOpenLapor={handleOpenLapor} handleDelete={handleDelete} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} />
+                        return <BonCard key={item.id} d={item} role={role} getTechNames={getTechNames} expandedId={expandedId} setExpandedId={setExpandedId} handleOpenLapor={handleOpenLapor} handleOpenEdit={handleOpenEdit} handleDelete={handleDelete} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} />
                       })}
                     </div>
                   </div>
@@ -991,7 +1077,7 @@ export default function BonBarang() {
         <div className="modal-overlay">
           <div className="modal modal-lg" style={{ display: 'flex', flexDirection: 'column', maxHeight: '93vh' }}>
             <div className="modal-header">
-              <div><h3 style={{ margin: 0 }}>Buat Bon Barang{selectedScheduleId ? ' (dari Jadwal)' : ''}</h3><p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Catat barang yang akan dibawa ke lapangan</p></div>
+              <div><h3 style={{ margin: 0 }}>{editingDispatchId ? 'Edit Bon Barang' : 'Buat Bon Barang'}{selectedScheduleId && !editingDispatchId ? ' (dari Jadwal)' : ''}</h3><p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Catat barang yang akan dibawa ke lapangan</p></div>
               <button className="btn-close" onClick={() => setIsModalOpen(false)}><X size={20} /></button>
             </div>
             <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
@@ -1147,7 +1233,7 @@ export default function BonBarang() {
 }
 
 // Reusable Components
-function BonTableRow({ d, role, getTechNames, SITES, ITEM_TYPE_COLORS, handleOpenLapor, handleDelete }) {
+function BonTableRow({ d, role, getTechNames, SITES, ITEM_TYPE_COLORS, handleOpenLapor, handleOpenEdit, handleDelete }) {
   const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
   return (
     <tr>
@@ -1186,6 +1272,7 @@ function BonTableRow({ d, role, getTechNames, SITES, ITEM_TYPE_COLORS, handleOpe
       <td>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
           {d.status === 'sedang_dibawa' && <button className="btn btn-primary btn-sm" onClick={() => handleOpenLapor(d)}><CheckCircle size={14} /> Lapor</button>}
+          {d.status === 'sedang_dibawa' && role === 'superadmin' && <button className="btn btn-secondary btn-sm" style={{ color: 'var(--warning)' }} onClick={() => handleOpenEdit(d)} title="Edit"><Edit2 size={14} /></button>}
           {(role === 'superadmin' || role === 'admin') && <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(d)} title="Batalkan"><Trash2 size={14} /></button>}
         </div>
       </td>
@@ -1193,7 +1280,7 @@ function BonTableRow({ d, role, getTechNames, SITES, ITEM_TYPE_COLORS, handleOpe
   )
 }
 
-function BonCard({ d, role, getTechNames, expandedId, setExpandedId, handleOpenLapor, handleDelete, SITES, ITEM_TYPE_COLORS }) {
+function BonCard({ d, role, getTechNames, expandedId, setExpandedId, handleOpenLapor, handleOpenEdit, handleDelete, SITES, ITEM_TYPE_COLORS }) {
   const isExpanded = expandedId === d.id
   const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
   return (
@@ -1231,8 +1318,9 @@ function BonCard({ d, role, getTechNames, expandedId, setExpandedId, handleOpenL
             </div>
           </div>
           {d.status === 'sedang_dibawa' && (
-            <div className="mobile-card-actions" style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+            <div className="mobile-card-actions" style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)', display: 'flex', gap: '8px' }}>
               <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => handleOpenLapor(d)}><CheckCircle size={13} /> Lapor Pemakaian</button>
+              {role === 'superadmin' && <button className="btn btn-secondary btn-sm" style={{ color: 'var(--warning)' }} onClick={() => handleOpenEdit(d)} title="Edit"><Edit2 size={13} /></button>}
               {(role === 'superadmin' || role === 'admin') && <button className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(d)} title="Batalkan"><Trash2 size={13} /></button>}
             </div>
           )}
