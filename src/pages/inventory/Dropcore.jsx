@@ -34,6 +34,7 @@ export default function Dropcore() {
   const [historyData, setHistoryData] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   useEffect(() => { fetchHaspels() }, [])
   useEffect(() => { setPage(1) }, [searchTerm, typeFilter, statusFilter])
@@ -126,12 +127,23 @@ export default function Dropcore() {
     } finally { setSaving(false) }
   }
 
-  const handleDelete = async (h) => {
-    if (!window.confirm(`Hapus haspel ${h.haspel_code}?`)) return
-    await supabase.from('dropcore_haspels').delete().eq('id', h.id)
-    await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dropcore', action: 'Hapus Haspel', detail: h.haspel_code })
-    toast.success('Haspel dihapus')
-    fetchHaspels()
+  const handleDelete = (h) => {
+    setConfirmDelete(h)
+  }
+
+  const doDelete = async () => {
+    const h = confirmDelete
+    setConfirmDelete(null)
+    if (!h) return
+    try {
+      const { error } = await supabase.from('dropcore_haspels').delete().eq('id', h.id)
+      if (error) throw error
+      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dropcore', action: 'Hapus Haspel', detail: h.haspel_code })
+      toast.success(`Haspel ${h.haspel_code} berhasil dihapus`)
+      fetchHaspels()
+    } catch (err) {
+      toast.error('Gagal menghapus: ' + err.message)
+    }
   }
 
   const fetchHistory = async (haspel) => {
@@ -642,6 +654,33 @@ export default function Dropcore() {
         title={`Riwayat Haspel: ${historyItem?.haspel_code}`}
         unit="m"
       />
+
+      {/* ===== CUSTOM DELETE CONFIRM MODAL ===== */}
+      {confirmDelete && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '400px' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <AlertTriangle size={20} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+                <h3 style={{ margin: 0, fontSize: '16px' }}>Hapus Haspel</h3>
+              </div>
+              <button className="btn-icon" onClick={() => setConfirmDelete(null)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ margin: 0, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                Yakin ingin menghapus haspel <strong style={{ color: 'var(--text-primary)' }}>{confirmDelete.haspel_code}</strong>?
+              </p>
+              <p style={{ margin: '10px 0 0', fontSize: '13px', color: 'var(--danger)', background: 'rgba(239,68,68,0.08)', borderRadius: '8px', padding: '10px 12px' }}>
+                ⚠️ Tindakan ini tidak bisa dibatalkan dan data riwayat haspel ini akan ikut terhapus.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setConfirmDelete(null)}>Batal</button>
+              <button className="btn" style={{ background: 'var(--danger)', color: '#fff' }} onClick={doDelete}>Ya, Hapus</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
