@@ -139,12 +139,22 @@ export default function Dropcore() {
       // Cek apakah haspel masih dipakai di Bon Barang
       const { data: refs, error: refErr } = await supabase
         .from('dispatch_items')
-        .select('id', { count: 'exact', head: true })
+        .select('id, dispatch:dispatches(dispatch_date, site, status)')
         .eq('haspel_id', h.id)
       if (refErr) throw refErr
 
       if (refs && refs.length > 0) {
-        toast.error(`Haspel ${h.haspel_code} tidak bisa dihapus karena masih tercatat dalam data Bon Barang. Hapus atau selesaikan bon terkait terlebih dahulu.`, { duration: 5000 })
+        const bonList = refs
+          .filter(r => r.dispatch)
+          .map(r => {
+            const tgl = r.dispatch.dispatch_date
+            const site = r.dispatch.site || '-'
+            const status = r.dispatch.status === 'sedang_dibawa' ? 'Sedang Dibawa' : 'Selesai'
+            return `• ${tgl} (${site}) – ${status}`
+          })
+          .join('\n')
+        const msg = `Haspel ${h.haspel_code} masih tercatat di Bon Barang:\n${bonList || refs.length + ' bon'}`
+        toast.error(msg, { duration: 8000, style: { whiteSpace: 'pre-line' } })
         return
       }
 
