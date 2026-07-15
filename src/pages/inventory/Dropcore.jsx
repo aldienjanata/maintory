@@ -136,6 +136,18 @@ export default function Dropcore() {
     setConfirmDelete(null)
     if (!h) return
     try {
+      // Cek apakah haspel masih dipakai di Bon Barang
+      const { data: refs, error: refErr } = await supabase
+        .from('dispatch_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('haspel_id', h.id)
+      if (refErr) throw refErr
+
+      if (refs && refs.length > 0) {
+        toast.error(`Haspel ${h.haspel_code} tidak bisa dihapus karena masih tercatat dalam data Bon Barang. Hapus atau selesaikan bon terkait terlebih dahulu.`, { duration: 5000 })
+        return
+      }
+
       const { error } = await supabase.from('dropcore_haspels').delete().eq('id', h.id)
       if (error) throw error
       await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dropcore', action: 'Hapus Haspel', detail: h.haspel_code })
