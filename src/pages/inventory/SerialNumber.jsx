@@ -190,7 +190,7 @@ export default function SerialNumber() {
   }
 
   const handleSaveBulk = async () => {
-    const lines = bulkText.split('\n').map(l => l.trim()).filter(Boolean)
+    const lines = [...new Set(bulkText.split('\n').map(l => l.trim()).filter(Boolean))]
     if (!lines.length) { toast.error('Masukkan minimal 1 serial number'); return }
     if (!form.brand_name && !form.brand_id) { toast.error('Pilih atau ketik merk terlebih dahulu'); return }
     setSaving(true)
@@ -215,12 +215,18 @@ export default function SerialNumber() {
           if (ex) typeId = ex.id
         }
       }
-      const inserts = lines.map(sn => ({ brand_id: brandId, type_id: typeId, serial_number: sn, date_in: form.date_in, status: 'tersedia', created_by: profile.id }))
-      const { data: insertedSns, error } = await supabase.from('serial_numbers').insert(inserts).select()
-      if (error) throw error
-      await supabase.from('inventory_log').insert(insertedSns.map(sn => ({ log_date: form.date_in, item_type: 'sn', item_id: sn.id, action: 'masuk', quantity: 1, note: 'Input massal via text', created_by: profile.id })))
-      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Input Massal SN', detail: `${lines.length} SN ditambahkan` })
-      toast.success(`${lines.length} Serial Number berhasil ditambahkan`)
+      
+      const existing = items.filter(i => lines.includes(i.serial_number)).map(i => i.serial_number)
+      const toInsert = lines.filter(sn => !existing.includes(sn)).map(sn => ({ brand_id: brandId, type_id: typeId, serial_number: sn, date_in: form.date_in, status: 'tersedia', created_by: profile.id }))
+      
+      if (toInsert.length > 0) {
+        const { data: insertedSns, error } = await supabase.from('serial_numbers').insert(toInsert).select()
+        if (error) throw error
+        await supabase.from('inventory_log').insert(insertedSns.map(sn => ({ log_date: form.date_in, item_type: 'sn', item_id: sn.id, action: 'masuk', quantity: 1, note: 'Input massal via text', created_by: profile.id })))
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Input Massal SN', detail: `${toInsert.length} SN ditambahkan` })
+      }
+      
+      toast.success(`${toInsert.length} berhasil ditambah, ${existing.length} sudah ada.`)
       setIsModalOpen(false)
       setBulkText('')
       fetchAll()
