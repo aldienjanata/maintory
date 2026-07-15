@@ -136,28 +136,37 @@ export default function Dropcore() {
     setConfirmDelete(null)
     if (!h) return
     try {
-      // Cek apakah haspel masih dipakai di Bon Barang
+      // Cek apakah haspel masih dipakai di Bon Barang (ambil data dispatch-nya)
       const { data: refs, error: refErr } = await supabase
         .from('dispatch_items')
-        .select('id, dispatch:dispatches(dispatch_date, site, status)')
+        .select('id, dispatch_id, dispatch:dispatches(id, dispatch_date, site, status)')
         .eq('haspel_id', h.id)
       if (refErr) throw refErr
 
       if (refs && refs.length > 0) {
-        const bonList = refs
-          .filter(r => r.dispatch)
-          .map(r => {
+        // Pisahkan: yang dispatch-nya masih ada vs orphan (bon sudah terhapus)
+        const realRefs = refs.filter(r => r.dispatch !== null)
+        const orphanIds = refs.filter(r => r.dispatch === null).map(r => r.id)
+
+        // Hapus orphan dulu secara otomatis
+        if (orphanIds.length > 0) {
+          await supabase.from('dispatch_items').delete().in('id', orphanIds)
+        }
+
+        // Jika masih ada bon aktif yang mereferensi, blokir
+        if (realRefs.length > 0) {
+          const bonList = realRefs.map(r => {
             const tgl = r.dispatch.dispatch_date
             const site = r.dispatch.site || '-'
             const status = r.dispatch.status === 'sedang_dibawa' ? 'Sedang Dibawa' : 'Selesai'
             return `• ${tgl} (${site}) – ${status}`
-          })
-          .join('\n')
-        const msg = `Haspel ${h.haspel_code} masih tercatat di Bon Barang:\n${bonList || refs.length + ' bon'}`
-        toast.error(msg, { duration: 8000, style: { whiteSpace: 'pre-line' } })
-        return
+          }).join('\n')
+          toast.error(`Haspel ${h.haspel_code} masih dipakai di Bon Barang:\n${bonList}`, { duration: 8000, style: { whiteSpace: 'pre-line' } })
+          return
+        }
       }
 
+      // Aman untuk dihapus
       const { error } = await supabase.from('dropcore_haspels').delete().eq('id', h.id)
       if (error) throw error
       await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dropcore', action: 'Hapus Haspel', detail: h.haspel_code })
