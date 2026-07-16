@@ -607,10 +607,11 @@ tbody tr:hover td { background: var(--bg-hover); }
   inset: 0;
   background: rgba(0, 0, 0, 0.7);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 1000;
   padding: 16px;
+  overflow-y: auto;
   backdrop-filter: blur(4px);
   animation: fadeIn 0.15s ease;
 }
@@ -621,10 +622,11 @@ tbody tr:hover td { background: var(--bg-hover); }
   border-radius: var(--radius-lg);
   width: 100%;
   max-width: 520px;
-  max-height: 85vh;
-  overflow-y: auto;
+  max-height: unset;
+  overflow-y: visible;
   box-shadow: var(--shadow-lg);
   animation: slideUp 0.2s ease;
+  margin: auto;
 }
 
 .modal-lg { max-width: 760px; }
@@ -1490,7 +1492,7 @@ tbody tr:hover td { background: var(--bg-hover); }
 
   /* --- Modal --- */
   .modal { max-width: 90%; margin: 0 auto; border-radius: var(--radius-lg); }
-  .modal-overlay { align-items: center; padding: 16px; }
+  .modal-overlay { align-items: flex-start; padding: 16px; overflow-y: auto; }
   .modal-header { padding: 16px 16px 0; }
   .modal-body { padding: 14px 16px; gap: 10px !important; }
   .modal-footer { padding: 0 16px 16px; flex-direction: column; }
