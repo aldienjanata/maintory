@@ -1212,7 +1212,7 @@ export default function BonBarang() {
       {/* ===== MODAL DETAIL BON ===== */}
       {detailDispatch && (
         <div className="modal-overlay" onClick={() => setDetailDispatch(null)}>
-          <div className="modal modal-lg" style={{ maxWidth: '640px', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+          <div className="modal modal-lg" style={{ maxWidth: '640px', display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <h3 style={{ margin: 0 }}>Detail Bon Barang</h3>
@@ -1222,7 +1222,7 @@ export default function BonBarang() {
               </div>
               <button className="btn-icon" onClick={() => setDetailDispatch(null)}><X size={20} /></button>
             </div>
-            <div className="modal-body" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <div className="modal-body" style={{ flex: 1, overflowY: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '18px', paddingBottom: '20px' }}>
               {/* Info Umum */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div style={{ background: 'var(--bg-hover)', borderRadius: '10px', padding: '12px 14px' }}>
