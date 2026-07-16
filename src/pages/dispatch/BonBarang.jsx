@@ -1035,7 +1035,7 @@ export default function BonBarang() {
               <div className="grid-2">
                 <div className="form-group">
                   <label className="form-label">Tanggal Tugas <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input type="date" className="form-input" value={scheduleForm.schedule_date} onChange={e => setScheduleForm(f => ({ ...f, schedule_date: e.target.value }))} />
+                  <input type="date" className="form-input" style={{ cursor: 'pointer' }} value={scheduleForm.schedule_date} onChange={e => setScheduleForm(f => ({ ...f, schedule_date: e.target.value }))} onClick={e => e.target.showPicker && e.target.showPicker()} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Lokasi / Site <span style={{ color: 'var(--danger)' }}>*</span></label>
@@ -1085,7 +1085,7 @@ export default function BonBarang() {
               <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Tanggal</label>
-                  <input type="date" className="form-input" value={form.dispatch_date} onChange={e => setForm({ ...form, dispatch_date: e.target.value })} />
+                  <input type="date" className="form-input" style={{ cursor: 'pointer' }} value={form.dispatch_date} onChange={e => setForm({ ...form, dispatch_date: e.target.value })} onClick={e => e.target.showPicker && e.target.showPicker()} />
                 </div>
                 <div className="form-group" style={{ margin: 0, gridColumn: 'span 2' }}>
                   <label className="form-label">Teknisi (Bisa lebih dari 1) <span style={{ color: 'var(--danger)' }}>*</span></label>
