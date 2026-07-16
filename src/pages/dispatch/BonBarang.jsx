@@ -1294,7 +1294,7 @@ export default function BonBarang() {
         </div>
       )}
 
-      {/* ===== MODAL EXPORT ===== */}}
+      {/* ===== MODAL EXPORT ===== */}
       {isExportModalOpen && (
         <div className="modal-overlay" onClick={() => setIsExportModalOpen(false)}>
           <div className="modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
