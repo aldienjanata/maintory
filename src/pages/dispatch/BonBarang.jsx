@@ -87,6 +87,7 @@ export default function BonBarang() {
   // Modal: Export
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
   const [exportMonth, setExportMonth] = useState('')
+  const [detailDispatch, setDetailDispatch] = useState(null)
 
   useEffect(() => { fetchData() }, [])
   useEffect(() => { setPage(1) }, [activeTab])
@@ -922,7 +923,7 @@ export default function BonBarang() {
                       </thead>
                       <tbody>
                         {paginatedHistory.map(d => (
-                          <BonTableRow key={d.id} d={d} role={role} getTechNames={getTechNames} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} handleOpenLapor={handleOpenLapor} handleOpenEdit={handleOpenEdit} handleDelete={handleDelete} />
+                          <BonTableRow key={d.id} d={d} role={role} getTechNames={getTechNames} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} handleOpenLapor={handleOpenLapor} handleOpenEdit={handleOpenEdit} handleDelete={handleDelete} setDetailDispatch={setDetailDispatch} />
                         ))}
                       </tbody>
                     </table>
@@ -976,7 +977,7 @@ export default function BonBarang() {
                               </tr>
                             )
                           }
-                          return <BonTableRow key={item.id} d={item} role={role} getTechNames={getTechNames} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} handleOpenLapor={handleOpenLapor} handleOpenEdit={handleOpenEdit} handleDelete={handleDelete} />
+                          return <BonTableRow key={item.id} d={item} role={role} getTechNames={getTechNames} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} handleOpenLapor={handleOpenLapor} handleOpenEdit={handleOpenEdit} handleDelete={handleDelete} setDetailDispatch={setDetailDispatch} />
                         })}
                       </tbody>
                     </table>
@@ -1208,7 +1209,92 @@ export default function BonBarang() {
         </div>
       )}
 
-      {/* ===== MODAL EXPORT ===== */}
+      {/* ===== MODAL DETAIL BON ===== */}
+      {detailDispatch && (
+        <div className="modal-overlay" onClick={() => setDetailDispatch(null)}>
+          <div className="modal modal-lg" style={{ maxWidth: '640px', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3 style={{ margin: 0 }}>Detail Bon Barang</h3>
+                <p style={{ margin: '3px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  {format(new Date(detailDispatch.dispatch_date), 'dd MMMM yyyy', { locale: id })} &mdash; {SITES.find(s => s.value === detailDispatch.site)?.label || detailDispatch.site}
+                </p>
+              </div>
+              <button className="btn-icon" onClick={() => setDetailDispatch(null)}><X size={20} /></button>
+            </div>
+            <div className="modal-body" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              {/* Info Umum */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ background: 'var(--bg-hover)', borderRadius: '10px', padding: '12px 14px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>TEKNISI</div>
+                  <div style={{ fontWeight: 600, color: 'var(--accent)' }}>
+                    {getTechNames(detailDispatch.technicians?.length > 0 ? detailDispatch.technicians : [detailDispatch.technician_id])}
+                  </div>
+                </div>
+                <div style={{ background: 'var(--bg-hover)', borderRadius: '10px', padding: '12px 14px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>STATUS</div>
+                  <span className={`badge ${detailDispatch.status === 'sedang_dibawa' ? 'badge-warning' : 'badge-success'}`}>
+                    {detailDispatch.status === 'sedang_dibawa' ? 'Sedang Dibawa' : 'Selesai'}
+                  </span>
+                </div>
+                {detailDispatch.notes && (
+                  <div style={{ background: 'var(--bg-hover)', borderRadius: '10px', padding: '12px 14px', gridColumn: '1/-1' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>CATATAN</div>
+                    <div style={{ fontSize: '13px' }}>{detailDispatch.notes}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Daftar Item */}
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Daftar Barang ({detailDispatch.items?.length || 0} item)</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {(detailDispatch.items || []).map((it, i) => {
+                    let name = '', sub = '', qtyLabel = '', usedLabel = ''
+                    const color = ITEM_TYPE_COLORS[it.item_type] || 'var(--accent)'
+                    if (it.item_type === 'ont') {
+                      name = it.sn?.serial_number || '-'
+                      sub = 'Serial Number ONT'
+                      qtyLabel = `${it.quantity_dispatched || 1} Unit dibawa`
+                      if (detailDispatch.status === 'selesai') usedLabel = it.quantity_used > 0 ? '✅ Terpakai' : '↩️ Dikembalikan'
+                    } else if (it.item_type === 'dropcore') {
+                      name = it.haspel?.haspel_code || '-'
+                      sub = 'Dropcore Haspel'
+                      qtyLabel = `${it.quantity_dispatched || 1} Haspel dibawa`
+                      if (detailDispatch.status === 'selesai') usedLabel = `${it.meters_used || 0} m terpakai`
+                    } else if (it.item_type === 'other') {
+                      name = it.warehouse_item?.item_name || 'Material Lain'
+                      sub = 'Material'
+                      qtyLabel = `${it.quantity_dispatched || 0} Unit dibawa`
+                      if (detailDispatch.status === 'selesai') usedLabel = `${it.quantity_used || 0} dipakai, ${it.quantity_returned || 0} kembali`
+                    }
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--bg-hover)', borderRadius: '10px', padding: '12px 14px', borderLeft: `3px solid ${color}` }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{sub}</div>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{qtyLabel}</div>
+                          {usedLabel && <div style={{ fontSize: '12px', marginTop: '2px', fontWeight: 500 }}>{usedLabel}</div>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {(!detailDispatch.items || detailDispatch.items.length === 0) && (
+                    <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '20px', fontSize: '13px' }}>Tidak ada item</div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setDetailDispatch(null)}>Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL EXPORT ===== */}}
       {isExportModalOpen && (
         <div className="modal-overlay" onClick={() => setIsExportModalOpen(false)}>
           <div className="modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
@@ -1233,10 +1319,10 @@ export default function BonBarang() {
 }
 
 // Reusable Components
-function BonTableRow({ d, role, getTechNames, SITES, ITEM_TYPE_COLORS, handleOpenLapor, handleOpenEdit, handleDelete }) {
+function BonTableRow({ d, role, getTechNames, SITES, ITEM_TYPE_COLORS, handleOpenLapor, handleOpenEdit, handleDelete, setDetailDispatch }) {
   const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
   return (
-    <tr>
+    <tr style={{ cursor: 'pointer' }} onClick={() => setDetailDispatch(d)}>
       <td>
         <div style={{ fontWeight: 600 }}>{format(new Date(d.dispatch_date), 'dd MMM yyyy', { locale: id })}</div>
       </td>
@@ -1271,9 +1357,9 @@ function BonTableRow({ d, role, getTechNames, SITES, ITEM_TYPE_COLORS, handleOpe
       </td>
       <td>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-          {d.status === 'sedang_dibawa' && <button className="btn btn-primary btn-sm" onClick={() => handleOpenLapor(d)}><CheckCircle size={14} /> Lapor</button>}
-          {d.status === 'sedang_dibawa' && role === 'superadmin' && <button className="btn btn-secondary btn-sm" style={{ color: 'var(--warning)' }} onClick={() => handleOpenEdit(d)} title="Edit"><Edit2 size={14} /></button>}
-          {(role === 'superadmin' || role === 'admin') && <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(d)} title="Batalkan"><Trash2 size={14} /></button>}
+          {d.status === 'sedang_dibawa' && <button className="btn btn-primary btn-sm" onClick={e => { e.stopPropagation(); handleOpenLapor(d) }}><CheckCircle size={14} /> Lapor</button>}
+          {d.status === 'sedang_dibawa' && role === 'superadmin' && <button className="btn btn-secondary btn-sm" style={{ color: 'var(--warning)' }} onClick={e => { e.stopPropagation(); handleOpenEdit(d) }} title="Edit"><Edit2 size={14} /></button>}
+          {(role === 'superadmin' || role === 'admin') && <button className="btn btn-secondary btn-sm text-danger" onClick={e => { e.stopPropagation(); handleDelete(d) }} title="Batalkan"><Trash2 size={14} /></button>}
         </div>
       </td>
     </tr>
