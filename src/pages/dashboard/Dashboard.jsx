@@ -41,7 +41,9 @@ export default function Dashboard() {
   const [showAllAlerts, setShowAllAlerts] = useState(false)
   const [pendingSchedules, setPendingSchedules] = useState([])
   const [maintenanceChartData, setMaintenanceChartData] = useState([])
+  const [allTickets, setAllTickets] = useState([])
   const [maintenanceByStatus, setMaintenanceByStatus] = useState([])
+  const [statusFilter, setStatusFilter] = useState('bulan')
   const [stats, setStats] = useState({
     maintenanceToday: 0,
     maintenanceOpen: 0,
@@ -56,19 +58,42 @@ export default function Dashboard() {
     fetchDashboardData()
   }, [])
 
+  useEffect(() => {
+    if (!allTickets.length) return
+    const todayStr = format(new Date(), 'yyyy-MM-dd')
+    const thisMonthStr = format(new Date(), 'yyyy-MM')
+    const thisYearStr = format(new Date(), 'yyyy')
+    
+    let filtered = allTickets
+    if (statusFilter === 'hari') {
+      filtered = allTickets.filter(t => t.date_input === todayStr)
+    } else if (statusFilter === 'bulan') {
+      filtered = allTickets.filter(t => t.date_input?.startsWith(thisMonthStr))
+    } else if (statusFilter === 'tahun') {
+      filtered = allTickets.filter(t => t.date_input?.startsWith(thisYearStr))
+    }
+    
+    setMaintenanceByStatus([
+      { name: 'Aktif', value: filtered.filter(t => t.status === 'aktif').length, color: 'var(--danger)' },
+      { name: 'Pending', value: filtered.filter(t => t.status === 'pending').length, color: '#ffaa00' },
+      { name: 'Close', value: filtered.filter(t => t.status === 'close').length, color: 'var(--success)' },
+    ])
+  }, [statusFilter, allTickets])
+
   const fetchDashboardData = async () => {
     setLoading(true)
     try {
       // Fetch semua maintenance tickets
-      const { data: allTickets } = await supabase
+      const { data: tickets } = await supabase
         .from('maintenance_tickets')
         .select('*')
         .order('date_input', { ascending: false })
 
-      if (allTickets) {
-        const todayTickets = allTickets.filter(t => isToday(new Date(t.created_at)))
-        const openTickets = allTickets.filter(t => t.status === 'aktif')
-        const unresolvedTickets = allTickets.filter(t => t.status === 'aktif' || t.status === 'pending')
+      if (tickets) {
+        const todayStr = format(new Date(), 'yyyy-MM-dd')
+        const todayTickets = tickets.filter(t => isToday(new Date(t.created_at)))
+        const openTickets = tickets.filter(t => t.status === 'aktif')
+        const unresolvedTickets = tickets.filter(t => t.status === 'aktif' || t.status === 'pending')
 
         // Tiket Alert: aktif atau pending yang masuk TEPAT kemarin (H-1)
         let overdue = unresolvedTickets.filter(t => {
@@ -81,6 +106,7 @@ export default function Dashboard() {
         }
         const activeTodayTickets = todayTickets.filter(t => t.status === 'aktif' || t.status === 'pending')
 
+        setAllTickets(tickets)
         setOverdueTickets(overdue)
         setRecentActiveTickets(openTickets.slice(0, 5))
         setStats(prev => ({
@@ -93,7 +119,7 @@ export default function Dashboard() {
         const last7Days = Array.from({ length: 7 }, (_, i) => {
           const date = subDays(new Date(), 6 - i)
           const dateStr = format(date, 'yyyy-MM-dd')
-          const dayTickets = allTickets.filter(t => t.date_input === dateStr)
+          const dayTickets = tickets.filter(t => t.date_input === dateStr)
           return {
             name: format(date, 'EEE', { locale: id }),
             Masuk: dayTickets.length,
@@ -104,10 +130,13 @@ export default function Dashboard() {
         })
         setMaintenanceChartData(last7Days)
 
+        // Default pie: bulan berjalan
+        const thisMonthStr = format(new Date(), 'yyyy-MM')
+        const thisMonthTickets = tickets.filter(t => t.date_input?.startsWith(thisMonthStr))
         setMaintenanceByStatus([
-          { name: 'Aktif', value: openTickets.length, color: 'var(--danger)' },
-          { name: 'Pending', value: allTickets.filter(t => t.status === 'pending').length, color: '#ffaa00' },
-          { name: 'Close', value: allTickets.filter(t => t.status === 'close').length, color: 'var(--success)' },
+          { name: 'Aktif', value: thisMonthTickets.filter(t => t.status === 'aktif').length, color: 'var(--danger)' },
+          { name: 'Pending', value: thisMonthTickets.filter(t => t.status === 'pending').length, color: '#ffaa00' },
+          { name: 'Close', value: thisMonthTickets.filter(t => t.status === 'close').length, color: 'var(--success)' },
         ])
       }
 
@@ -357,10 +386,19 @@ export default function Dashboard() {
 
         {/* Maintenance by Status (Pie) */}
         <div className="card">
-          <div className="flex justify-between items-center mb-3">
+          <div className="flex justify-between items-center mb-3" style={{ flexWrap: 'wrap', gap: '8px' }}>
             <div>
               <h3 style={{ fontSize: '15px', fontWeight: 700 }}>Status Tiket</h3>
-              <p className="text-secondary" style={{ fontSize: '12px' }}>Distribusi semua tiket</p>
+              <p className="text-secondary" style={{ fontSize: '12px' }}>
+                {statusFilter === 'hari' ? 'Hari ini' : statusFilter === 'bulan' ? `Bulan ${format(new Date(), 'MMMM yyyy', { locale: id })}` : statusFilter === 'tahun' ? `Tahun ${format(new Date(), 'yyyy')}` : 'Semua data'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              {[['hari', 'Hari Ini'], ['bulan', 'Bulan Ini'], ['tahun', 'Tahun Ini'], ['semua', 'Semua']].map(([key, label]) => (
+                <button key={key} onClick={() => setStatusFilter(key)} style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: statusFilter === key ? 'var(--accent)' : 'var(--bg-primary)', color: statusFilter === key ? '#fff' : 'var(--text-secondary)', transition: 'all 0.15s' }}>
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
