@@ -633,9 +633,12 @@ export default function BonBarang() {
       // ===== SHEET 5: Rekap Per Item =====
       showProgress('Mengekspor Data', 'Membuat Rekap Per Item...', 75)
       const ws5 = workbook.addWorksheet('Rekap Per Item')
-      const headers5 = ['Tanggal', 'Teknisi', 'Item', 'Total Dibawa', 'Total Terpakai (Khusus Bon Selesai)']
-      setColumnWidths(ws5, [14, 32, 35, 20, 32])
+      const headers5 = ['Tanggal', 'Teknisi', 'Item', 'Status', 'Jumlah']
+      setColumnWidths(ws5, [14, 32, 35, 22, 16])
       applyHeaderStyle(ws5, headers5, '7C3AED') // purple
+      
+      // Tambahkan filter otomatis ke header
+      ws5.autoFilter = 'A1:E1'
 
       const rekapMap = {}
 
@@ -645,62 +648,86 @@ export default function BonBarang() {
         const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
         const isSelesai = d.status === 'selesai'
 
-        for (const it of d.items) {
-          let itemName = ''
-          let qtyDispatched = 0
-          let qtyUsed = 0
-
-          if (it.item_type === 'ont') {
-            itemName = `ONT: ${it.sn?.serial_number || '-'}`
-            qtyDispatched = it.quantity_dispatched || 1
-            qtyUsed = isSelesai ? (it.quantity_used || 0) : 0
-          } else if (it.item_type === 'dropcore') {
-            const haspelType = (it.haspel?.type || '1c').toUpperCase()
-            itemName = `Dropcore ${haspelType} - ${it.haspel?.haspel_code || '-'}`
-            const usedThisDispatch = isSelesai ? (it.meters_used || 0) : 0
-            const hId = it.haspel_id || (it.haspel && it.haspel.id)
-            
-            // Jika dispatch ini adalah yang pertama kali membawa haspel tersebut, maka dihitung sebagai 1 Haspel utuh
-            const isUtuh = hId && firstDispatchByHaspel[hId]?.dispatchId === d.id
-            
-            qtyDispatched = isUtuh ? 1 : 0 // Hanya hitung haspel jika utuh
-            qtyUsed = usedThisDispatch // Tetap hitung meternya
-          } else if (it.item_type === 'other') {
-            itemName = it.warehouse_item?.item_name || '-'
-            qtyDispatched = it.quantity_dispatched || 0
-            qtyUsed = isSelesai ? (it.quantity_used || 0) : 0
-          }
-
+        const addRekap = (itemName, status, qty, unit, itemType) => {
+          if (qty === 0 && status !== 'Dibawa Awal') return // Skip empty usage/returns, but allow 0 Haspel for Dibawa
           if (!rekapMap[dateStr]) rekapMap[dateStr] = {}
           if (!rekapMap[dateStr][techName]) rekapMap[dateStr][techName] = {}
-          if (!rekapMap[dateStr][techName][itemName]) rekapMap[dateStr][techName][itemName] = { qtyDispatched: 0, qtyUsed: 0, itemType: it.item_type }
+          if (!rekapMap[dateStr][techName][itemName]) rekapMap[dateStr][techName][itemName] = {}
           
-          rekapMap[dateStr][techName][itemName].qtyDispatched += qtyDispatched
-          rekapMap[dateStr][techName][itemName].qtyUsed += qtyUsed
+          if (!rekapMap[dateStr][techName][itemName][status]) {
+             rekapMap[dateStr][techName][itemName][status] = { qty: 0, unit, itemType }
+          }
+          rekapMap[dateStr][techName][itemName][status].qty += qty
+        }
+
+        for (const it of d.items) {
+          if (it.item_type === 'ont') {
+            const itemName = `ONT: ${it.sn?.serial_number || '-'}`
+            const qtyDispatched = it.quantity_dispatched || 1
+            if (!isSelesai) {
+              addRekap(itemName, 'Sedang Dibawa', qtyDispatched, 'Unit', 'ont')
+            } else {
+              const qtyUsed = it.quantity_used || 0
+              const qtyRet = it.quantity_returned || (qtyDispatched - qtyUsed)
+              addRekap(itemName, 'Dibawa Awal', qtyDispatched, 'Unit', 'ont')
+              addRekap(itemName, 'Terpakai (Keluar)', qtyUsed, 'Unit', 'ont')
+              addRekap(itemName, 'Kembali ke Gudang', qtyRet, 'Unit', 'ont')
+            }
+          } else if (it.item_type === 'dropcore') {
+            const haspelType = (it.haspel?.type || '1c').toUpperCase()
+            const itemName = `Dropcore ${haspelType} - ${it.haspel?.haspel_code || '-'}`
+            const hId = it.haspel_id || (it.haspel && it.haspel.id)
+            const isUtuh = hId && firstDispatchByHaspel[hId]?.dispatchId === d.id
+            const qtyDispatched = isUtuh ? 1 : 0
+            
+            if (!isSelesai) {
+              addRekap(itemName, 'Sedang Dibawa', qtyDispatched, 'Haspel', 'dropcore')
+            } else {
+              const usedThisDispatch = it.meters_used || 0
+              addRekap(itemName, 'Dibawa Awal', qtyDispatched, 'Haspel', 'dropcore')
+              addRekap(itemName, 'Terpakai (Keluar)', usedThisDispatch, 'Meter', 'dropcore')
+            }
+          } else if (it.item_type === 'other') {
+            const itemName = it.warehouse_item?.item_name || '-'
+            const qtyDispatched = it.quantity_dispatched || 0
+            if (!isSelesai) {
+              addRekap(itemName, 'Sedang Dibawa', qtyDispatched, 'Unit', 'other')
+            } else {
+              const qtyUsed = it.quantity_used || 0
+              const qtyRet = it.quantity_returned || (qtyDispatched - qtyUsed)
+              addRekap(itemName, 'Dibawa Awal', qtyDispatched, 'Unit', 'other')
+              addRekap(itemName, 'Terpakai (Keluar)', qtyUsed, 'Unit', 'other')
+              addRekap(itemName, 'Kembali ke Gudang', qtyRet, 'Unit', 'other')
+            }
+          }
         }
       }
 
       const rekapArray = []
       Object.entries(rekapMap).forEach(([date, techs]) => {
         Object.entries(techs).forEach(([tech, items]) => {
-          Object.entries(items).forEach(([name, data]) => {
-            rekapArray.push({ date, tech, name, ...data })
+          Object.entries(items).forEach(([name, statuses]) => {
+            Object.entries(statuses).forEach(([status, data]) => {
+               rekapArray.push({ date, tech, name, status, ...data })
+            })
           })
         })
       })
-      rekapArray.sort((a, b) => a.date.localeCompare(b.date) || a.tech.localeCompare(b.tech))
+      
+      const statusOrder = { 'Sedang Dibawa': 1, 'Dibawa Awal': 2, 'Terpakai (Keluar)': 3, 'Kembali ke Gudang': 4 }
+      rekapArray.sort((a, b) => 
+        a.date.localeCompare(b.date) || 
+        a.tech.localeCompare(b.tech) || 
+        a.name.localeCompare(b.name) ||
+        (statusOrder[a.status] - statusOrder[b.status])
+      )
       
       for (const r of rekapArray) {
-        let dispStr = r.qtyDispatched
-        let usedStr = r.qtyUsed
-        if (r.itemType === 'ont' || r.itemType === 'other') {
-          dispStr += ' Unit'
-          usedStr += ' Unit'
-        } else if (r.itemType === 'dropcore') {
-          dispStr = r.qtyDispatched > 0 ? `${r.qtyDispatched} Haspel` : '0 Haspel/Kabel Sisa'
-          usedStr += ' Meter'
+        let jumlahStr = `${r.qty} ${r.unit}`
+        if (r.itemType === 'dropcore' && r.unit === 'Haspel') {
+          jumlahStr = r.qty > 0 ? `${r.qty} Haspel` : '0 Haspel/Kabel Sisa'
         }
-        ws5.addRow([r.date, r.tech, r.name, dispStr, usedStr])
+        ws5.addRow([r.date, r.tech, r.name, r.status, jumlahStr])
       }
       applyDataRowStyles(ws5)
 
