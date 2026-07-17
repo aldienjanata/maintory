@@ -579,6 +579,20 @@ export default function BonBarang() {
       setColumnWidths(ws4, [14, 20, 32, 26, 24, 16, 16])
       applyHeaderStyle(ws4, headers4, 'B45309') // bronze
 
+      // Pre-calculate the first dispatch for each haspel to correctly label "Haspel Utuh"
+      const firstDispatchByHaspel = {}
+      baseData.forEach(d => {
+        if (!d.items) return
+        d.items.filter(it => it.item_type === 'dropcore').forEach(it => {
+          const hId = it.haspel_id || (it.haspel && it.haspel.id)
+          if (hId) {
+            if (!firstDispatchByHaspel[hId] || new Date(d.created_at) < new Date(firstDispatchByHaspel[hId].created_at)) {
+              firstDispatchByHaspel[hId] = { created_at: d.created_at, dispatchId: d.id }
+            }
+          }
+        })
+      })
+
       for (let i = 0; i < filteredData.length; i++) {
         const d = filteredData[i]
         const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
@@ -587,12 +601,13 @@ export default function BonBarang() {
 
         if (d.items && d.items.length > 0) {
           d.items.filter(it => it.item_type === 'dropcore').forEach(it => {
+            const hId = it.haspel_id || (it.haspel && it.haspel.id)
             const haspel = it.haspel?.haspel_code || '-'
             const usedThisDispatch = isSelesai ? (it.meters_used || 0) : 0
-            const currentUsed = it.haspel?.used_meters || 0
-            // Jika currentUsed sama dengan usedThisDispatch, berarti haspel ini belum dipakai orang lain sblmnya
-            const isUtuh = (currentUsed === 0 || currentUsed === usedThisDispatch)
-            const ket = isUtuh ? 'Haspel Utuh (1000m)' : 'Sisa Haspel / Potongan'
+            
+            // Jika dispatch ini adalah yang pertama kali membawa haspel tersebut, maka disebut Haspel Utuh
+            const isUtuh = hId && firstDispatchByHaspel[hId]?.dispatchId === d.id
+            const ket = isUtuh ? `Haspel Utuh (${it.haspel?.initial_meters || 1000}m)` : 'Sisa Haspel / Potongan'
             const meterTerpakai = isSelesai ? `${usedThisDispatch} m` : '-'
             
             ws4.addRow([d.dispatch_date, site, techName, haspel, ket, `${it.quantity_dispatched || 1} Haspel`, meterTerpakai])
