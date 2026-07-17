@@ -79,13 +79,14 @@ export default function Dashboard() {
         if (role === 'teknisi') {
           overdue = overdue.filter(t => t.technicians?.includes(profile.id))
         }
+        const activeTodayTickets = todayTickets.filter(t => t.status === 'aktif' || t.status === 'pending')
 
         setOverdueTickets(overdue)
         setRecentActiveTickets(openTickets.slice(0, 5))
         setStats(prev => ({
           ...prev,
           maintenanceToday: todayTickets.length,
-          maintenanceOpen: unresolvedTickets.length, // total aktif & pending
+          maintenanceOpen: activeTodayTickets.length, // total aktif & pending hari ini
         }))
 
         // Chart data: maintenance 7 hari terakhir
@@ -319,7 +320,7 @@ export default function Dashboard() {
       {/* ===== STATS GRID ===== */}
       <div className="stats-grid mb-4">
         <StatCard title="Masuk Hari Ini" value={stats.maintenanceToday} icon={Wrench} colorVar="var(--accent)" />
-        <StatCard title="Tiket Aktif" value={stats.maintenanceOpen} icon={AlertTriangle} colorVar="var(--danger)" />
+        <StatCard title="Aktif Hari Ini" value={stats.maintenanceOpen} icon={AlertTriangle} colorVar="var(--danger)" />
         <StatCard title="Stok ONT" value={stats.stockOnt} icon={Package} colorVar="var(--success)" />
         <StatCard title="Dismantle Aktif" value={stats.dismantleActive} icon={ArrowDownToLine} colorVar="var(--danger)" />
       </div>
