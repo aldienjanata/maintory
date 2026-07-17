@@ -354,6 +354,20 @@ export default function BonBarang() {
   const handleSaveLapor = async () => {
     setLaporSaving(true)
     try {
+      // Validasi Pemakaian melebihi bawaan
+      for (const it of selectedDispatch.items) {
+        const lapor = laporForm[it.id]
+        if (it.item_type === 'other') {
+          const qUsed = Number(lapor?.qty_used || 0)
+          const qDisp = Number(it.quantity_dispatched || 0)
+          if (qUsed > qDisp) {
+            toast.error(`Pemakaian ${it.warehouse_item?.item_name || 'barang'} (${qUsed}) melebihi jumlah yang dibawa (${qDisp})!`)
+            setLaporSaving(false)
+            return
+          }
+        }
+      }
+
       const expItemsToInsert = [], dispatchUpdates = []
       const ontReturns = [], ontUsed = [], dcUpdates = [], whReturns = [], whUsed = []
 
