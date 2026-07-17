@@ -633,8 +633,8 @@ export default function BonBarang() {
       // ===== SHEET 5: Rekap Per Item =====
       showProgress('Mengekspor Data', 'Membuat Rekap Per Item...', 75)
       const ws5 = workbook.addWorksheet('Rekap Per Item')
-      const headers5 = ['Tanggal', 'Item', 'Total Dibawa', 'Total Terpakai (Khusus Bon Selesai)']
-      setColumnWidths(ws5, [14, 35, 18, 32])
+      const headers5 = ['Tanggal', 'Teknisi', 'Item', 'Total Dibawa', 'Total Terpakai (Khusus Bon Selesai)']
+      setColumnWidths(ws5, [14, 32, 35, 20, 32])
       applyHeaderStyle(ws5, headers5, '7C3AED') // purple
 
       const rekapMap = {}
@@ -642,6 +642,7 @@ export default function BonBarang() {
       for (const d of filteredData) {
         if (!d.items) continue
         const dateStr = d.dispatch_date || ''
+        const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
         const isSelesai = d.status === 'selesai'
 
         for (const it of d.items) {
@@ -655,7 +656,7 @@ export default function BonBarang() {
             qtyUsed = isSelesai ? (it.quantity_used || 0) : 0
           } else if (it.item_type === 'dropcore') {
             const haspelType = (it.haspel?.type || '1c').toUpperCase()
-            itemName = `Dropcore ${haspelType}`
+            itemName = `Dropcore ${haspelType} - ${it.haspel?.haspel_code || '-'}`
             const usedThisDispatch = isSelesai ? (it.meters_used || 0) : 0
             const hId = it.haspel_id || (it.haspel && it.haspel.id)
             
@@ -671,20 +672,23 @@ export default function BonBarang() {
           }
 
           if (!rekapMap[dateStr]) rekapMap[dateStr] = {}
-          if (!rekapMap[dateStr][itemName]) rekapMap[dateStr][itemName] = { qtyDispatched: 0, qtyUsed: 0, itemType: it.item_type }
+          if (!rekapMap[dateStr][techName]) rekapMap[dateStr][techName] = {}
+          if (!rekapMap[dateStr][techName][itemName]) rekapMap[dateStr][techName][itemName] = { qtyDispatched: 0, qtyUsed: 0, itemType: it.item_type }
           
-          rekapMap[dateStr][itemName].qtyDispatched += qtyDispatched
-          rekapMap[dateStr][itemName].qtyUsed += qtyUsed
+          rekapMap[dateStr][techName][itemName].qtyDispatched += qtyDispatched
+          rekapMap[dateStr][techName][itemName].qtyUsed += qtyUsed
         }
       }
 
       const rekapArray = []
-      Object.entries(rekapMap).forEach(([date, items]) => {
-        Object.entries(items).forEach(([name, data]) => {
-          rekapArray.push({ date, name, ...data })
+      Object.entries(rekapMap).forEach(([date, techs]) => {
+        Object.entries(techs).forEach(([tech, items]) => {
+          Object.entries(items).forEach(([name, data]) => {
+            rekapArray.push({ date, tech, name, ...data })
+          })
         })
       })
-      rekapArray.sort((a, b) => a.date.localeCompare(b.date))
+      rekapArray.sort((a, b) => a.date.localeCompare(b.date) || a.tech.localeCompare(b.tech))
       
       for (const r of rekapArray) {
         let dispStr = r.qtyDispatched
@@ -693,10 +697,10 @@ export default function BonBarang() {
           dispStr += ' Unit'
           usedStr += ' Unit'
         } else if (r.itemType === 'dropcore') {
-          dispStr += ' Haspel'
+          dispStr = r.qtyDispatched > 0 ? `${r.qtyDispatched} Haspel` : '0 Haspel/Kabel Sisa'
           usedStr += ' Meter'
         }
-        ws5.addRow([r.date, r.name, dispStr, usedStr])
+        ws5.addRow([r.date, r.tech, r.name, dispStr, usedStr])
       }
       applyDataRowStyles(ws5)
 
