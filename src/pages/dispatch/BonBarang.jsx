@@ -640,36 +640,45 @@ export default function BonBarang() {
             qtyDispatched = it.quantity_dispatched || 1
             qtyUsed = isSelesai ? (it.quantity_used || 0) : 0
           } else if (it.item_type === 'dropcore') {
-            itemName = `Dropcore` // Group by generic name so total Dropcore is summed
+            const haspelType = (it.haspel?.type || '1c').toUpperCase()
+            itemName = `Dropcore ${haspelType}`
             const usedThisDispatch = isSelesai ? (it.meters_used || 0) : 0
-            const currentUsed = it.haspel?.used_meters || 0
-            const isUtuh = (currentUsed === 0 || currentUsed === usedThisDispatch)
+            const hId = it.haspel_id || (it.haspel && it.haspel.id)
+            
+            // Jika dispatch ini adalah yang pertama kali membawa haspel tersebut, maka dihitung sebagai 1 Haspel utuh
+            const isUtuh = hId && firstDispatchByHaspel[hId]?.dispatchId === d.id
             
             qtyDispatched = isUtuh ? 1 : 0 // Hanya hitung haspel jika utuh
             qtyUsed = usedThisDispatch // Tetap hitung meternya
           } else if (it.item_type === 'other') {
             itemName = it.warehouse_item?.item_name || '-'
-            qtyDispatched = it.quantity_dispatched || 1
+            qtyDispatched = it.quantity_dispatched || 0
             qtyUsed = isSelesai ? (it.quantity_used || 0) : 0
           }
 
-          const key = `${dateStr}||${itemName}||${it.item_type}`
-          if (!rekapMap[key]) rekapMap[key] = { date: dateStr, name: itemName, type: it.item_type, dispatched: 0, used: 0 }
+          if (!rekapMap[dateStr]) rekapMap[dateStr] = {}
+          if (!rekapMap[dateStr][itemName]) rekapMap[dateStr][itemName] = { qtyDispatched: 0, qtyUsed: 0, itemType: it.item_type }
           
-          rekapMap[key].dispatched += qtyDispatched
-          rekapMap[key].used += qtyUsed
+          rekapMap[dateStr][itemName].qtyDispatched += qtyDispatched
+          rekapMap[dateStr][itemName].qtyUsed += qtyUsed
         }
       }
 
-      const rekapArray = Object.values(rekapMap).sort((a, b) => a.date.localeCompare(b.date))
+      const rekapArray = []
+      Object.entries(rekapMap).forEach(([date, items]) => {
+        Object.entries(items).forEach(([name, data]) => {
+          rekapArray.push({ date, name, ...data })
+        })
+      })
+      rekapArray.sort((a, b) => a.date.localeCompare(b.date))
       
       for (const r of rekapArray) {
-        let dispStr = r.dispatched
-        let usedStr = r.used
-        if (r.type === 'ont' || r.type === 'other') {
+        let dispStr = r.qtyDispatched
+        let usedStr = r.qtyUsed
+        if (r.itemType === 'ont' || r.itemType === 'other') {
           dispStr += ' Unit'
           usedStr += ' Unit'
-        } else if (r.type === 'dropcore') {
+        } else if (r.itemType === 'dropcore') {
           dispStr += ' Haspel'
           usedStr += ' Meter'
         }
