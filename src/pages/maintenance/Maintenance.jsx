@@ -194,7 +194,10 @@ export default function Maintenance() {
       const updateData = {
         status: type,
         action_note: note || null,
-        ...(type === 'close' ? { completed_at: new Date().toISOString() } : { completed_at: null })
+        ...(type === 'close'
+          ? { completed_at: new Date().toISOString(), closed_by_name: profile.full_name || profile.username }
+          : { completed_at: null, closed_by_name: null }
+        )
       }
       const { error } = await supabase
         .from('maintenance_tickets')
@@ -447,7 +450,12 @@ export default function Maintenance() {
                       <td>{getTechNames(ticket.technicians)}</td>
                       <td>
                         {ticket.status === 'close' ? (
-                          <span className="badge badge-success"><CheckCircle size={12} /> Close</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <span className="badge badge-success"><CheckCircle size={12} /> Close</span>
+                            {ticket.closed_by_name && (
+                              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>oleh {ticket.closed_by_name}</span>
+                            )}
+                          </div>
                         ) : ticket.status === 'pending' ? (
                           <span className="badge" style={{ background: 'rgba(255,170,0,0.15)', color: '#ffaa00', border: '1px solid rgba(255,170,0,0.3)' }}><Clock size={12} /> Pending</span>
                         ) : (
@@ -489,7 +497,12 @@ export default function Maintenance() {
                       </div>
                       <div>
                         {ticket.status === 'close' ? (
-                          <span className="badge badge-success"><CheckCircle size={10} /> Close</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-end' }}>
+                            <span className="badge badge-success"><CheckCircle size={10} /> Close</span>
+                            {ticket.closed_by_name && (
+                              <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>oleh {ticket.closed_by_name}</span>
+                            )}
+                          </div>
                         ) : ticket.status === 'pending' ? (
                           <span className="badge" style={{ background: 'rgba(255,170,0,0.15)', color: '#ffaa00', border: '1px solid rgba(255,170,0,0.3)' }}><Clock size={10} /> Pending</span>
                         ) : (
