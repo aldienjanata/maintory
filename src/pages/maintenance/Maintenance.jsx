@@ -145,7 +145,7 @@ export default function Maintenance() {
       
       const toInsert = parsedTickets.map(({ _id, ...rest }) => ({
         ...rest,
-        technicians: globalTechnicians,
+        technicians: [],
         status: 'aktif',
         created_by: profile.id
       }))
@@ -160,21 +160,19 @@ export default function Maintenance() {
         showProgress('Menyimpan ke Database', `Menyimpan ${inserted} dari ${toInsert.length} tiket...`, 10 + (inserted / toInsert.length) * 80)
       }
 
-      const techNames = globalTechnicians.map(id => technicians.find(t => t.id === id)?.full_name || '').filter(Boolean).join(', ')
       await logActivity({
         userId: profile.id,
         username: profile.username,
         role: profile.role,
         module: 'Maintenance',
         action: 'Tambah Tiket Massal',
-        detail: `Menambahkan ${toInsert.length} tiket baru — Teknisi: ${techNames || '-'}`
+        detail: `Menambahkan ${toInsert.length} tiket baru`
       })
 
       toast.success(`${toInsert.length} tiket berhasil ditambahkan`)
       setIsAddModalOpen(false)
       setWaText('')
       setParsedTickets([])
-      setGlobalTechnicians([])
       fetchTickets()
     } catch (err) {
       toast.error('Gagal menyimpan data: ' + err.message)
@@ -615,33 +613,6 @@ export default function Maintenance() {
 
               {parsedTickets.length > 0 && (
                 <div>
-                  {/* === PILIH TEKNISI SEKALI UNTUK SEMUA TIKET === */}
-                  <div style={{ background: 'var(--bg-hover)', borderRadius: '10px', padding: '14px 16px', marginBottom: '16px', border: '1px solid var(--border-color)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                      <Wrench size={15} style={{ color: 'var(--accent)' }} />
-                      <span className="font-semibold" style={{ fontSize: '14px' }}>Teknisi Hari Ini</span>
-                      <span className="text-secondary" style={{ fontSize: '12px' }}>— pilihan ini berlaku untuk semua {parsedTickets.length} tiket</span>
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                      {technicians.map(tech => (
-                        <button
-                          key={tech.id}
-                          type="button"
-                          onClick={() => handleGlobalTechnicianChange(tech.id)}
-                          className={`badge ${globalTechnicians.includes(tech.id) ? 'badge-accent' : 'badge-muted'}`}
-                          style={{ border: 'none', cursor: 'pointer', padding: '6px 12px', fontSize: '13px' }}
-                        >
-                          {globalTechnicians.includes(tech.id) ? '✓ ' : ''}{tech.full_name}
-                        </button>
-                      ))}
-                    </div>
-                    {globalTechnicians.length === 0 && (
-                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px', marginBottom: 0 }}>
-                        ⚠️ Belum ada teknisi dipilih. Tiket akan disimpan tanpa teknisi.
-                      </p>
-                    )}
-                  </div>
-
                   <h4 className="mb-4 font-semibold text-accent">Preview Hasil Parsing ({parsedTickets.length} Tiket)</h4>
                   <div className="table-container" style={{ maxHeight: '260px' }}>
                     <table>
