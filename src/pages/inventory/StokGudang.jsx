@@ -450,7 +450,7 @@ export default function StokGudang() {
             <option value="all">Semua Tipe</option>
             {ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <div className="filter-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {can(role, 'inventory.stok.import') && (
               <>
                 <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate}>

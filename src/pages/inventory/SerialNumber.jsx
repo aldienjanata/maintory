@@ -472,7 +472,7 @@ export default function SerialNumber() {
             <option value="tersedia">Tersedia</option>
             <option value="terpakai">Terpakai</option>
           </select>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <div className="filter-actions" style={{ marginLeft: 'auto', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {can(role, 'inventory.sn.import') && (
               <>
                 <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate}><FileDown size={14} /> Template</button>

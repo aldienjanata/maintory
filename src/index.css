@@ -1432,6 +1432,10 @@ tbody tr:hover td { background: var(--bg-hover); }
     gap: 10px;
     margin-bottom: 16px;
   }
+  /* 3-item stats grids: use 3 cols so no orphan card */
+  .stats-grid:has(.stat-card:nth-child(3):last-child) {
+    grid-template-columns: repeat(3, 1fr);
+  }
   .grid-2, .grid-3 { grid-template-columns: 1fr; gap: 12px; }
 
   /* --- Page Header --- */
@@ -1454,7 +1458,7 @@ tbody tr:hover td { background: var(--bg-hover); }
   .filter-bar {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: 8px;
   }
   .search-box {
     grid-column: 1 / -1;
@@ -1462,9 +1466,17 @@ tbody tr:hover td { background: var(--bg-hover); }
   }
   .date-filter-group {
     grid-column: 1 / 2;
+    min-width: 0;
   }
   .date-input {
     width: 100%;
+    min-width: 0;
+  }
+  .filter-select {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .filter-select.status-select {
     grid-column: 2 / 3;
