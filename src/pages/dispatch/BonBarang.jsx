@@ -1487,7 +1487,7 @@ export default function BonBarang() {
                   {item.item_type === 'ont' && (
                     <div className="form-group mb-0">
                       <label className="form-label">Pilih ONT</label>
-                      <Select isMulti options={ontOptions} value={item.selected_onts} onChange={val => setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, selected_onts: val } : i) }))} placeholder="Cari SN..." />
+                      <Select isMulti options={ontOptions} value={item.selected_onts} onChange={val => setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, selected_onts: val } : i) }))} placeholder="Cari SN..." menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }), input: (b) => ({ ...b, color: 'var(--text-primary)' }), singleValue: (b) => ({ ...b, color: 'var(--text-primary)' }) }} />
                     </div>
                   )}
 
@@ -1495,7 +1495,7 @@ export default function BonBarang() {
                     <>
                       <div className="form-group mb-3">
                         <label className="form-label">Pilih Haspel</label>
-                        <Select isMulti options={dropcoreOptions} value={item.selected_haspels} onChange={val => setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, selected_haspels: val } : i) }))} placeholder="Cari Kode Haspel..." />
+                        <Select isMulti options={haspelOptions} value={item.selected_haspels} onChange={val => setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, selected_haspels: val } : i) }))} placeholder="Cari Kode Haspel..." menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }), input: (b) => ({ ...b, color: 'var(--text-primary)' }), singleValue: (b) => ({ ...b, color: 'var(--text-primary)' }) }} />
                       </div>
                       {(item.selected_haspels || []).length > 0 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1518,7 +1518,7 @@ export default function BonBarang() {
                     <>
                       <div className="form-group mb-3">
                         <label className="form-label">Pilih Material</label>
-                        <Select isMulti options={otherOptions} value={item.selected_others} onChange={val => setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, selected_others: val } : i) }))} placeholder="Cari Barang..." />
+                        <Select isMulti options={otherOptions} value={item.selected_others} onChange={val => setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, selected_others: val } : i) }))} placeholder="Cari Barang..." menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }), input: (b) => ({ ...b, color: 'var(--text-primary)' }), singleValue: (b) => ({ ...b, color: 'var(--text-primary)' }) }} />
                       </div>
                       {(item.selected_others || []).length > 0 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
