@@ -89,6 +89,11 @@ export default function BonBarang() {
   const [exportMonth, setExportMonth] = useState('')
   const [detailDispatch, setDetailDispatch] = useState(null)
 
+  // Modal: Tambah Susulan
+  const [isSusulanModalOpen, setIsSusulanModalOpen] = useState(false)
+  const [susulanForm, setSusulanForm] = useState({ items: [] })
+  const [susulanSaving, setSusulanSaving] = useState(false)
+
   useEffect(() => { fetchData() }, [])
   useEffect(() => { setPage(1) }, [activeTab])
 
@@ -431,6 +436,82 @@ export default function BonBarang() {
       console.error(err)
       toast.error('Terjadi kesalahan')
     } finally { setLaporSaving(false) }
+  }
+
+  const handleSaveSusulan = async () => {
+    if (susulanForm.items.length === 0) { toast.error('Tambahkan minimal 1 barang susulan'); return }
+    setSusulanSaving(true)
+    try {
+      const itemsToInsert = [], expItemsToInsert = [], ontUsed = [], dcUpdates = [], whUpdates = []
+      for (const item of susulanForm.items) {
+        if (item.item_type === 'ont') {
+          (item.selected_onts || []).forEach(opt => { 
+            itemsToInsert.push({ item_type: 'ont', serial_number_id: opt.value, quantity_dispatched: 1, quantity_used: 1, quantity_returned: 0 })
+            ontUsed.push(opt.value)
+            expItemsToInsert.push({ item_type: 'ont', serial_number_id: opt.value, quantity: 1 })
+          })
+        } else if (item.item_type === 'dropcore') {
+          (item.selected_haspels || []).forEach(opt => { 
+            // For susulan, we assume 1 meter if they don't specify, but they can't specify in this basic form.
+            // Let's prompt them if it's dropcore, it's safer to not allow dropcore in susulan easily or default to something.
+            // Actually, we can add a qty input for dropcore in the susulan form later. For now, default to `item.dropcore_meters?.[opt.value] || 1`
+            const m = item.dropcore_meters?.[opt.value] || 1
+            itemsToInsert.push({ item_type: 'dropcore', haspel_id: opt.value, quantity_dispatched: 1, meters_used: m })
+            dcUpdates.push({ id: opt.value, add_meters: m })
+            expItemsToInsert.push({ item_type: 'dropcore', haspel_id: opt.value, meters_used: m, quantity: 1 })
+          })
+        } else if (item.item_type === 'other') {
+          (item.selected_others || []).forEach(opt => {
+            const qty = item.other_quantities?.[opt.value] || 1
+            if (qty > 0) { 
+              itemsToInsert.push({ item_type: 'other', warehouse_item_id: opt.value, quantity_dispatched: qty, quantity_used: qty, quantity_returned: 0 })
+              whUpdates.push({ id: opt.value, qty })
+              expItemsToInsert.push({ item_type: 'other', warehouse_item_id: opt.value, quantity: qty })
+            }
+          })
+        }
+      }
+
+      if (itemsToInsert.length === 0) { toast.error('Belum ada item valid yang dipilih'); setSusulanSaving(false); return }
+
+      // 1. Insert ke dispatch_items (selalu ke detailDispatch.id)
+      const { error: iErr } = await supabase.from('dispatch_items').insert(itemsToInsert.map(i => ({ ...i, dispatch_id: detailDispatch.id })))
+      if (iErr) throw iErr
+
+      // 2. Insert ke daily_expenses
+      if (expItemsToInsert.length > 0) {
+        const { data: expData, error: expErr } = await supabase.from('daily_expenses').insert({
+          expense_date: detailDispatch.dispatch_date,
+          site: detailDispatch.site,
+          technicians: detailDispatch.technicians && detailDispatch.technicians.length > 0 ? detailDispatch.technicians : [detailDispatch.technician_id],
+          work_type: 'ikr_psb',
+          note: 'Barang Tambahan Susulan',
+          created_by: profile.id
+        }).select('id').single()
+        if (expErr) throw expErr
+        await supabase.from('expense_items').insert(expItemsToInsert.map(i => ({ ...i, expense_id: expData.id })))
+      }
+
+      // 3. Update stok
+      if (ontUsed.length > 0) await supabase.from('serial_numbers').update({ status: 'terpakai' }).in('id', ontUsed)
+      for (const dc of dcUpdates) {
+        const { data: hData } = await supabase.from('dropcore_haspels').select('initial_meters, used_meters').eq('id', dc.id).single()
+        if (hData) { const newUsed = Number(hData.used_meters || 0) + Number(dc.add_meters); await supabase.from('dropcore_haspels').update({ used_meters: newUsed, status: newUsed >= Number(hData.initial_meters) ? 'habis' : 'tersedia' }).eq('id', dc.id) }
+      }
+      for (const wh of whUpdates) {
+        // Kurangi initial_stock langsung, tidak sentuh stock_on_hold karena ini susulan otomatis terpakai
+        const { data: wItem } = await supabase.from('warehouses').select('initial_stock').eq('id', wh.id).single()
+        if (wItem) await supabase.from('warehouses').update({ initial_stock: Math.max(0, Number(wItem.initial_stock || 0) - Number(wh.qty)) }).eq('id', wh.id)
+      }
+
+      toast.success('Barang susulan berhasil ditambahkan dan stok dipotong!')
+      setIsSusulanModalOpen(false)
+      setDetailDispatch(null) // tutup detail juga
+      fetchData()
+    } catch (err) {
+      console.error(err)
+      toast.error('Gagal menyimpan susulan: ' + err.message)
+    } finally { setSusulanSaving(false) }
   }
 
   const handleDelete = async (dispatch) => {
@@ -1316,7 +1397,15 @@ export default function BonBarang() {
 
               {/* Daftar Item */}
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Daftar Barang ({detailDispatch.items?.length || 0} item)</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Daftar Barang ({detailDispatch.items?.length || 0} item)</div>
+                  {detailDispatch.status === 'selesai' && role === 'superadmin' && (
+                    <button className="btn btn-primary btn-sm" onClick={() => {
+                      setSusulanForm({ items: [] })
+                      setIsSusulanModalOpen(true)
+                    }}>+ Tambah Susulan</button>
+                  )}
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {(detailDispatch.items || []).map((it, i) => {
                     let name = '', sub = '', qtyLabel = '', usedLabel = ''
@@ -1358,6 +1447,105 @@ export default function BonBarang() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setDetailDispatch(null)}>Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL TAMBAH SUSULAN ===== */}
+      {isSusulanModalOpen && detailDispatch && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal modal-lg" style={{ display: 'flex', flexDirection: 'column', maxHeight: '93vh' }}>
+            <div className="modal-header">
+              <div><h3 style={{ margin: 0 }}>Tambah Barang Susulan</h3><p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Otomatis tercatat sebagai TERPAKAI</p></div>
+              <button className="btn-close" onClick={() => setIsSusulanModalOpen(false)}><X size={20} /></button>
+            </div>
+            <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
+              <div style={{ padding: '10px 14px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 'var(--radius-md)', marginBottom: '14px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                ℹ️ Barang yang diinput di sini akan <strong>langsung memotong stok akhir gudang</strong>.
+              </div>
+
+              {susulanForm.items.map((item, index) => (
+                <div key={item.id} className="card" style={{ marginBottom: '16px', border: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+                    <div style={{ fontWeight: 600, fontSize: '13px' }}>Item #{index + 1}</div>
+                    <button className="btn-icon text-danger" onClick={() => setSusulanForm(f => ({ ...f, items: f.items.filter(i => i.id !== item.id) }))}><Trash2 size={16} /></button>
+                  </div>
+                  
+                  <div className="form-group mb-3">
+                    <label className="form-label">Tipe Item</label>
+                    <select className="form-input" value={item.item_type} onChange={e => {
+                      const newType = e.target.value
+                      setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, item_type: newType, selected_haspels: [], selected_onts: [], selected_others: [], other_quantities: {}, dropcore_meters: {} } : i) }))
+                    }}>
+                      <option value="ont">ONT / Modem (Serial Number)</option>
+                      <option value="dropcore">Dropcore / Kabel</option>
+                      <option value="other">Material Lainnya</option>
+                    </select>
+                  </div>
+
+                  {item.item_type === 'ont' && (
+                    <div className="form-group mb-0">
+                      <label className="form-label">Pilih ONT</label>
+                      <Select isMulti options={ontOptions} value={item.selected_onts} onChange={val => setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, selected_onts: val } : i) }))} placeholder="Cari SN..." />
+                    </div>
+                  )}
+
+                  {item.item_type === 'dropcore' && (
+                    <>
+                      <div className="form-group mb-3">
+                        <label className="form-label">Pilih Haspel</label>
+                        <Select isMulti options={dropcoreOptions} value={item.selected_haspels} onChange={val => setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, selected_haspels: val } : i) }))} placeholder="Cari Kode Haspel..." />
+                      </div>
+                      {(item.selected_haspels || []).length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <label className="form-label">Meter Terpakai per Haspel</label>
+                          {(item.selected_haspels || []).map(opt => (
+                            <div key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span style={{ fontSize: '13px', width: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{opt.label.split(' - ')[0]}</span>
+                              <input type="number" min="1" className="form-input" style={{ width: '80px', padding: '6px' }} value={item.dropcore_meters?.[opt.value] || ''} onChange={e => {
+                                const val = e.target.value
+                                setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, dropcore_meters: { ...i.dropcore_meters, [opt.value]: val } } : i) }))
+                              }} placeholder="Meter" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {item.item_type === 'other' && (
+                    <>
+                      <div className="form-group mb-3">
+                        <label className="form-label">Pilih Material</label>
+                        <Select isMulti options={otherOptions} value={item.selected_others} onChange={val => setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, selected_others: val } : i) }))} placeholder="Cari Barang..." />
+                      </div>
+                      {(item.selected_others || []).length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <label className="form-label">Jumlah (Qty) Terpakai</label>
+                          {(item.selected_others || []).map(opt => (
+                            <div key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span style={{ fontSize: '13px', width: '180px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{opt.label.split(' (')[0]}</span>
+                              <input type="number" min="1" className="form-input" style={{ width: '80px', padding: '6px' }} value={item.other_quantities?.[opt.value] || ''} onChange={e => {
+                                const val = e.target.value
+                                setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, other_quantities: { ...i.other_quantities, [opt.value]: val } } : i) }))
+                              }} placeholder="Qty" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+
+              <button className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center', padding: '10px', borderStyle: 'dashed' }} onClick={() => setSusulanForm(f => ({ ...f, items: [...f.items, { id: crypto.randomUUID(), item_type: 'other', selected_haspels: [], selected_onts: [], selected_others: [], other_quantities: {}, dropcore_meters: {} }] }))}>
+                + Tambah Item Susulan
+              </button>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setIsSusulanModalOpen(false)}>Batal</button>
+              <button className="btn btn-primary" disabled={susulanSaving} onClick={handleSaveSusulan}>{susulanSaving ? 'Menyimpan...' : 'Simpan Susulan'}</button>
             </div>
           </div>
         </div>
