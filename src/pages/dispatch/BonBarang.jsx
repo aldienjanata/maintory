@@ -62,7 +62,8 @@ export default function BonBarang() {
   const [form, setForm] = useState({
     dispatch_date: format(new Date(), 'yyyy-MM-dd'),
     site: 'banyumas',
-    technicians: [], // <-- NOW AN ARRAY
+    technicians: [],
+    work_type: 'ikr_psb',
     note: '',
     items: []
   })
@@ -228,6 +229,7 @@ export default function BonBarang() {
     setForm({
       dispatch_date: dispatch.dispatch_date,
       site: dispatch.site,
+      work_type: dispatch.work_type || 'ikr_psb',
       technicians: dispatch.technicians && dispatch.technicians.length > 0 ? dispatch.technicians : [dispatch.technician_id],
       note: dispatch.notes || '',
       items: newItems
@@ -271,6 +273,7 @@ export default function BonBarang() {
         technician_id: form.technicians[0], 
         technicians: form.technicians,
         site: form.site,
+        work_type: form.work_type,
         notes: form.note,
         status: 'sedang_dibawa',
         created_by: profile.id
@@ -308,6 +311,7 @@ export default function BonBarang() {
             technician_id: form.technicians[0],
             technicians: form.technicians,
             site: form.site,
+            work_type: form.work_type,
             notes: form.note,
             schedule_id: selectedScheduleId || null
           }).eq('id', editingDispatchId)
@@ -403,7 +407,7 @@ export default function BonBarang() {
           site: selectedDispatch.site,
           // Support both legacy technician_id array or new technicians array
           technicians: selectedDispatch.technicians && selectedDispatch.technicians.length > 0 ? selectedDispatch.technicians : [selectedDispatch.technician_id],
-          work_type: 'ikr_psb',
+          work_type: selectedDispatch.work_type || 'ikr_psb',
           note: 'Otomatis dari Laporan Bon Barang',
           created_by: profile.id
         }).select('id').single()
@@ -484,7 +488,7 @@ export default function BonBarang() {
           expense_date: detailDispatch.dispatch_date,
           site: detailDispatch.site,
           technicians: detailDispatch.technicians && detailDispatch.technicians.length > 0 ? detailDispatch.technicians : [detailDispatch.technician_id],
-          work_type: 'ikr_psb',
+          work_type: detailDispatch.work_type || 'ikr_psb',
           note: 'Barang Tambahan Susulan',
           created_by: profile.id
         }).select('id').single()
@@ -1065,7 +1069,7 @@ export default function BonBarang() {
                         <tr>
                           <th>Tanggal</th>
                           <th>Teknisi</th>
-                          <th>Lokasi</th>
+                          <th>Lokasi / Pekerjaan</th>
                           <th>Item</th>
                           <th>Status</th>
                           <th className="text-right">Aksi</th>
@@ -1253,6 +1257,12 @@ export default function BonBarang() {
                   <label className="form-label">Lokasi</label>
                   <select className="form-input" value={form.site} onChange={e => setForm({ ...form, site: e.target.value })}>
                     {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Jenis Pekerjaan</label>
+                  <select className="form-input" value={form.work_type} onChange={e => setForm({ ...form, work_type: e.target.value })}>
+                    {WORK_TYPES.map(w => <option key={w.value} value={w.value}>{w.label}</option>)}
                   </select>
                 </div>
                 <div className="form-group" style={{ margin: 0, gridColumn: '1 / -1' }}>
@@ -1588,6 +1598,7 @@ function BonTableRow({ d, role, getTechNames, SITES, ITEM_TYPE_COLORS, handleOpe
       </td>
       <td>
         <div>{SITES.find(s => s.value === d.site)?.label || d.site}</div>
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{WORK_TYPES.find(w => w.value === d.work_type)?.label || 'Instalasi/PSB'}</div>
         {d.notes && <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{d.notes}</div>}
       </td>
       <td>
@@ -1641,6 +1652,7 @@ function BonCard({ d, role, getTechNames, expandedId, setExpandedId, handleOpenL
       {isExpanded && (
         <div className="mobile-card-body">
           <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === d.site)?.label || d.site}</span></div>
+          <div className="mobile-info-row"><span className="mobile-info-label">Pekerjaan</span><span className="mobile-info-value">{WORK_TYPES.find(w => w.value === d.work_type)?.label || 'Instalasi/PSB'}</span></div>
           {d.notes && <div className="mobile-info-row"><span className="mobile-info-label">Catatan</span><span className="mobile-info-value">{d.notes}</span></div>}
           <div style={{ marginTop: '10px' }}>
             <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 700, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Daftar Barang</div>

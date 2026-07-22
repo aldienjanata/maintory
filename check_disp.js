@@ -1,0 +1,1 @@
+import { createClient } from '@supabase/supabase-js'; import fs from 'fs'; const env = fs.readFileSync('.env', 'utf8'); const sb = createClient(env.match(/VITE_SUPABASE_URL=(.*)/)[1], env.match(/VITE_SUPABASE_ANON_KEY=(.*)/)[1]); sb.from('dispatches').select('*').limit(1).then(r => console.log(Object.keys(r.data[0] || {})));
