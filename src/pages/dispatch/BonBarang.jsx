@@ -565,8 +565,8 @@ export default function BonBarang() {
 
       // ===== SHEET 1: Rekap Bon Barang =====
       const ws1 = workbook.addWorksheet('Rekap Bon Barang')
-      const headers1 = ['Tanggal', 'Lokasi', 'Teknisi', 'Jumlah Item', 'Status', 'Catatan']
-      setColumnWidths(ws1, [14, 20, 32, 14, 16, 30])
+      const headers1 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Jumlah Item', 'Status', 'Catatan']
+      setColumnWidths(ws1, [14, 20, 20, 32, 14, 16, 30])
       applyHeaderStyle(ws1, headers1, '0369A1') // blue
 
       for (let i = 0; i < filteredData.length; i++) {
@@ -574,10 +574,12 @@ export default function BonBarang() {
         const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
         const site = SITES.find(s => s.value === d.site)?.label || d.site
         const statusLabel = d.status === 'sedang_dibawa' ? 'Sedang Dibawa' : 'Selesai'
+        const workTypeLabel = WORK_TYPES.find(w => w.value === d.work_type)?.label || 'Instalasi/PSB'
         
         ws1.addRow([
           d.dispatch_date,
           site,
+          workTypeLabel,
           techName,
           d.items?.length || 0,
           statusLabel,
@@ -594,8 +596,8 @@ export default function BonBarang() {
       // ===== SHEET 2: Detail Barang Dibawa =====
       showProgress('Mengekspor Data', 'Memproses Detail Barang...', 30)
       const ws2 = workbook.addWorksheet('Detail Barang Dibawa')
-      const headers2 = ['Tanggal', 'Lokasi', 'Teknisi', 'Jenis Barang', 'Kode / Serial Number', 'Qty Dibawa', 'Qty Terpakai/Sisa', 'Status Bon']
-      setColumnWidths(ws2, [14, 20, 32, 16, 26, 14, 20, 16])
+      const headers2 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Jenis Barang', 'Kode / Serial Number', 'Qty Dibawa', 'Qty Terpakai/Sisa', 'Status Bon']
+      setColumnWidths(ws2, [14, 20, 20, 32, 16, 26, 14, 20, 16])
       applyHeaderStyle(ws2, headers2, '065F46') // green
 
       let ws2RowIdx = 2
@@ -605,9 +607,10 @@ export default function BonBarang() {
         const site = SITES.find(s => s.value === d.site)?.label || d.site
         const isSelesai = d.status === 'selesai'
         const statusLabel = isSelesai ? 'Selesai' : 'Sedang Dibawa'
+        const workTypeLabel = WORK_TYPES.find(w => w.value === d.work_type)?.label || 'Instalasi/PSB'
 
         if (!d.items || d.items.length === 0) {
-          ws2.addRow([d.dispatch_date, site, techName, '-', '-', '-', '-', statusLabel])
+          ws2.addRow([d.dispatch_date, site, workTypeLabel, techName, '-', '-', '-', '-', statusLabel])
           ws2RowIdx++
         } else {
           d.items.forEach(it => {
@@ -633,7 +636,7 @@ export default function BonBarang() {
               if (isSelesai) qtyTerpakai = `${it.quantity_used || 0} Dipakai (Sisa: ${it.quantity_returned || 0})`
             }
 
-            ws2.addRow([d.dispatch_date, site, techName, jenisBarang, kode, qtyDibawa, qtyTerpakai, statusLabel])
+            ws2.addRow([d.dispatch_date, site, workTypeLabel, techName, jenisBarang, kode, qtyDibawa, qtyTerpakai, statusLabel])
           })
           ws2RowIdx += d.items.length
         }
@@ -648,8 +651,8 @@ export default function BonBarang() {
       // ===== SHEET 3: Catatan Serial Number =====
       showProgress('Mengekspor Data', 'Memproses Serial Number...', 45)
       const ws3 = workbook.addWorksheet('Catatan Serial Number')
-      const headers3 = ['Tanggal', 'Lokasi', 'Teknisi', 'Serial Number', 'Status Terpakai']
-      setColumnWidths(ws3, [14, 20, 32, 26, 20])
+      const headers3 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Serial Number', 'Status Terpakai']
+      setColumnWidths(ws3, [14, 20, 20, 32, 26, 20])
       applyHeaderStyle(ws3, headers3, '047857') // teal
 
       for (let i = 0; i < filteredData.length; i++) {
@@ -657,6 +660,7 @@ export default function BonBarang() {
         const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
         const site = SITES.find(s => s.value === d.site)?.label || d.site
         const isSelesai = d.status === 'selesai'
+        const workTypeLabel = WORK_TYPES.find(w => w.value === d.work_type)?.label || 'Instalasi/PSB'
 
         if (d.items && d.items.length > 0) {
           d.items.filter(it => it.item_type === 'ont').forEach(it => {
@@ -665,7 +669,7 @@ export default function BonBarang() {
             if (isSelesai) {
               status = it.quantity_used > 0 ? 'Terpakai' : 'Dikembalikan'
             }
-            ws3.addRow([d.dispatch_date, site, techName, sn, status])
+            ws3.addRow([d.dispatch_date, site, workTypeLabel, techName, sn, status])
           })
         }
       }
@@ -674,8 +678,8 @@ export default function BonBarang() {
       // ===== SHEET 4: Catatan Dropcore =====
       showProgress('Mengekspor Data', 'Memproses Dropcore...', 60)
       const ws4 = workbook.addWorksheet('Catatan Dropcore')
-      const headers4 = ['Tanggal', 'Lokasi', 'Teknisi', 'Kode Haspel', 'Keterangan', 'Qty Dibawa', 'Meter Terpakai']
-      setColumnWidths(ws4, [14, 20, 32, 26, 24, 16, 16])
+      const headers4 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Kode Haspel', 'Keterangan', 'Qty Dibawa', 'Meter Terpakai']
+      setColumnWidths(ws4, [14, 20, 20, 32, 26, 24, 16, 16])
       applyHeaderStyle(ws4, headers4, 'B45309') // bronze
 
       // Pre-calculate the first dispatch for each haspel to correctly label "Haspel Utuh"
@@ -697,6 +701,7 @@ export default function BonBarang() {
         const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
         const site = SITES.find(s => s.value === d.site)?.label || d.site
         const isSelesai = d.status === 'selesai'
+        const workTypeLabel = WORK_TYPES.find(w => w.value === d.work_type)?.label || 'Instalasi/PSB'
 
         if (d.items && d.items.length > 0) {
           d.items.filter(it => it.item_type === 'dropcore').forEach(it => {
@@ -709,7 +714,7 @@ export default function BonBarang() {
             const ket = isUtuh ? `Haspel Utuh (${it.haspel?.initial_meters || 1000}m)` : 'Sisa Haspel / Potongan'
             const meterTerpakai = isSelesai ? `${usedThisDispatch} m` : '-'
             
-            ws4.addRow([d.dispatch_date, site, techName, haspel, ket, `${it.quantity_dispatched || 1} Haspel`, meterTerpakai])
+            ws4.addRow([d.dispatch_date, site, workTypeLabel, techName, haspel, ket, `${it.quantity_dispatched || 1} Haspel`, meterTerpakai])
           })
         }
       }
