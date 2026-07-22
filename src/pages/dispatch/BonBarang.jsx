@@ -376,6 +376,16 @@ export default function BonBarang() {
             return
           }
         }
+        // FIX #1: Validasi meter Dropcore tidak melebihi sisa meter di haspel
+        if (it.item_type === 'dropcore') {
+          const meters = Number(lapor?.meters_used || 0)
+          const sisaMeter = Number(it.haspel?.initial_meters || 0) - Number(it.haspel?.used_meters || 0)
+          if (meters > sisaMeter) {
+            toast.error(`Meter terpakai untuk ${it.haspel?.haspel_code || 'haspel'} (${meters}m) melebihi sisa yang tersedia (${sisaMeter}m)!`)
+            setLaporSaving(false)
+            return
+          }
+        }
       }
 
       const expItemsToInsert = [], dispatchUpdates = []
@@ -390,7 +400,9 @@ export default function BonBarang() {
           else ontReturns.push(it.serial_number_id)
         } else if (it.item_type === 'dropcore') {
           const meters = Number(lapor?.meters_used || 0)
-          dispatchUpdates.push({ id: it.id, meters_used: meters })
+          // FIX #3: Track "returned" status explicitly — if 0 meters used, haspel is considered returned
+          const isReturned = meters === 0
+          dispatchUpdates.push({ id: it.id, meters_used: meters, quantity_returned: isReturned ? 1 : 0 })
           if (meters > 0) expItemsToInsert.push({ item_type: 'dropcore', haspel_id: it.haspel_id, meters_used: meters, quantity: 1 })
           dcUpdates.push({ id: it.haspel_id, add_meters: meters })
         } else if (it.item_type === 'other') {
@@ -456,15 +468,27 @@ export default function BonBarang() {
             expItemsToInsert.push({ item_type: 'ont', serial_number_id: opt.value, quantity: 1 })
           })
         } else if (item.item_type === 'dropcore') {
-          (item.selected_haspels || []).forEach(opt => { 
-            // For susulan, we assume 1 meter if they don't specify, but they can't specify in this basic form.
-            // Let's prompt them if it's dropcore, it's safer to not allow dropcore in susulan easily or default to something.
-            // Actually, we can add a qty input for dropcore in the susulan form later. For now, default to `item.dropcore_meters?.[opt.value] || 1`
-            const m = item.dropcore_meters?.[opt.value] || 1
+          // FIX #2: Validate meter input for each haspel in susulan form
+          let susulanDcValid = true
+          ;(item.selected_haspels || []).forEach(opt => {
+            const m = Number(item.dropcore_meters?.[opt.value] || 0)
+            if (!m || m <= 0) {
+              toast.error(`Isi meter terpakai untuk haspel ${opt.label.split(' ')[0]}!`)
+              susulanDcValid = false
+              return
+            }
+            // FIX #1 (susulan): Validate against remaining meters
+            const sisaMeter = opt.sisa || 0
+            if (m > sisaMeter) {
+              toast.error(`Meter terpakai (${m}m) melebihi sisa haspel ${opt.label.split(' ')[0]} (${sisaMeter}m)!`)
+              susulanDcValid = false
+              return
+            }
             itemsToInsert.push({ item_type: 'dropcore', haspel_id: opt.value, quantity_dispatched: 1, meters_used: m })
             dcUpdates.push({ id: opt.value, add_meters: m })
             expItemsToInsert.push({ item_type: 'dropcore', haspel_id: opt.value, meters_used: m, quantity: 1 })
           })
+          if (!susulanDcValid) { setSusulanSaving(false); return }
         } else if (item.item_type === 'other') {
           (item.selected_others || []).forEach(opt => {
             const qty = item.other_quantities?.[opt.value] || 1
@@ -814,7 +838,8 @@ export default function BonBarang() {
   const ontOptions = snList.map(sn => ({ value: sn.id, label: sn.serial_number }))
   const haspelOptions = haspelList.map(h => {
     const sisa = Number(h.initial_meters || 0) - Number(h.used_meters || 0)
-    return { value: h.id, label: `${h.haspel_code} (${h.type?.toUpperCase() || ''}) — sisa ${sisa}m`, sisa }
+    const typeLabel = h.type === '4c' ? '4C' : '1C'
+    return { value: h.id, label: `${h.haspel_code} [DROPCORE ${typeLabel}] — Sisa: ${sisa}m`, sisa, initial_meters: h.initial_meters, used_meters: h.used_meters }
   }).filter(h => h.sisa > 0)
   const otherOptions = otherItems.map(w => ({ value: w.id, label: `${w.item_name} (stok: ${w.initial_stock})` }))
 
@@ -1273,7 +1298,17 @@ export default function BonBarang() {
                         </div>
                         <div style={{ padding: '12px 14px' }}>
                           {item.item_type === 'ont' && <Select isMulti options={ontOptions} placeholder="Pilih Serial Number ONT..." value={item.selected_onts || []} onChange={val => updateItem(item.id, 'selected_onts', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }), input: (b) => ({ ...b, color: 'var(--text-primary)' }), singleValue: (b) => ({ ...b, color: 'var(--text-primary)' }) }} />}
-                          {item.item_type === 'dropcore' && <Select isMulti options={haspelOptions} placeholder="Pilih Haspel Dropcore..." value={item.selected_haspels || []} onChange={val => updateItem(item.id, 'selected_haspels', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }), input: (b) => ({ ...b, color: 'var(--text-primary)' }), singleValue: (b) => ({ ...b, color: 'var(--text-primary)' }) }} />}
+                          {item.item_type === 'dropcore' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <Select isMulti options={haspelOptions} placeholder="Pilih Haspel Dropcore..." value={item.selected_haspels || []} onChange={val => updateItem(item.id, 'selected_haspels', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }), input: (b) => ({ ...b, color: 'var(--text-primary)' }), singleValue: (b) => ({ ...b, color: 'var(--text-primary)' }) }} />
+                              {/* FIX #4: Warning jika haspel terlalu banyak dalam satu bon */}
+                              {(item.selected_haspels || []).length > 3 && (
+                                <div style={{ fontSize: '12px', color: 'var(--warning)', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '6px' }}>
+                                  ⚠ {(item.selected_haspels || []).length} haspel dipilih. Pastikan jumlah ini wajar untuk 1 tim.
+                                </div>
+                              )}
+                            </div>
+                          )}
                           {item.item_type === 'other' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                               <Select isMulti options={otherOptions} placeholder="Pilih Material..." value={item.selected_others || []} onChange={val => updateItem(item.id, 'selected_others', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }), input: (b) => ({ ...b, color: 'var(--text-primary)' }), singleValue: (b) => ({ ...b, color: 'var(--text-primary)' }) }} />
@@ -1323,12 +1358,27 @@ export default function BonBarang() {
                           </label>
                         </div>
                       )}
-                      {it.item_type === 'dropcore' && (
-                        <div>
-                          <div style={{ fontWeight: 600, marginBottom: '8px' }}>{it.haspel?.haspel_code || '-'}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}><span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Meter terpakai:</span><input type="number" className="form-input" style={{ width: '100px', height: '36px', textAlign: 'center' }} min="0" placeholder="0" value={laporForm[it.id]?.meters_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { meters_used: e.target.value } })} /><span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>meter</span></div>
-                        </div>
-                      )}
+                      {it.item_type === 'dropcore' && (() => {
+                        const sisaMeter = Number(it.haspel?.initial_meters || 0) - Number(it.haspel?.used_meters || 0)
+                        const inputMeter = Number(laporForm[it.id]?.meters_used || 0)
+                        const isOverLimit = inputMeter > sisaMeter
+                        return (
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 600 }}>{it.haspel?.haspel_code || '-'}</span>
+                              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'var(--bg-primary)', padding: '2px 8px', borderRadius: '20px', border: '1px solid var(--border)' }}>Sisa: {sisaMeter}m</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Meter terpakai:</span>
+                              <input type="number" className="form-input" style={{ width: '110px', height: '36px', textAlign: 'center', border: isOverLimit ? '1.5px solid var(--danger)' : undefined }} min="0" max={sisaMeter} placeholder="0" value={laporForm[it.id]?.meters_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { meters_used: e.target.value } })} />
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>meter</span>
+                              {inputMeter === 0 && <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: '4px' }}>↩ Dikembalikan</span>}
+                              {inputMeter > 0 && !isOverLimit && <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '4px' }}>Sisa setelah lapor: {sisaMeter - inputMeter}m</span>}
+                              {isOverLimit && <span style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 600 }}>⚠ Melebihi sisa!</span>}
+                            </div>
+                          </div>
+                        )
+                      })()}
                       {it.item_type === 'other' && (
                         <div>
                           <div style={{ fontWeight: 600, marginBottom: '8px' }}>{it.warehouse_item?.item_name || 'Barang'}</div>
