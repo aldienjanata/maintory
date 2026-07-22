@@ -827,6 +827,55 @@ export default function BonBarang() {
       }
       applyDataRowStyles(ws5)
 
+      // ===== SHEET 6: Rekap Pertanggal =====
+      showProgress('Mengekspor Data', 'Membuat Rekap Pertanggal...', 88)
+      const ws6 = workbook.addWorksheet('Rekap Pertanggal')
+      const headers6 = ['Tanggal', 'Item', 'Jumlah']
+      setColumnWidths(ws6, [14, 36, 18])
+      applyHeaderStyle(ws6, headers6, '0F766E') // teal-dark
+      ws6.autoFilter = 'A1:C1'
+
+      // ONT: hitung total quantity_used (terpakai)
+      // Dropcore: hitung haspel utuh (first dispatch) saja, dikelompokkan by type (1C, 4C, dll)
+      // Material lain: hitung total quantity_used
+      const dailyMap = {}
+
+      const addDaily = (dateStr, label, qty, unit) => {
+        if (qty <= 0) return
+        if (!dailyMap[dateStr]) dailyMap[dateStr] = {}
+        if (!dailyMap[dateStr][label]) dailyMap[dateStr][label] = { qty: 0, unit }
+        dailyMap[dateStr][label].qty += qty
+      }
+
+      for (const d of filteredData) {
+        if (!d.items || d.status !== 'selesai') continue
+        const dateStr = d.dispatch_date || ''
+        for (const it of d.items) {
+          if (it.item_type === 'ont') {
+            addDaily(dateStr, 'ONT (Terpakai)', it.quantity_used || 0, 'Unit')
+          } else if (it.item_type === 'dropcore') {
+            const hId = it.haspel_id || (it.haspel && it.haspel.id)
+            const isUtuh = hId && firstDispatchByHaspel[hId]?.dispatchId === d.id
+            if (isUtuh) {
+              const hType = (it.haspel?.type || '1c').toUpperCase()
+              addDaily(dateStr, `Dropcore ${hType} (Keluar Utuh)`, 1, 'Haspel')
+            }
+          } else if (it.item_type === 'other') {
+            const itemLabel = it.warehouse_item?.item_name || '-'
+            addDaily(dateStr, itemLabel, it.quantity_used || 0, 'Unit')
+          }
+        }
+      }
+
+      const sortedDates6 = Object.keys(dailyMap).sort()
+      for (const date of sortedDates6) {
+        const sortedItems = Object.entries(dailyMap[date]).sort((a, b) => a[0].localeCompare(b[0]))
+        for (const [label, data] of sortedItems) {
+          ws6.addRow([date, label, `${data.qty} ${data.unit}`])
+        }
+      }
+      applyDataRowStyles(ws6)
+
       showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
       const filename = monthFilter ? `Bon Barang ${monthFilter}.xlsx` : `Bon Barang Semua ${new Date().toISOString().slice(0, 7)}.xlsx`
       await downloadWorkbook(workbook, filename)
