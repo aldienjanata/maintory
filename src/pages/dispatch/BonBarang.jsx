@@ -597,8 +597,8 @@ export default function BonBarang() {
       // ===== SHEET 2: Detail Barang Dibawa =====
       showProgress('Mengekspor Data', 'Memproses Detail Barang...', 30)
       const ws2 = workbook.addWorksheet('Detail Barang Dibawa')
-      const headers2 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Jenis Barang', 'Kode / Serial Number', 'Qty Dibawa', 'Qty Terpakai/Sisa', 'Status Bon']
-      setColumnWidths(ws2, [14, 20, 20, 32, 16, 26, 14, 20, 16])
+      const headers2 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Jenis Barang', 'Kode / Serial Number', 'Qty Dibawa', 'Satuan Dibawa', 'Qty Terpakai', 'Qty Kembali', 'Satuan Pakai/Kembali', 'Status Item', 'Status Bon']
+      setColumnWidths(ws2, [14, 20, 20, 32, 16, 26, 12, 14, 12, 12, 18, 18, 16])
       applyHeaderStyle(ws2, headers2, '065F46') // green
 
       let ws2RowIdx = 2
@@ -611,33 +611,56 @@ export default function BonBarang() {
         const workTypeLabel = WORK_TYPES.find(w => w.value === d.work_type)?.label || 'Instalasi/PSB'
 
         if (!d.items || d.items.length === 0) {
-          ws2.addRow([d.dispatch_date, site, workTypeLabel, techName, '-', '-', '-', '-', statusLabel])
+          ws2.addRow([d.dispatch_date, site, workTypeLabel, techName, '-', '-', '-', '-', '-', '-', '-', '-', statusLabel])
           ws2RowIdx++
         } else {
           d.items.forEach(it => {
             let jenisBarang = ''
             let kode = ''
-            let qtyDibawa = `${it.quantity_dispatched || 1}`
-            let qtyTerpakai = isSelesai ? '-' : 'Belum Lapor'
+            let qtyDibawa = it.quantity_dispatched || 1
+            let satDibawa = ''
+            let qtyTerpakai = 0
+            let qtyKembali = 0
+            let satPakai = ''
+            let statusItem = 'Belum Lapor'
 
             if (it.item_type === 'ont') {
               jenisBarang = 'ONT'
               kode = it.sn?.serial_number || '-'
-              qtyDibawa += ' Unit'
-              if (isSelesai) qtyTerpakai = it.quantity_used > 0 ? 'Terpakai' : 'Dikembalikan'
+              satDibawa = 'Unit'
+              satPakai = 'Unit'
+              if (isSelesai) {
+                qtyTerpakai = it.quantity_used || 0
+                qtyKembali = it.quantity_returned || (qtyDibawa - qtyTerpakai)
+                statusItem = qtyTerpakai > 0 ? 'Terpakai' : 'Dikembalikan'
+              }
             } else if (it.item_type === 'dropcore') {
-              jenisBarang = 'Dropcore'
+              const hType = (it.haspel?.type || '1c').toUpperCase()
+              jenisBarang = `Dropcore ${hType}`
               kode = it.haspel?.haspel_code || '-'
-              qtyDibawa += ' Haspel'
-              if (isSelesai) qtyTerpakai = `${it.meters_used || 0} Meter Terpakai`
+              const hId = it.haspel_id || (it.haspel && it.haspel.id)
+              const isUtuh = hId && firstDispatchByHaspel[hId]?.dispatchId === d.id
+              qtyDibawa = isUtuh ? 1 : 0
+              satDibawa = 'Haspel'
+              satPakai = 'Meter'
+              if (isSelesai) {
+                qtyTerpakai = it.meters_used || 0
+                qtyKembali = 0
+                statusItem = 'Terpakai'
+              }
             } else if (it.item_type === 'other') {
               jenisBarang = 'Material Lain'
               kode = it.warehouse_item?.item_name || '-'
-              qtyDibawa += ' Unit'
-              if (isSelesai) qtyTerpakai = `${it.quantity_used || 0} Dipakai (Sisa: ${it.quantity_returned || 0})`
+              satDibawa = 'Unit'
+              satPakai = 'Unit'
+              if (isSelesai) {
+                qtyTerpakai = it.quantity_used || 0
+                qtyKembali = it.quantity_returned || (qtyDibawa - qtyTerpakai)
+                statusItem = qtyTerpakai > 0 && qtyKembali > 0 ? 'Terpakai Sebagian' : (qtyTerpakai > 0 ? 'Terpakai' : 'Dikembalikan')
+              }
             }
 
-            ws2.addRow([d.dispatch_date, site, workTypeLabel, techName, jenisBarang, kode, qtyDibawa, qtyTerpakai, statusLabel])
+            ws2.addRow([d.dispatch_date, site, workTypeLabel, techName, jenisBarang, kode, qtyDibawa, satDibawa, qtyTerpakai, qtyKembali, satPakai, statusItem, statusLabel])
           })
           ws2RowIdx += d.items.length
         }
@@ -721,119 +744,13 @@ export default function BonBarang() {
       }
       applyDataRowStyles(ws4)
 
-      // ===== SHEET 5: Rekap Per Item =====
-      showProgress('Mengekspor Data', 'Membuat Rekap Per Item...', 75)
-      const ws5 = workbook.addWorksheet('Rekap Per Item')
-      const headers5 = ['Tanggal', 'Teknisi', 'Jenis Pekerjaan', 'Item', 'Status', 'Jumlah']
-      setColumnWidths(ws5, [14, 32, 20, 35, 22, 16])
-      applyHeaderStyle(ws5, headers5, '7C3AED') // purple
-      
-      // Tambahkan filter otomatis ke header
-      ws5.autoFilter = 'A1:F1'
-
-      const rekapMap = {}
-
-      for (const d of filteredData) {
-        if (!d.items) continue
-        const dateStr = d.dispatch_date || ''
-        const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
-        const isSelesai = d.status === 'selesai'
-        const workTypeLabel = WORK_TYPES.find(w => w.value === d.work_type)?.label || 'Instalasi/PSB'
-
-        const addRekap = (itemName, status, qty, unit, itemType) => {
-          if (qty === 0 && status !== 'Dibawa Awal') return // Skip empty usage/returns, but allow 0 Haspel for Dibawa
-          if (!rekapMap[dateStr]) rekapMap[dateStr] = {}
-          if (!rekapMap[dateStr][techName]) rekapMap[dateStr][techName] = {}
-          if (!rekapMap[dateStr][techName][workTypeLabel]) rekapMap[dateStr][techName][workTypeLabel] = {}
-          if (!rekapMap[dateStr][techName][workTypeLabel][itemName]) rekapMap[dateStr][techName][workTypeLabel][itemName] = {}
-          
-          if (!rekapMap[dateStr][techName][workTypeLabel][itemName][status]) {
-             rekapMap[dateStr][techName][workTypeLabel][itemName][status] = { qty: 0, unit, itemType }
-          }
-          rekapMap[dateStr][techName][workTypeLabel][itemName][status].qty += qty
-        }
-
-        for (const it of d.items) {
-          if (it.item_type === 'ont') {
-            const itemName = `ONT: ${it.sn?.serial_number || '-'}`
-            const qtyDispatched = it.quantity_dispatched || 1
-            if (!isSelesai) {
-              addRekap(itemName, 'Sedang Dibawa', qtyDispatched, 'Unit', 'ont')
-            } else {
-              const qtyUsed = it.quantity_used || 0
-              const qtyRet = it.quantity_returned || (qtyDispatched - qtyUsed)
-              addRekap(itemName, 'Dibawa Awal', qtyDispatched, 'Unit', 'ont')
-              addRekap(itemName, 'Terpakai (Keluar)', qtyUsed, 'Unit', 'ont')
-              addRekap(itemName, 'Kembali ke Gudang', qtyRet, 'Unit', 'ont')
-            }
-          } else if (it.item_type === 'dropcore') {
-            const haspelType = (it.haspel?.type || '1c').toUpperCase()
-            const itemName = `Dropcore ${haspelType} - ${it.haspel?.haspel_code || '-'}`
-            const hId = it.haspel_id || (it.haspel && it.haspel.id)
-            const isUtuh = hId && firstDispatchByHaspel[hId]?.dispatchId === d.id
-            const qtyDispatched = isUtuh ? 1 : 0
-            
-            if (!isSelesai) {
-              addRekap(itemName, 'Sedang Dibawa', qtyDispatched, 'Haspel', 'dropcore')
-            } else {
-              const usedThisDispatch = it.meters_used || 0
-              addRekap(itemName, 'Dibawa Awal', qtyDispatched, 'Haspel', 'dropcore')
-              addRekap(itemName, 'Terpakai (Keluar)', usedThisDispatch, 'Meter', 'dropcore')
-            }
-          } else if (it.item_type === 'other') {
-            const itemName = it.warehouse_item?.item_name || '-'
-            const qtyDispatched = it.quantity_dispatched || 0
-            if (!isSelesai) {
-              addRekap(itemName, 'Sedang Dibawa', qtyDispatched, 'Unit', 'other')
-            } else {
-              const qtyUsed = it.quantity_used || 0
-              const qtyRet = it.quantity_returned || (qtyDispatched - qtyUsed)
-              addRekap(itemName, 'Dibawa Awal', qtyDispatched, 'Unit', 'other')
-              addRekap(itemName, 'Terpakai (Keluar)', qtyUsed, 'Unit', 'other')
-              addRekap(itemName, 'Kembali ke Gudang', qtyRet, 'Unit', 'other')
-            }
-          }
-        }
-      }
-
-      const rekapArray = []
-      Object.entries(rekapMap).forEach(([date, techs]) => {
-        Object.entries(techs).forEach(([tech, works]) => {
-          Object.entries(works).forEach(([work, items]) => {
-            Object.entries(items).forEach(([name, statuses]) => {
-              Object.entries(statuses).forEach(([status, data]) => {
-                 rekapArray.push({ date, tech, work, name, status, ...data })
-              })
-            })
-          })
-        })
-      })
-      
-      const statusOrder = { 'Sedang Dibawa': 1, 'Dibawa Awal': 2, 'Terpakai (Keluar)': 3, 'Kembali ke Gudang': 4 }
-      rekapArray.sort((a, b) => 
-        a.date.localeCompare(b.date) || 
-        a.tech.localeCompare(b.tech) || 
-        a.work.localeCompare(b.work) ||
-        a.name.localeCompare(b.name) ||
-        (statusOrder[a.status] - statusOrder[b.status])
-      )
-      
-      for (const r of rekapArray) {
-        let jumlahStr = `${r.qty} ${r.unit}`
-        if (r.itemType === 'dropcore' && r.unit === 'Haspel') {
-          jumlahStr = r.qty > 0 ? `${r.qty} Haspel` : '0 Haspel/Kabel Sisa'
-        }
-        ws5.addRow([r.date, r.tech, r.work, r.name, r.status, jumlahStr])
-      }
-      applyDataRowStyles(ws5)
-
-      // ===== SHEET 6: Rekap Pertanggal =====
-      showProgress('Mengekspor Data', 'Membuat Rekap Pertanggal...', 88)
-      const ws6 = workbook.addWorksheet('Rekap Pertanggal')
-      const headers6 = ['Tanggal', 'Item', 'Jumlah']
-      setColumnWidths(ws6, [14, 36, 18])
-      applyHeaderStyle(ws6, headers6, '0F766E') // teal-dark
-      ws6.autoFilter = 'A1:C1'
+      // ===== SHEET 5: Rekap Pertanggal =====
+      showProgress('Mengekspor Data', 'Membuat Rekap Pertanggal...', 75)
+      const ws5 = workbook.addWorksheet('Rekap Pertanggal')
+      const headers5 = ['Tanggal', 'Item', 'Jumlah', 'Satuan']
+      setColumnWidths(ws5, [14, 36, 14, 14])
+      applyHeaderStyle(ws5, headers5, '0F766E') // teal-dark
+      ws5.autoFilter = 'A1:D1'
 
       // ONT: hitung total quantity_used (terpakai)
       // Dropcore: hitung haspel utuh (first dispatch) saja, dikelompokkan by type (1C, 4C, dll)
@@ -867,14 +784,14 @@ export default function BonBarang() {
         }
       }
 
-      const sortedDates6 = Object.keys(dailyMap).sort()
-      for (const date of sortedDates6) {
+      const sortedDates5 = Object.keys(dailyMap).sort()
+      for (const date of sortedDates5) {
         const sortedItems = Object.entries(dailyMap[date]).sort((a, b) => a[0].localeCompare(b[0]))
         for (const [label, data] of sortedItems) {
-          ws6.addRow([date, label, `${data.qty} ${data.unit}`])
+          ws5.addRow([date, label, data.qty, data.unit])
         }
       }
-      applyDataRowStyles(ws6)
+      applyDataRowStyles(ws5)
 
       showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
       const filename = monthFilter ? `Bon Barang ${monthFilter}.xlsx` : `Bon Barang Semua ${new Date().toISOString().slice(0, 7)}.xlsx`
