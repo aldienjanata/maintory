@@ -648,7 +648,7 @@ export default function BonBarang() {
               }
             } else if (it.item_type === 'dropcore') {
               const hType = (it.haspel?.type || '1c').toUpperCase()
-              jenisBarang = `Dropcore ${hType}`
+              jenisBarang = `DROPCORE ${hType}`
               kode = it.haspel?.haspel_code || '-'
               const hId = it.haspel_id || (it.haspel && it.haspel.id)
               const isUtuh = hId && firstDispatchByHaspel[hId]?.dispatchId === d.id
@@ -726,7 +726,7 @@ export default function BonBarang() {
         if (d.items && d.items.length > 0) {
           d.items.filter(it => it.item_type === 'dropcore').forEach(it => {
             const hId = it.haspel_id || (it.haspel && it.haspel.id)
-            const hType = it.haspel?.type ? `Dropcore ${it.haspel.type.toUpperCase()}` : 'Dropcore 1C'
+            const hType = it.haspel?.type ? `DROPCORE ${it.haspel.type.toUpperCase()}` : 'DROPCORE 1C'
             const haspel = it.haspel?.haspel_code || '-'
             const usedThisDispatch = isSelesai ? (it.meters_used || 0) : 0
             
@@ -745,21 +745,24 @@ export default function BonBarang() {
       // ===== SHEET 5: Rekap Pertanggal =====
       showProgress('Mengekspor Data', 'Membuat Rekap Pertanggal...', 75)
       const ws5 = workbook.addWorksheet('Rekap Pertanggal')
-      const headers5 = ['Tanggal', 'Item', 'Jumlah', 'Satuan']
-      setColumnWidths(ws5, [14, 36, 14, 14])
+      const headers5 = ['Tanggal', 'Item', 'Kode/Serial Number', 'Jumlah', 'Satuan']
+      setColumnWidths(ws5, [14, 36, 40, 14, 14])
       applyHeaderStyle(ws5, headers5, '0F766E') // teal-dark
-      ws5.autoFilter = 'A1:D1'
+      ws5.autoFilter = 'A1:E1'
 
       // ONT: hitung total quantity_used (terpakai)
       // Dropcore: hitung haspel utuh (first dispatch) saja, dikelompokkan by type (1C, 4C, dll)
       // Material lain: hitung total quantity_used
       const dailyMap = {}
 
-      const addDaily = (dateStr, label, qty, unit) => {
+      const addDaily = (dateStr, label, qty, unit, code = null) => {
         if (qty <= 0) return
         if (!dailyMap[dateStr]) dailyMap[dateStr] = {}
-        if (!dailyMap[dateStr][label]) dailyMap[dateStr][label] = { qty: 0, unit }
+        if (!dailyMap[dateStr][label]) dailyMap[dateStr][label] = { qty: 0, unit, codes: [] }
         dailyMap[dateStr][label].qty += qty
+        if (code && !dailyMap[dateStr][label].codes.includes(code)) {
+          dailyMap[dateStr][label].codes.push(code)
+        }
       }
 
       for (const d of filteredData) {
@@ -767,13 +770,15 @@ export default function BonBarang() {
         const dateStr = d.dispatch_date || ''
         for (const it of d.items) {
           if (it.item_type === 'ont') {
-            addDaily(dateStr, 'ONT (Terpakai)', it.quantity_used || 0, 'Unit')
+            const sn = it.sn?.serial_number || null
+            addDaily(dateStr, 'ONT (Terpakai)', it.quantity_used || 0, 'Unit', (it.quantity_used || 0) > 0 ? sn : null)
           } else if (it.item_type === 'dropcore') {
             const hId = it.haspel_id || (it.haspel && it.haspel.id)
             const isUtuh = hId && firstDispatchByHaspel[hId]?.dispatchId === d.id
             if (isUtuh) {
               const hType = (it.haspel?.type || '1c').toUpperCase()
-              addDaily(dateStr, `Dropcore ${hType} (Keluar Utuh)`, 1, 'Haspel')
+              const haspelCode = it.haspel?.haspel_code || null
+              addDaily(dateStr, `DROPCORE ${hType} (Keluar Utuh)`, 1, 'Haspel', haspelCode)
             }
           } else if (it.item_type === 'other') {
             const itemLabel = it.warehouse_item?.item_name || '-'
@@ -786,13 +791,14 @@ export default function BonBarang() {
       for (const date of sortedDates5) {
         const sortedItems = Object.entries(dailyMap[date]).sort((a, b) => a[0].localeCompare(b[0]))
         for (const [label, data] of sortedItems) {
-          ws5.addRow([date, label, data.qty, data.unit])
+          const codesStr = data.codes.length > 0 ? data.codes.join(', ') : '-'
+          ws5.addRow([date, label, codesStr, data.qty, data.unit])
         }
       }
       applyDataRowStyles(ws5)
 
       showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
-      const filename = monthFilter ? `Bon Barang ${monthFilter}.xlsx` : `Bon Barang Semua ${new Date().toISOString().slice(0, 7)}.xlsx`
+      const filename = monthFilter ? `Rekap Pemakaian Barang ${monthFilter}.xlsx` : `Rekap Pemakaian Barang Semua ${new Date().toISOString().slice(0, 7)}.xlsx`
       await downloadWorkbook(workbook, filename)
       toast.success('Export berhasil!')
       
