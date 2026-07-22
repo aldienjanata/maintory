@@ -185,6 +185,7 @@ export default function BonBarang() {
     setForm({
       dispatch_date: sched ? sched.schedule_date : format(new Date(), 'yyyy-MM-dd'),
       site: sched ? sched.site : 'banyumas',
+      work_type: sched ? sched.work_type : 'ikr_psb',
       technicians: sched?.technicians || [],
       note: sched ? `Berdasarkan Jadwal ${sched.schedule_date}` : '',
       items: []
