@@ -712,8 +712,8 @@ export default function BonBarang() {
       // ===== SHEET 4: Catatan Dropcore =====
       showProgress('Mengekspor Data', 'Memproses Dropcore...', 60)
       const ws4 = workbook.addWorksheet('Catatan Dropcore')
-      const headers4 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Kode Haspel', 'Keterangan', 'Qty Dibawa', 'Meter Terpakai']
-      setColumnWidths(ws4, [14, 20, 20, 32, 26, 24, 16, 16])
+      const headers4 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Tipe Kabel', 'Kode Haspel', 'Keterangan', 'Qty Dibawa (Haspel)', 'Meter Terpakai']
+      setColumnWidths(ws4, [14, 20, 20, 32, 18, 26, 24, 22, 18])
       applyHeaderStyle(ws4, headers4, 'B45309') // bronze
 
       for (let i = 0; i < filteredData.length; i++) {
@@ -726,15 +726,17 @@ export default function BonBarang() {
         if (d.items && d.items.length > 0) {
           d.items.filter(it => it.item_type === 'dropcore').forEach(it => {
             const hId = it.haspel_id || (it.haspel && it.haspel.id)
+            const hType = it.haspel?.type ? `Dropcore ${it.haspel.type.toUpperCase()}` : 'Dropcore 1C'
             const haspel = it.haspel?.haspel_code || '-'
             const usedThisDispatch = isSelesai ? (it.meters_used || 0) : 0
             
             // Jika dispatch ini adalah yang pertama kali membawa haspel tersebut, maka disebut Haspel Utuh
             const isUtuh = hId && firstDispatchByHaspel[hId]?.dispatchId === d.id
             const ket = isUtuh ? `Haspel Utuh (${it.haspel?.initial_meters || 1000}m)` : 'Sisa Haspel / Potongan'
-            const meterTerpakai = isSelesai ? `${usedThisDispatch} m` : '-'
+            const meterTerpakai = isSelesai ? usedThisDispatch : 0
+            const qtyDibawa = it.quantity_dispatched || 1
             
-            ws4.addRow([d.dispatch_date, site, workTypeLabel, techName, haspel, ket, `${it.quantity_dispatched || 1} Haspel`, meterTerpakai])
+            ws4.addRow([d.dispatch_date, site, workTypeLabel, techName, hType, haspel, ket, qtyDibawa, meterTerpakai])
           })
         }
       }
