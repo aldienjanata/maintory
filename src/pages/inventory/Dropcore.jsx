@@ -292,8 +292,8 @@ export default function Dropcore() {
 
       // Sheet 2: Riwayat Transaksi
       const ws2 = workbook.addWorksheet('Riwayat Transaksi')
-      const headers2 = ['Kode Haspel', 'Tipe', 'Tanggal', 'Jenis', 'Pekerjaan', 'Teknisi', 'Stok Awal', 'Masuk', 'Keluar', 'Sisa Stok', 'Lokasi/Note']
-      setColumnWidths(ws2, [16, 14, 16, 12, 16, 24, 12, 12, 12, 12, 28])
+      const headers2 = ['Kode Haspel', 'Tipe', 'Tanggal', 'Jenis', 'Pekerjaan', 'Teknisi', 'Stok Awal (m)', 'Masuk (m)', 'Keluar (m)', 'Sisa Stok (m)', 'Lokasi/Note']
+      setColumnWidths(ws2, [16, 14, 16, 12, 18, 28, 14, 14, 14, 14, 30])
       applyHeaderStyle(ws2, headers2, '065F46')
 
       // Fetch all transactions
@@ -313,7 +313,7 @@ export default function Dropcore() {
         if (!transactionsByHaspelId[hId]) transactionsByHaspelId[hId] = []
         
         const haspelCode = haspelMap[hId]?.haspel_code || '-'
-        const haspelType = haspelMap[hId]?.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C'
+        const haspelType = haspelMap[hId]?.type === '1c' ? 'DROPCORE 1C' : 'DROPCORE 4C'
 
         transactionsByHaspelId[hId].push({
           date: l.log_date,
@@ -321,6 +321,7 @@ export default function Dropcore() {
           code: haspelCode,
           type: haspelType,
           jenis: l.action === 'masuk' ? 'Masuk' : 'Koreksi',
+          sortPriority: 0, // Masuk/Koreksi dulu
           work: '-',
           tech: l.user?.full_name || '-',
           stok_awal: 0,
@@ -337,7 +338,7 @@ export default function Dropcore() {
         if (!transactionsByHaspelId[hId]) transactionsByHaspelId[hId] = []
 
         const haspelCode = ei.haspel?.haspel_code || haspelMap[hId]?.haspel_code || '-'
-        const haspelType = (ei.haspel?.type || haspelMap[hId]?.type) === '1c' ? 'Dropcore 1C' : 'Dropcore 4C'
+        const haspelType = (ei.haspel?.type || haspelMap[hId]?.type) === '1c' ? 'DROPCORE 1C' : 'DROPCORE 4C'
         const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
         const wType = ei.expense?.work_type
 
@@ -347,6 +348,7 @@ export default function Dropcore() {
           code: haspelCode,
           type: haspelType,
           jenis: 'Keluar',
+          sortPriority: 1, // Keluar setelah Masuk jika tanggal sama
           work: workTypeLabels[wType] || wType || '-',
           tech: techNames || '-',
           stok_awal: 0,
@@ -362,33 +364,42 @@ export default function Dropcore() {
       // Calculate running balance per haspel
       Object.keys(transactionsByHaspelId).forEach(hId => {
         const txs = transactionsByHaspelId[hId]
+        // FIX: Sort by date, lalu Masuk/Koreksi sebelum Keluar jika tanggal sama
         txs.sort((a, b) => {
           if (a.date !== b.date) return a.date < b.date ? -1 : 1
+          if (a.sortPriority !== b.sortPriority) return a.sortPriority - b.sortPriority
           return new Date(a.created_at) - new Date(b.created_at)
         })
 
-        let currentStock = 0
+        // FIX: Jika tidak ada transaksi Masuk sama sekali (data lama tanpa inventory_log),
+        // mulai dari initial_meters haspel agar balance tidak negatif
+        const hasMasukTx = txs.some(tx => tx.jenis === 'Masuk' || tx.jenis === 'Koreksi')
+        let currentStock = hasMasukTx ? 0 : Number(haspelMap[hId]?.initial_meters || 0)
+
         txs.forEach(tx => {
           tx.stok_awal = currentStock
           if (tx.jenis === 'Masuk' || tx.jenis === 'Koreksi') {
             currentStock += tx.masuk
           } else if (tx.jenis === 'Keluar') {
-            currentStock -= tx.keluar
+            currentStock = Math.max(0, currentStock - tx.keluar)
           }
           tx.stok_akhir = currentStock
           rows2.push(tx)
         })
       })
 
-      // Sort all combined rows by date for the final excel sheet
+      // Sort all combined rows by date + code for the final excel sheet
       rows2.sort((a, b) => {
+        if (a.code !== b.code) return a.code < b.code ? -1 : 1
         if (a.date !== b.date) return a.date < b.date ? -1 : 1
+        if (a.sortPriority !== b.sortPriority) return a.sortPriority - b.sortPriority
         return new Date(a.created_at) - new Date(b.created_at)
       })
       
       for (let i = 0; i < rows2.length; i++) {
         const r = rows2[i]
-        ws2.addRow([r.code, r.type, r.date, r.jenis, r.work, r.tech, r.stok_awal, r.masuk || '-', r.keluar || '-', r.stok_akhir, r.note])
+        // FIX: Gunakan 0 bukan '-' agar bisa di-SUM di Excel
+        ws2.addRow([r.code, r.type, r.date, r.jenis, r.work, r.tech, r.stok_awal, r.masuk, r.keluar, r.stok_akhir, r.note])
         if (i % 20 === 0) {
           showProgress('Mengekspor Data', `Memproses Riwayat Transaksi... (${i + 1}/${rows2.length})`, 50 + ((i + 1) / rows2.length) * 40)
           await new Promise(res => setTimeout(res, 0))
