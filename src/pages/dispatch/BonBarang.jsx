@@ -594,6 +594,20 @@ export default function BonBarang() {
       }
       applyDataRowStyles(ws1)
 
+      // Pre-calculate the first dispatch for each haspel to correctly label "Haspel Utuh"
+      const firstDispatchByHaspel = {}
+      baseData.forEach(d => {
+        if (!d.items) return
+        d.items.filter(it => it.item_type === 'dropcore').forEach(it => {
+          const hId = it.haspel_id || (it.haspel && it.haspel.id)
+          if (hId) {
+            if (!firstDispatchByHaspel[hId] || new Date(d.created_at) < new Date(firstDispatchByHaspel[hId].created_at)) {
+              firstDispatchByHaspel[hId] = { created_at: d.created_at, dispatchId: d.id }
+            }
+          }
+        })
+      })
+
       // ===== SHEET 2: Detail Barang Dibawa =====
       showProgress('Mengekspor Data', 'Memproses Detail Barang...', 30)
       const ws2 = workbook.addWorksheet('Detail Barang Dibawa')
@@ -705,20 +719,6 @@ export default function BonBarang() {
       const headers4 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Kode Haspel', 'Keterangan', 'Qty Dibawa', 'Meter Terpakai']
       setColumnWidths(ws4, [14, 20, 20, 32, 26, 24, 16, 16])
       applyHeaderStyle(ws4, headers4, 'B45309') // bronze
-
-      // Pre-calculate the first dispatch for each haspel to correctly label "Haspel Utuh"
-      const firstDispatchByHaspel = {}
-      baseData.forEach(d => {
-        if (!d.items) return
-        d.items.filter(it => it.item_type === 'dropcore').forEach(it => {
-          const hId = it.haspel_id || (it.haspel && it.haspel.id)
-          if (hId) {
-            if (!firstDispatchByHaspel[hId] || new Date(d.created_at) < new Date(firstDispatchByHaspel[hId].created_at)) {
-              firstDispatchByHaspel[hId] = { created_at: d.created_at, dispatchId: d.id }
-            }
-          }
-        })
-      })
 
       for (let i = 0; i < filteredData.length; i++) {
         const d = filteredData[i]
