@@ -378,7 +378,7 @@ export default function LaporanPemasangan() {
               style={{ borderRadius: 'var(--radius-md) 0 0 var(--radius-md)', borderRight: 'none', flex: 1 }}
             />
             <span style={{ padding: '0 10px', display: 'flex', alignItems: 'center', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '0 var(--radius-md) var(--radius-md) 0', fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-              {site?.suffix || '— pilih site —'}
+              {SITE.suffix}
             </span>
           </div>
           <p style={hintStyle}>ℹ️ Isi angka saja, suffix domain ditambah otomatis</p>
