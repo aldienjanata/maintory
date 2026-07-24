@@ -157,8 +157,8 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
 // ─── SECTION CARD COMPONENT ───────────────────────────────────────────────────
 function SectionCard({ icon: Icon, title, color = 'var(--accent)', children }) {
   return (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', marginBottom: '16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg-primary)' }}>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg-primary)', borderTopLeftRadius: 'var(--radius-lg)', borderTopRightRadius: 'var(--radius-lg)' }}>
         <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', color }}>
           <Icon size={15} />
         </div>
@@ -317,7 +317,7 @@ export default function LaporanPemasangan() {
           </div>
           <div>
             <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 800 }}>Laporan Pemasangan</h1>
-            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>Generate laporan WA pemasangan internet</p>
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>Generate laporan WA pemasangan baru</p>
           </div>
         </div>
       </div>
@@ -343,17 +343,7 @@ export default function LaporanPemasangan() {
         </div>
       )}
 
-      {/* ── SITE BADGE (fixed Banyumas) ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: 'var(--radius-md)', marginBottom: '16px' }}>
-        <span style={{ fontSize: '18px' }}>{SITE.icon}</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--accent)' }}>Site: {SITE.label}</div>
-          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>OLT: {SITE.olt} · Suffix: {SITE.suffix}</div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--success)', fontWeight: 600 }}>
-          <Check size={12} /> Aktif
-        </div>
-      </div>
+
 
       {/* ── SEKSI 2: TANGGAL ── */}
       <SectionCard icon={Info} title="Tanggal Pemasangan" color="#6366f1">
