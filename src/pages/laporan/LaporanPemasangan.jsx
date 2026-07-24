@@ -94,6 +94,15 @@ function up(v) {
   return v.toString().toUpperCase()
 }
 
+function normalizeRedaman(val) {
+  if (!val || !val.trim()) return '-'
+  let s = val.trim().toLowerCase().replace(/\s*dbm$/i, '')
+  s = s.replace(/[^0-9.,-]/g, '').replace(/,/g, '.')
+  if (!s) return '-'
+  if (!s.startsWith('-')) s = '-' + s
+  return s + ' dbm'
+}
+
 // ─── SEARCHABLE SELECT COMPONENT ─────────────────────────────────────────────
 function SearchableSelect({ options, value, onChange, placeholder }) {
   const [open, setOpen] = useState(false)
@@ -263,7 +272,7 @@ export default function LaporanPemasangan() {
       `SN PON: ${up(form.sn) || '-'}`,
       `Vlan ID: ${up(form.vlanId) || '-'}`,
       `OLT: ${up(form.olt) || '-'}`,
-      `REDAMAN: ${up(form.redaman) || '-'}`,
+      `REDAMAN: ${normalizeRedaman(form.redaman)}`,
       `PANJANG KABEL: ${up(form.panjangKabel) || '-'}`,
       `KLAM KABEL: ${up(form.klamKabel) || '-'}`,
       `PATHCORE: ${up(form.pathcore) || '-'}`,
