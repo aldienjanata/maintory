@@ -34,6 +34,7 @@ export default function Maintenance() {
   const [parsedTickets, setParsedTickets] = useState([])
   const [globalTechnicians, setGlobalTechnicians] = useState([]) // Teknisi hari ini, berlaku ke semua tiket
   const [actionModal, setActionModal] = useState({ open: false, ticket: null, type: 'close', note: '' })
+  const [exportModal, setExportModal] = useState(false)
 
   useEffect(() => {
     fetchTickets()
@@ -272,44 +273,91 @@ export default function Maintenance() {
       return na - nb
     })
 
-  const handleExport = async () => {
+  // ─── EXPORT ───────────────────────────────────────────────────────────────
+  const handleExport = async (range) => {
     try {
+      setExportModal(false)
       showProgress('Menyiapkan Export', 'Menginisialisasi file Excel...', 10)
       const { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } = await import('../../utils/excelHelper.js')
       const ExcelJS = (await import('exceljs')).default
+
+      // Determine data range
+      const today = new Date()
+      const todayStr = format(today, 'yyyy-MM-dd')
+      const thisMonthStr = format(today, 'yyyy-MM')
+
+      let exportData = [...tickets]
+      let rangeLabel = 'Semua'
+      if (range === 'today') {
+        exportData = tickets.filter(t => (t.created_at || '').startsWith(todayStr))
+        rangeLabel = format(today, 'dd MMM yyyy', { locale: id })
+      } else if (range === 'month') {
+        exportData = tickets.filter(t => (t.created_at || '').startsWith(thisMonthStr))
+        rangeLabel = format(today, 'MMMM yyyy', { locale: id })
+      }
+
+      // Sort by ticket_number asc
+      exportData.sort((a, b) => (parseInt(a.ticket_number) || 0) - (parseInt(b.ticket_number) || 0))
+
       const workbook = new ExcelJS.Workbook()
       const ws = workbook.addWorksheet('Maintenance')
-      
-      const headers = ['No Tiket', 'Tgl Tiket', 'Tgl Selesai', 'ID Pelanggan', 'Nama Pelanggan', 'No HP', 'Keluhan', 'Desa', 'Titik Maps', 'Teknisi', 'Status', 'Catatan']
-      setColumnWidths(ws, [10, 16, 16, 16, 24, 16, 30, 20, 30, 24, 12, 24])
+
+      const headers = [
+        'No Tiket', 'Tgl Tiket', 'Tgl Selesai',
+        'ID Pelanggan', 'Nama Pelanggan', 'No HP',
+        'Keluhan', 'Note', 'Desa', 'Titik Maps',
+        'Di Close Oleh', 'Status'
+      ]
+      setColumnWidths(ws, [10, 14, 14, 26, 26, 16, 34, 28, 18, 34, 22, 12])
       applyHeaderStyle(ws, headers)
-      
-      for (let i = 0; i < filteredTickets.length; i++) {
-        const t = filteredTickets[i]
+
+      const statusLabel = { aktif: 'Aktif', pending: 'Pending', close: 'Selesai' }
+
+      for (let i = 0; i < exportData.length; i++) {
+        const t = exportData[i]
+        const tglTiket = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy') : ''
+        const tglSelesai = t.completed_at ? format(new Date(t.completed_at), 'dd/MM/yyyy') : ''
         ws.addRow([
-          t.ticket_number,
-          t.created_at ? t.created_at.split('T')[0] : '',
-          t.completed_at ? t.completed_at.split('T')[0] : '',
+          t.ticket_number || '',
+          tglTiket,
+          tglSelesai,
           t.customer_id || '',
           t.customer_name || '',
           t.phone_number || '',
           t.complaint || '',
+          t.note || '',
           t.village || '',
           t.sharelok || '',
-          getTechNames(t.technicians),
-          t.status,
-          t.note || ''
+          t.closed_by_name || '-',
+          statusLabel[t.status] || t.status || ''
         ])
         if (i % 20 === 0) {
-          showProgress('Mengekspor Data', `Memproses baris ${i + 1} dari ${filteredTickets.length}...`, 10 + ((i + 1) / filteredTickets.length) * 80)
+          showProgress('Mengekspor Data', `Memproses ${i + 1} dari ${exportData.length} tiket...`, 10 + ((i + 1) / exportData.length) * 80)
           await new Promise(r => setTimeout(r, 0))
         }
       }
+
       applyDataRowStyles(ws)
 
+      // Color status cells
+      const startRow = 2
+      ws.eachRow((row, rowNumber) => {
+        if (rowNumber < startRow) return
+        const statusCell = row.getCell(12)
+        const val = statusCell.value
+        if (val === 'Selesai') {
+          statusCell.font = { bold: true, color: { argb: 'FF16A34A' } }
+        } else if (val === 'Aktif') {
+          statusCell.font = { bold: true, color: { argb: 'FFDC2626' } }
+        } else if (val === 'Pending') {
+          statusCell.font = { bold: true, color: { argb: 'FFD97706' } }
+        }
+      })
+
       showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
-      await downloadWorkbook(workbook, `Maintenance ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
-      toast.success('Export berhasil!')
+      const filename = `Maintenance ${rangeLabel} - ${format(today, 'yyyy-MM-dd')}.xlsx`
+      await downloadWorkbook(workbook, filename)
+      toast.success(`Export berhasil! (${exportData.length} tiket)`)
     } catch (err) {
       toast.error('Gagal export: ' + err.message)
     } finally {
@@ -331,7 +379,7 @@ export default function Maintenance() {
         </div>
         <div className="page-header-right">
           {can(role, 'maintenance.export') && (
-            <button className="btn btn-secondary" onClick={handleExport}>
+            <button className="btn btn-secondary" onClick={() => setExportModal(true)}>
               <Download size={16} /> Export
             </button>
           )}
@@ -769,7 +817,48 @@ export default function Maintenance() {
         document.body
       )}
 
+      {/* Export Modal */}
+      {exportModal && createPortal(
+        <div className="modal-overlay" onClick={() => setExportModal(false)}>
+          <div className="modal" style={{ maxWidth: '380px', width: '90%' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Download size={16} /> Export Data Maintenance
+              </h3>
+              <button className="btn-icon" onClick={() => setExportModal(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <p style={{ margin: '0 0 4px', fontSize: '13px', color: 'var(--text-secondary)' }}>Pilih rentang data yang akan di-export:</p>
+
+              {[
+                { range: 'today', label: '📅 Hari Ini', desc: `Data tanggal ${format(new Date(), 'dd MMMM yyyy', { locale: id })}` },
+                { range: 'month', label: '🗓️ Bulan Ini', desc: `Data bulan ${format(new Date(), 'MMMM yyyy', { locale: id })}` },
+                { range: 'all',   label: '📊 Semua Data', desc: 'Seluruh data maintenance tanpa filter tanggal' },
+              ].map(({ range, label, desc }) => (
+                <button
+                  key={range}
+                  onClick={() => handleExport(range)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                    gap: '2px', padding: '12px 16px', border: '1px solid var(--border)',
+                    borderRadius: '10px', background: 'var(--bg-primary)', cursor: 'pointer',
+                    textAlign: 'left', transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-dim)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-primary)' }}
+                >
+                  <span style={{ fontWeight: 700, fontSize: '14px' }}>{label}</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
     </div>
+
   )
 }
 
