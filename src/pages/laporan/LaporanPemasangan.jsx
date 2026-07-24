@@ -597,7 +597,7 @@ export default function LaporanPemasangan() {
       </SectionCard>
 
       {/* ── STICKY ACTION BUTTONS ── */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 16px', background: 'var(--bg-primary)', borderTop: '1px solid var(--border)', display: 'flex', gap: '10px', zIndex: 100, backdropFilter: 'blur(10px)' }}>
+      <div style={{ position: 'sticky', bottom: '20px', padding: '12px 16px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '16px', display: 'flex', gap: '10px', zIndex: 100, boxShadow: 'var(--shadow-lg)' }}>
         <button
           type="button"
           onClick={handleReset}
