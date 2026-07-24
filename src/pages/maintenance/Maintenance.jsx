@@ -446,12 +446,13 @@ export default function Maintenance() {
                         )}
                       </td>
                       <td>
-                        <div>{getTechNames(ticket.technicians)}</div>
-                        {ticket.status === 'close' && ticket.closed_by_name && (
-                          <div style={{ marginTop: '5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <CheckCircle size={10} style={{ color: 'var(--success)', flexShrink: 0 }} />
-                            <span style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600 }}>Ditutup: {ticket.closed_by_name}</span>
+                        {ticket.status === 'close' && ticket.closed_by_name ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <CheckCircle size={11} style={{ color: 'var(--success)', flexShrink: 0 }} />
+                            <span style={{ fontSize: '12px', color: 'var(--success)', fontWeight: 600 }}>Di close oleh {ticket.closed_by_name}</span>
                           </div>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>—</span>
                         )}
                       </td>
                       <td>
@@ -550,15 +551,15 @@ export default function Maintenance() {
                           </div>
                         )}
 
-                        <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(ticket.technicians)}</span></div>
-                        {ticket.status === 'close' && ticket.closed_by_name && (
-                          <div className="mobile-info-row">
-                            <span className="mobile-info-label">Ditutup oleh</span>
-                            <span className="mobile-info-value" style={{ color: 'var(--success)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
-                              <CheckCircle size={12} /> {ticket.closed_by_name}
-                            </span>
-                          </div>
-                        )}
+                        <div className="mobile-info-row">
+                          <span className="mobile-info-label">Di close oleh</span>
+                          <span className="mobile-info-value" style={{ color: ticket.status === 'close' && ticket.closed_by_name ? 'var(--success)' : 'var(--text-muted)', fontWeight: ticket.status === 'close' ? 600 : 400, display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
+                            {ticket.status === 'close' && ticket.closed_by_name
+                              ? <><CheckCircle size={12} /> {ticket.closed_by_name}</>
+                              : '—'
+                            }
+                          </span>
+                        </div>
 
                         <div className="mobile-card-actions">
                           {ticket.status === 'aktif' && (
