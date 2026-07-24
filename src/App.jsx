@@ -16,6 +16,7 @@ import Dismantle from './pages/dismantle/Dismantle'
 import OntReplacement from './pages/ont/OntReplacement'
 import ActivityLogs from './pages/activity/ActivityLogs'
 import Settings from './pages/settings/Settings'
+import LaporanPemasangan from './pages/laporan/LaporanPemasangan'
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth()
@@ -77,6 +78,7 @@ function App() {
           <Route path="ont" element={<OntReplacement />} />
           <Route path="logs" element={<ActivityLogs />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="laporan-pemasangan" element={<LaporanPemasangan />} />
         </Route>
       </Routes>
     </Router>

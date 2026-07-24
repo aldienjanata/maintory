@@ -14,7 +14,8 @@ import {
   RefreshCcw,
   History,
   Settings,
-  ClipboardList
+  ClipboardList,
+  FileText
 } from 'lucide-react'
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -34,6 +35,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { label: 'Pengeluaran', path: '/pengeluaran', icon: <Truck />, section: 'OPERATIONS' },
     { label: 'Dismantle', path: '/dismantle', icon: <ArrowDownToLine />, section: 'OPERATIONS' },
     { label: 'Pergantian ONT', path: '/ont', icon: <RefreshCcw />, section: 'OPERATIONS' },
+    { label: 'Laporan Pemasangan', path: '/laporan-pemasangan', icon: <FileText />, section: 'OPERATIONS' },
     
     { label: 'Log Aktivitas', path: '/logs', icon: <History />, section: 'SYSTEM' },
     { label: 'Pengaturan', path: '/settings', icon: <Settings />, section: 'SYSTEM' },
