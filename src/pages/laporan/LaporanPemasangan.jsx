@@ -4,41 +4,17 @@ import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
 import {
   FileText, Copy, RotateCcw, ChevronDown, ChevronUp,
-  MapPin, User, Package, Wifi, Info, Check, Zap
+  User, Package, Wifi, Info, Check, Zap
 } from 'lucide-react'
 
-// ─── STATIC DATA ─────────────────────────────────────────────────────────────
-const SITES = [
-  { value: 'Banyumas', label: 'Banyumas', suffix: '@bms.wifian.net.id', olt: 'BANYUMAS', icon: '🌿', desc: 'BMS · bms.wifian.net.id' },
-  { value: 'Cilacap',  label: 'Cilacap',  suffix: '@clp.wifian.net.id', olt: 'CILACAP',  icon: '🌊', desc: 'CLP · clp.wifian.net.id' },
-  { value: 'Herman',   label: 'Herman',   suffix: '@clp.wifian.net.id', olt: 'CILACAP',  icon: '⭐', desc: 'CLP · clp.wifian.net.id' },
-  { value: 'Kebumen',  label: 'Kebumen',  suffix: '@kbm.wifian.net.id', olt: 'KEBUMEN',  icon: '🏔️', desc: 'KBM · kbm.wifian.net.id' },
-  { value: 'Rowokele', label: 'Rowokele', suffix: '@rkw.wifian.net.id', olt: 'ROWOKELE', icon: '🌄', desc: 'RKW · rkw.wifian.net.id' },
-]
+// ─── STATIC DATA (Khusus Banyumas) ───────────────────────────────────────────
+const SITE = { value: 'Banyumas', label: 'Banyumas', suffix: '@bms.wifian.net.id', olt: 'BANYUMAS', icon: '🌿', desc: 'BMS · bms.wifian.net.id' }
 
-const BANDWIDTH = {
-  Banyumas: ['HELIUM 50Mbps - Rp 170.000','HELIUM 100Mbps - Rp 280.000','HELIUM 50Mbps DISCOUNT - Rp 115.000','HELIUM 50Mbps FREE - Rp 0','PROMO 3 BULAN PERTAMA 50Mbps - Rp 20.000','PAKET 2026 PROMO 100Mbps - Rp 150.000','PAKET 2026 PROMO 3 BULAN 100Mbps - Rp 100.000','PROMO 9 BULAN 50Mbps - Rp 115.000','PAKET PROMO 3 BULAN PERTAMA 100Mbps - Rp 30.000','PAKET PROMO 9 BULAN 100Mbps - Rp 170.000','PAKET SOHO 100Mbps - Rp 500.000'],
-  Cilacap:  ['HELIUM 50Mbps - Rp 170.000','HELIUM 100Mbps - Rp 280.000','HELIUM 50Mbps DISCOUNT - Rp 115.000','HELIUM 50Mbps FREE - Rp 0','PROMO 3 BULAN AWAL - Rp 20.000','PAKET 2026 PROMO 100Mbps - Rp 150.000','PAKET 2026 PROMO 3 BULAN 100Mbps - Rp 100.000'],
-  Herman:   ['HELIUM GRATIS 1 TAHUN - Rp 20.000','PAKET FREE 50 MBPS - Rp 0'],
-  Kebumen:  ['PROMO TAHUNAN 3 BULAN PERTAMA 50Mbps - Rp 20.000','PROMO TAHUNAN 3 BULAN PERTAMA 100Mbps - Rp 30.000','PROMO 9 BULAN 50Mbps - Rp 115.000','PROMO 9 BULAN 100Mbps - Rp 170.000','PAKET 50 MBPS - Rp 175.000','PAKET 2026 PROMO 3 BULAN 100Mbps - Rp 100.000','PAKET 2026 PROMO 100Mbps - Rp 150.000','HELIUM 70Mbps - Rp 200.000','HELIUM 50Mbps - Rp 180.000','HELIUM 50 MBPS FREE - Rp 0'],
-  Rowokele: ['PROMO 9 BULAN 100Mbps - Rp 150.000','PROMO 3 BULAN 100Mbps - Rp 100.000','HELIUM 50Mbps FREE - Rp 0','SINTEL 100Mbps - Rp 280.000','SINTEL 50Mbps - Rp 170.000','PROMO 1 TAHUN - Rp 20.000'],
-}
+const BANDWIDTH = ['HELIUM 50Mbps - Rp 170.000','HELIUM 100Mbps - Rp 280.000','HELIUM 50Mbps DISCOUNT - Rp 115.000','HELIUM 50Mbps FREE - Rp 0','PROMO 3 BULAN PERTAMA 50Mbps - Rp 20.000','PAKET 2026 PROMO 100Mbps - Rp 150.000','PAKET 2026 PROMO 3 BULAN 100Mbps - Rp 100.000','PROMO 9 BULAN 50Mbps - Rp 115.000','PAKET PROMO 3 BULAN PERTAMA 100Mbps - Rp 30.000','PAKET PROMO 9 BULAN 100Mbps - Rp 170.000','PAKET SOHO 100Mbps - Rp 500.000']
 
-const MARKETING = {
-  Banyumas: ['Anto Sejariyanto','Paryo Prayogi','Sarno'],
-  Cilacap:  ['Kundarto'],
-  Herman:   ['Herman'],
-  Kebumen:  ['Gatot n Fitrianto'],
-  Rowokele: ['Fitriyanto n Gatot'],
-}
+const MARKETING = ['Anto Sejariyanto','Paryo Prayogi','Sarno']
 
-const KOORDINATOR = {
-  Banyumas: ['Muarif Anto','Handoko3','Nur Khasan-Anto','Sapto Handoko','Achmad Saadi','Bejo','Shoudy Bagus Larado','Bumdes Karag','Kaliwedi Diman','Sarno','Ahida barid Asmara','Budi Martono','Mukhafid','Sukirno','Krisna','Syaiful Mumin','Agus Hariwibowo','Herman','Moh Amir Syarifuddin','Musolih','Nur Khasanah','Imam Fauzi','Suparman','Joenarto Tri Djoko Soetiksno','Fiat Aldila','Jumadi Abdillah','Bumdes Sidasari','Sapto Handoko Bumdes Sidamulya','Hari Irawan','Nur Khasan-Prayogi','Mohammad Ali Makruf','Bambang Sudi','Kuat Widodo','Yatiman Yulianto','Lusi Eka Susanti','Kaliwedi Baha','Puthut Handoko','Naslim Gunungnangka','Budi Santoso','Dyah Agus Purwani','Siswoyo','Bumdes Bangsa','Amira','Alasmalang Bumdes','Adisana KUD Kebasen'],
-  Cilacap:  ['Ahmad Romli','Herman','Suherman'],
-  Herman:   ['Herman'],
-  Kebumen:  ['Juni Aminudin','Salsabila Setiawan','Aditya Wibowo','Wahyu Andi Saputra','Poniran','Hermanto','Fadhilah Mustaqim','Budi Harsono','Farid Ibnu Hayyan','Gatot Setiawan','Fitriyanto','Elok Faiqoh','Silvia Indriani','Oki Kaswoyo','Surip','Caturiyani Anugrahwati','Darmanto','Supriyono','Margijono,AM.TEM.','Is Setyadi','Candra Edi Wahyono'],
-  Rowokele: ['Dahori','Chomsiyatun','Andika Tri Wibowo','Sulasih','Gatot Setiawan','Supendi','Nugraha Era Pamungkas','Wiratama Aji Pamungkas','Edi Pranoto','Nur Chamid'],
-}
+const KOORDINATOR = ['Muarif Anto','Handoko3','Nur Khasan-Anto','Sapto Handoko','Achmad Saadi','Bejo','Shoudy Bagus Larado','Bumdes Karag','Kaliwedi Diman','Sarno','Ahida barid Asmara','Budi Martono','Mukhafid','Sukirno','Krisna','Syaiful Mumin','Agus Hariwibowo','Herman','Moh Amir Syarifuddin','Musolih','Nur Khasanah','Imam Fauzi','Suparman','Joenarto Tri Djoko Soetiksno','Fiat Aldila','Jumadi Abdillah','Bumdes Sidasari','Sapto Handoko Bumdes Sidamulya','Hari Irawan','Nur Khasan-Prayogi','Mohammad Ali Makruf','Bambang Sudi','Kuat Widodo','Yatiman Yulianto','Lusi Eka Susanti','Kaliwedi Baha','Puthut Handoko','Naslim Gunungnangka','Budi Santoso','Dyah Agus Purwani','Siswoyo','Bumdes Bangsa','Amira','Alasmalang Bumdes','Adisana KUD Kebasen']
 
 const STATUS_TEMPAT = ['RUMAH SENDIRI','KONTRAKAN','KOST','APARTEMEN','INSTANSI']
 
@@ -197,7 +173,6 @@ function SectionCard({ icon: Icon, title, color = 'var(--accent)', children }) {
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 const EMPTY_FORM = {
-  site: '',
   tanggal: todayISO(),
   idPelanggan: '',
   nik: '',
@@ -218,7 +193,7 @@ const EMPTY_FORM = {
   shareOdp: '',
   idOdp: '',
   sn: '',
-  olt: '',
+  olt: SITE.olt,
   redaman: '',
   panjangKabel: '',
   klamKabel: '',
@@ -237,8 +212,6 @@ export default function LaporanPemasangan() {
   const [copied, setCopied] = useState(false)
   const outputRef = useRef(null)
 
-  const site = SITES.find(s => s.value === form.site)
-
   // Auto-fill teknisi from profile
   useEffect(() => {
     if (profile?.full_name && !form.teknisi) {
@@ -247,18 +220,6 @@ export default function LaporanPemasangan() {
   }, [profile])
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
-
-  const handleSiteSelect = (siteVal) => {
-    const s = SITES.find(x => x.value === siteVal)
-    setForm(f => ({
-      ...f,
-      site: siteVal,
-      olt: s?.olt || '',
-      bandwidth: '',
-      marketing: '',
-      koordinator: '',
-    }))
-  }
 
   const handleNikChange = (val) => {
     const digits = val.replace(/\D/g, '')
@@ -271,11 +232,9 @@ export default function LaporanPemasangan() {
   }
 
   const handleGenerate = () => {
-    if (!form.site) { toast.error('Pilih site terlebih dahulu!'); return }
     if (form.nik && form.nik.length !== 16) { toast.error('NIK harus 16 digit!'); return }
 
-    const s = SITES.find(x => x.value === form.site)
-    const idPelanggan = normalizeIdPelanggan(form.idPelanggan, s.suffix)
+    const idPelanggan = normalizeIdPelanggan(form.idPelanggan, SITE.suffix)
     const alamat = buildAlamat(form.jalan, form.rtRw, form.desa, form.kecamatan)
     const waFormatted = normalizeWA(form.wa)
     const lokURL = extractURL(form.shareLok)
@@ -338,7 +297,7 @@ export default function LaporanPemasangan() {
 
   const handleReset = () => {
     if (!window.confirm('Reset semua isian? Data yang sudah diisi akan hilang.')) return
-    setForm({ ...EMPTY_FORM, tanggal: todayISO(), teknisi: profile?.full_name || '' })
+    setForm({ ...EMPTY_FORM, tanggal: todayISO(), olt: SITE.olt, teknisi: profile?.full_name || '' })
     setNikError('')
     setOutput('')
     toast.success('Form berhasil direset')
@@ -384,42 +343,17 @@ export default function LaporanPemasangan() {
         </div>
       )}
 
-      {/* ── SEKSI 1: PILIH SITE ── */}
-      <SectionCard icon={MapPin} title="Pilih Site / Area" color="var(--accent)">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '4px' }}>
-          {SITES.map(s => (
-            <button
-              key={s.value}
-              type="button"
-              onClick={() => handleSiteSelect(s.value)}
-              style={{
-                padding: '10px 8px',
-                border: `2px solid ${form.site === s.value ? 'var(--accent)' : 'var(--border)'}`,
-                borderRadius: '10px',
-                background: form.site === s.value ? 'var(--accent-dim)' : 'var(--bg-primary)',
-                cursor: 'pointer',
-                textAlign: 'center',
-                transition: 'all 0.15s',
-                position: 'relative',
-              }}
-            >
-              {form.site === s.value && (
-                <div style={{ position: 'absolute', top: '4px', right: '4px', width: '16px', height: '16px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Check size={10} color="white" />
-                </div>
-              )}
-              <div style={{ fontSize: '18px', marginBottom: '2px' }}>{s.icon}</div>
-              <div style={{ fontWeight: 700, fontSize: '12px', color: form.site === s.value ? 'var(--accent)' : 'var(--text-primary)' }}>{s.label}</div>
-              <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '1px' }}>{s.desc.split(' · ')[0]}</div>
-            </button>
-          ))}
+      {/* ── SITE BADGE (fixed Banyumas) ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: 'var(--radius-md)', marginBottom: '16px' }}>
+        <span style={{ fontSize: '18px' }}>{SITE.icon}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--accent)' }}>Site: {SITE.label}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>OLT: {SITE.olt} · Suffix: {SITE.suffix}</div>
         </div>
-        {site && (
-          <div style={{ marginTop: '10px', padding: '8px 12px', background: 'var(--accent-dim)', borderRadius: '8px', fontSize: '12px', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Zap size={12} /> Area dipilih: <strong>{site.label}</strong> — OLT: <strong>{site.olt}</strong> — Suffix: <code style={{ fontSize: '11px' }}>{site.suffix}</code>
-          </div>
-        )}
-      </SectionCard>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--success)', fontWeight: 600 }}>
+          <Check size={12} /> Aktif
+        </div>
+      </div>
 
       {/* ── SEKSI 2: TANGGAL ── */}
       <SectionCard icon={Info} title="Tanggal Pemasangan" color="#6366f1">
@@ -530,42 +464,30 @@ export default function LaporanPemasangan() {
         {/* Bandwidth/Paket */}
         <div style={inputStyle}>
           <label style={labelStyle}>Paket</label>
-          {form.site ? (
-            <select className="form-input" value={form.bandwidth} onChange={e => set('bandwidth', e.target.value)}>
-              <option value="">— Pilih Paket —</option>
-              {(BANDWIDTH[form.site] || []).map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
-          ) : (
-            <input className="form-input" disabled placeholder="— Pilih site dulu —" />
-          )}
+          <select className="form-input" value={form.bandwidth} onChange={e => set('bandwidth', e.target.value)}>
+            <option value="">— Pilih Paket —</option>
+            {BANDWIDTH.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
         </div>
 
         {/* Marketing */}
         <div style={inputStyle}>
           <label style={labelStyle}>Marketing</label>
-          {form.site ? (
-            <select className="form-input" value={form.marketing} onChange={e => set('marketing', e.target.value)}>
-              <option value="">— Pilih Marketing —</option>
-              {(MARKETING[form.site] || []).map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          ) : (
-            <input className="form-input" disabled placeholder="— Pilih site dulu —" />
-          )}
+          <select className="form-input" value={form.marketing} onChange={e => set('marketing', e.target.value)}>
+            <option value="">— Pilih Marketing —</option>
+            {MARKETING.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
         </div>
 
         {/* Koordinator */}
         <div style={inputStyle}>
           <label style={labelStyle}>Koordinator</label>
-          {form.site ? (
-            <SearchableSelect
-              options={KOORDINATOR[form.site] || []}
-              value={form.koordinator}
-              onChange={val => set('koordinator', val)}
-              placeholder="— Pilih Koordinator —"
-            />
-          ) : (
-            <input className="form-input" disabled placeholder="— Pilih site dulu —" />
-          )}
+          <SearchableSelect
+            options={KOORDINATOR}
+            value={form.koordinator}
+            onChange={val => set('koordinator', val)}
+            placeholder="— Pilih Koordinator —"
+          />
         </div>
       </SectionCard>
 
