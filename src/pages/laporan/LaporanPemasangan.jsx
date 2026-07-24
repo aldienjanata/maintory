@@ -193,6 +193,7 @@ const EMPTY_FORM = {
   shareOdp: '',
   idOdp: '',
   sn: '',
+  vlanId: '',
   olt: SITE.olt,
   redaman: '',
   panjangKabel: '',
@@ -260,6 +261,7 @@ export default function LaporanPemasangan() {
       `TIKOR ODP: ${odpURL}`,
       `ID ODP: ${up(form.idOdp) || '-'}`,
       `SN PON: ${up(form.sn) || '-'}`,
+      `Vlan ID: ${up(form.vlanId) || '-'}`,
       `OLT: ${up(form.olt) || '-'}`,
       `REDAMAN: ${up(form.redaman) || '-'}`,
       `PANJANG KABEL: ${up(form.panjangKabel) || '-'}`,
@@ -523,10 +525,16 @@ export default function LaporanPemasangan() {
           <input type="text" className="form-input" placeholder="Kosongkan jika tidak ada" value={form.idOdp} onChange={e => set('idOdp', e.target.value)} />
         </div>
 
-        {/* SN PON */}
-        <div style={inputStyle}>
-          <label style={labelStyle}>SN PON (Serial Number)</label>
-          <input type="text" className="form-input" placeholder="HWTC1CEC5AA3" autoCapitalize="characters" value={form.sn} onChange={e => set('sn', e.target.value.toUpperCase())} />
+        {/* SN PON & Vlan ID */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+          <div>
+            <label style={labelStyle}>SN PON (Serial Number)</label>
+            <input type="text" className="form-input" placeholder="HWTC1CEC5AA3" autoCapitalize="characters" value={form.sn} onChange={e => set('sn', e.target.value.toUpperCase())} />
+          </div>
+          <div>
+            <label style={labelStyle}>Vlan ID</label>
+            <input type="text" className="form-input" placeholder="2024" value={form.vlanId} onChange={e => set('vlanId', e.target.value)} />
+          </div>
         </div>
 
         {/* OLT */}
