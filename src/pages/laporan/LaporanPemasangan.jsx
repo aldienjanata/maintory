@@ -256,7 +256,7 @@ export default function LaporanPemasangan() {
       `PAKET: ${up(form.bandwidth) || '-'}`,
       `MARKETING: ${up(form.marketing) || '-'}`,
       `KOORDINATOR: ${up(form.koordinator) || '-'}`,
-      `SHARE LOK  CLIENT: ${lokURL}`,
+      `SHARE LOK CLIENT: ${lokURL}`,
       `ID FAT/ODC: ${up(form.fatOdc) || '-'}`,
       `TIKOR ODP: ${odpURL}`,
       `ID ODP: ${up(form.idOdp) || '-'}`,
