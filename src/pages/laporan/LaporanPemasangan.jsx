@@ -261,7 +261,7 @@ export default function LaporanPemasangan() {
       `STATUS TEMPAT TINGGAL: ${up(form.statusTempat) || '-'}`,
       `PATOKAN: ${up(form.patokan) || '-'}`,
       `WA: ${waFormatted}`,
-      `EMAIL: ${form.email ? form.email.toUpperCase() : '-'}`,
+      `EMAIL: ${form.email ? form.email.toLowerCase() : '-'}`,
       `PAKET: ${up(form.bandwidth) || '-'}`,
       `MARKETING: ${up(form.marketing) || '-'}`,
       `KOORDINATOR: ${up(form.koordinator) || '-'}`,
