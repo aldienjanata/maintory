@@ -93,6 +93,7 @@ export default function OntReplacement() {
   const { showProgress, hideProgress } = useProgress()
 
   const [items, setItems] = useState([])
+  const [technicians, setTechnicians] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [dateFilter, setDateFilter] = useState('')
@@ -112,11 +113,12 @@ export default function OntReplacement() {
 
   const fetchAll = async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('ont_replacements')
-      .select('*, new_sn:serial_numbers(serial_number, brand:ont_brands(brand_name), type:ont_types(type_name))')
-      .order('replacement_date', { ascending: false })
-    if (!error) setItems(data || [])
+    const [res, techRes] = await Promise.all([
+      supabase.from('ont_replacements').select('*, new_sn:serial_numbers(serial_number, brand:ont_brands(brand_name), type:ont_types(type_name))').order('replacement_date', { ascending: false }),
+      supabase.from('users').select('id, full_name').in('role', ['admin', 'teknisi']).eq('is_active', true)
+    ])
+    if (!res.error) setItems(res.data || [])
+    if (!techRes.error) setTechnicians(techRes.data || [])
     setLoading(false)
   }
 
@@ -229,7 +231,9 @@ export default function OntReplacement() {
 
   const getTechDisplay = (item) => {
     if (item.technician_text) return item.technician_text
-    if (item.technicians?.length) return item.technicians.join(', ')
+    if (item.technicians?.length) {
+      return item.technicians.map(id => technicians.find(t => t.id === id)?.full_name || id).join(', ')
+    }
     return '-'
   }
 
