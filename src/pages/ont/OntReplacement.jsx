@@ -490,7 +490,7 @@ Minta tolong Config ulang @Call Center Wifian Solution`
                 <label className="form-label">Paste pesan WA di sini</label>
                 <textarea
                   className="form-input"
-                  rows={10}
+                  rows={6}
                   value={waText}
                   onChange={e => handleWaChange(e.target.value)}
                   placeholder="Paste teks WA di sini..."
