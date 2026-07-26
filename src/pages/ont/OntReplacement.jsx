@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, X, RefreshCcw, ArrowRight, Download } from 'lucide-react'
-import { format } from 'date-fns'
+import { Search, Plus, Trash2, X, RefreshCcw, ArrowRight, Download, ClipboardPaste, CheckCircle } from 'lucide-react'
+import { format, parse, isValid } from 'date-fns'
 import { id } from 'date-fns/locale'
 import { useProgress } from '../../contexts/ProgressContext'
 import Pagination from '../../components/common/Pagination'
@@ -16,89 +17,185 @@ const SITES = [
   { value: 'cilacap_herman', label: 'Cilacap (Herman)' }
 ]
 
+// ─── DATE PARSER ────────────────────────────────────────────────────────────
+// Parses Indonesian date strings like "Jum'at,24 Juli 2026" or "24 Juli 2026" or "24/07/2026"
+function parseIndonesianDate(raw) {
+  if (!raw || !raw.trim()) return null
+  let s = raw.trim()
+
+  // Strip day-name prefix: "Jum'at,24 Juli 2026" → "24 Juli 2026"
+  s = s.replace(/^[A-Za-z']+\s*,\s*/u, '').trim()
+
+  const MONTHS = {
+    januari: 1, februari: 2, maret: 3, april: 4, mei: 5, juni: 6,
+    juli: 7, agustus: 8, september: 9, oktober: 10, november: 11, desember: 12,
+    jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, agt: 8, sep: 9, okt: 10, nov: 11, des: 12,
+    'agu': 8,
+  }
+
+  // "24 Juli 2026"
+  const longMatch = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/)
+  if (longMatch) {
+    const d = parseInt(longMatch[1])
+    const m = MONTHS[longMatch[2].toLowerCase()]
+    const y = parseInt(longMatch[3])
+    if (m && d && y) {
+      const date = new Date(y, m - 1, d)
+      if (isValid(date)) return format(date, 'yyyy-MM-dd')
+    }
+  }
+
+  // "24/07/2026" or "24-07-2026"
+  const slashMatch = s.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})$/)
+  if (slashMatch) {
+    const d = parseInt(slashMatch[1])
+    const m = parseInt(slashMatch[2])
+    const y = parseInt(slashMatch[3])
+    const date = new Date(y, m - 1, d)
+    if (isValid(date)) return format(date, 'yyyy-MM-dd')
+  }
+
+  // "2026-07-24"
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (isoMatch) return s
+
+  return null
+}
+
+// ─── WA TEXT PARSER ─────────────────────────────────────────────────────────
+function parseWaText(text) {
+  const up = (s) => (s || '').trim().toUpperCase()
+
+  const getField = (label) => {
+    const regex = new RegExp(`${label}\\s*:?\\s*(.+)`, 'im')
+    const m = text.match(regex)
+    return m ? m[1].trim() : ''
+  }
+
+  const rawDate = getField('Tanggal Pergantian')
+  const parsedDate = parseIndonesianDate(rawDate) || format(new Date(), 'yyyy-MM-dd')
+
+  return {
+    replacement_date: parsedDate,
+    customer_name: up(getField('NAMA PELANGGAN')),
+    customer_id: up(getField('ID PELANGGAN')),
+    old_serial_number: up(getField('SN LAMA')),
+    new_serial_number_raw: up(getField('SN BARU')),
+    reason: up(getField('ALASAN DI GANTI')),
+    technician_raw: up(getField('TEKNISI')),
+  }
+}
+
+// ─── MAIN COMPONENT ─────────────────────────────────────────────────────────
 export default function OntReplacement() {
   const { profile } = useAuth()
   const role = profile?.role || 'teknisi'
   const { showProgress, hideProgress } = useProgress()
 
   const [items, setItems] = useState([])
-  const [technicians, setTechnicians] = useState([])
-  const [snList, setSnList] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [dateFilter, setDateFilter] = useState('')
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
-  const [snSearch, setSnSearch] = useState('')
-  const [snDropdownOpen, setSnDropdownOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
 
-  const emptyForm = {
-    replacement_date: format(new Date(), 'yyyy-MM-dd'),
-    site: 'banyumas',
-    customer_name: '', customer_id: '',
-    old_serial_number: '', new_serial_number_id: '',
-    reason: '', technicians: []
-  }
-  const [form, setForm] = useState(emptyForm)
+  // WA modal state
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [waText, setWaText] = useState('')
+  const [parsed, setParsed] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [site, setSite] = useState('banyumas')
 
   useEffect(() => { fetchAll() }, [])
   useEffect(() => { setPage(1) }, [searchTerm, dateFilter])
 
   const fetchAll = async () => {
     setLoading(true)
-    const [res, techRes, snRes] = await Promise.all([
-      supabase.from('ont_replacements').select('*, new_sn:serial_numbers(serial_number, brand:ont_brands(brand_name), type:ont_types(type_name))').order('replacement_date', { ascending: false }),
-      supabase.from('users').select('id, full_name').in('role', ['admin', 'teknisi']).eq('is_active', true),
-      supabase.from('serial_numbers').select('id, serial_number, brand:ont_brands(brand_name), type:ont_types(type_name)').eq('status', 'tersedia'),
-    ])
-    if (!res.error) setItems(res.data || [])
-    if (!techRes.error) setTechnicians(techRes.data || [])
-    if (!snRes.error) setSnList(snRes.data || [])
+    const { data, error } = await supabase
+      .from('ont_replacements')
+      .select('*, new_sn:serial_numbers(serial_number, brand:ont_brands(brand_name), type:ont_types(type_name))')
+      .order('replacement_date', { ascending: false })
+    if (!error) setItems(data || [])
     setLoading(false)
   }
 
-  const toggleTech = (techId) => {
-    setForm(f => ({ ...f, technicians: f.technicians.includes(techId) ? f.technicians.filter(t => t !== techId) : [...f.technicians, techId] }))
+  // ── Parse on every WA text change ──────────────────────────────────────────
+  const handleWaChange = (val) => {
+    setWaText(val)
+    if (val.trim()) {
+      setParsed(parseWaText(val))
+    } else {
+      setParsed(null)
+    }
   }
 
+  // ── Save ────────────────────────────────────────────────────────────────────
   const handleSave = async () => {
-    let finalSnId = form.new_serial_number_id
-    if (!finalSnId && snSearch) {
-      const match = snList.find(s => s.serial_number.toLowerCase() === snSearch.trim().toLowerCase())
-      if (match) finalSnId = match.id
-    }
-
-    if (!form.customer_name || !form.customer_id || !form.old_serial_number || !finalSnId) {
-      toast.error('Nama pelanggan, ID pelanggan, SN lama, dan SN baru wajib diisi')
+    if (!parsed) { toast.error('Belum ada teks WA yang diparse'); return }
+    if (!parsed.customer_name || !parsed.customer_id || !parsed.old_serial_number) {
+      toast.error('Nama pelanggan, ID pelanggan, dan SN Lama wajib ada di teks WA')
       return
     }
     setSaving(true)
     try {
-      const submitData = { ...form, new_serial_number_id: finalSnId, created_by: profile.id }
+      const submitData = {
+        replacement_date: parsed.replacement_date,
+        site,
+        customer_name: parsed.customer_name,
+        customer_id: parsed.customer_id,
+        old_serial_number: parsed.old_serial_number,
+        new_serial_number_raw: parsed.new_serial_number_raw || null,
+        reason: parsed.reason || null,
+        technician_text: parsed.technician_raw || null,
+        technicians: [],
+        created_by: profile.id,
+      }
+
       const { error } = await supabase.from('ont_replacements').insert(submitData)
       if (error) throw error
-
-      // Update SN baru menjadi terpakai
-      await supabase.from('serial_numbers').update({ status: 'terpakai' }).eq('id', finalSnId)
 
       await logActivity({
         userId: profile.id, username: profile.username, role,
         module: 'Pergantian ONT', action: 'Input Pergantian ONT',
-        detail: `Pelanggan: ${form.customer_name} | SN Lama: ${form.old_serial_number}`
+        detail: `${parsed.customer_name} | SN Lama: ${parsed.old_serial_number} | SN Baru: ${parsed.new_serial_number_raw || '-'}`,
       })
 
-      toast.success('Data pergantian ONT berhasil disimpan')
+      toast.success('Data pergantian ONT berhasil disimpan!')
       setIsModalOpen(false)
-      setForm(emptyForm)
-      setSnSearch('')
-      setSnDropdownOpen(false)
+      setWaText('')
+      setParsed(null)
       fetchAll()
     } catch (err) {
-      toast.error('Gagal: ' + err.message)
-    } finally { setSaving(false) }
+      // If column doesn't exist yet, fallback to basic insert
+      if (err.message?.includes('new_serial_number_raw') || err.message?.includes('technician_text')) {
+        try {
+          const fallback = {
+            replacement_date: parsed.replacement_date,
+            site,
+            customer_name: parsed.customer_name,
+            customer_id: parsed.customer_id,
+            old_serial_number: parsed.old_serial_number,
+            reason: parsed.reason || null,
+            technicians: [],
+            created_by: profile.id,
+          }
+          const { error: e2 } = await supabase.from('ont_replacements').insert(fallback)
+          if (e2) throw e2
+          toast.success('Data disimpan (mode kompatibilitas)')
+          setIsModalOpen(false)
+          setWaText('')
+          setParsed(null)
+          fetchAll()
+        } catch (e3) {
+          toast.error('Gagal: ' + e3.message)
+        }
+      } else {
+        toast.error('Gagal: ' + err.message)
+      }
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDelete = async (item) => {
@@ -109,22 +206,31 @@ export default function OntReplacement() {
     fetchAll()
   }
 
-  const getTechNames = (ids) => {
-    if (!ids?.length) return '-'
-    return ids.map(id => technicians.find(t => t.id === id)?.full_name || '?').join(', ')
+  const getSnDisplay = (item) => {
+    if (item.new_sn?.serial_number) return item.new_sn.serial_number
+    if (item.new_serial_number_raw) return item.new_serial_number_raw
+    return '-'
+  }
+
+  const getTechDisplay = (item) => {
+    if (item.technician_text) return item.technician_text
+    if (item.technicians?.length) return item.technicians.join(', ')
+    return '-'
   }
 
   const filtered = items.filter(i => {
-    const matchSearch = i.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        i.customer_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        i.old_serial_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        i.new_sn?.serial_number?.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchSearch =
+      i.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      i.customer_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      i.old_serial_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (i.new_sn?.serial_number || i.new_serial_number_raw || '').toLowerCase().includes(searchTerm.toLowerCase())
     const matchDate = !dateFilter || i.replacement_date === dateFilter
     return matchSearch && matchDate
   })
 
   const paginated = filtered.slice((page - 1) * perPage, page * perPage)
 
+  // ── Export ──────────────────────────────────────────────────────────────────
   const handleExportExcel = async () => {
     try {
       showProgress('Menyiapkan Export', 'Menginisialisasi file Excel...', 10)
@@ -132,24 +238,25 @@ export default function OntReplacement() {
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
       const ws = workbook.addWorksheet('Pergantian ONT')
-      
-      const headers = ['Tanggal', 'ID Pelanggan', 'Nama Pelanggan', 'SN Lama', 'SN Baru', 'Teknisi', 'Alasan']
-      setColumnWidths(ws, [16, 16, 24, 20, 20, 24, 30])
+
+      const headers = ['Tanggal', 'Lokasi', 'ID Pelanggan', 'Nama Pelanggan', 'SN Lama', 'SN Baru', 'Alasan', 'Teknisi']
+      setColumnWidths(ws, [14, 14, 28, 26, 20, 20, 30, 24])
       applyHeaderStyle(ws, headers)
-      
+
       for (let i = 0; i < filtered.length; i++) {
         const item = filtered[i]
         ws.addRow([
-          item.replacement_date,
-          item.customer_id,
-          item.customer_name,
-          item.old_serial_number,
-          item.new_sn?.serial_number || '',
-          getTechNames(item.technicians),
-          item.reason || ''
+          item.replacement_date ? format(new Date(item.replacement_date + 'T00:00:00'), 'dd/MM/yyyy') : '',
+          SITES.find(s => s.value === item.site)?.label || item.site || '',
+          item.customer_id || '',
+          item.customer_name || '',
+          item.old_serial_number || '',
+          getSnDisplay(item),
+          item.reason || '',
+          getTechDisplay(item),
         ])
         if (i % 20 === 0) {
-          showProgress('Mengekspor Data', `Memproses baris ${i + 1} dari ${filtered.length}...`, 10 + ((i + 1) / filtered.length) * 80)
+          showProgress('Mengekspor Data', `Memproses ${i + 1} dari ${filtered.length}...`, 10 + ((i + 1) / filtered.length) * 80)
           await new Promise(r => setTimeout(r, 0))
         }
       }
@@ -165,6 +272,25 @@ export default function OntReplacement() {
     }
   }
 
+  // ── Format date for display ────────────────────────────────────────────────
+  const fmtDate = (dateStr) => {
+    if (!dateStr) return '-'
+    try { return format(new Date(dateStr + 'T00:00:00'), 'dd MMM yyyy', { locale: id }) }
+    catch { return dateStr }
+  }
+
+  const TEMPLATE = `GANTI ONT
+
+Tanggal Pergantian : 
+NAMA PELANGGAN : 
+ID PELANGGAN : 
+SN LAMA : 
+SN BARU : 
+ALASAN DI GANTI : 
+TEKNISI : 
+
+Minta tolong Config ulang @Call Center Wifian Solution`
+
   return (
     <div>
       <div className="page-header">
@@ -179,20 +305,19 @@ export default function OntReplacement() {
             </button>
           )}
           {can(role, 'ont.input') && (
-            <button className="btn btn-primary" onClick={() => { setForm(emptyForm); setSnSearch(''); setSnDropdownOpen(false); setIsModalOpen(true) }}>
-              <Plus size={16} /> Tambah Pergantian
+            <button className="btn btn-primary" onClick={() => { setWaText(''); setParsed(null); setIsModalOpen(true) }}>
+              <ClipboardPaste size={16} /> Input Pergantian ONT
             </button>
           )}
         </div>
       </div>
 
       <div className="card">
-        <div className="filter-bar mb-4" style={{ gridTemplateColumns: '1fr', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+        <div className="filter-bar mb-4" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
           <div className="search-box" style={{ flex: 1, minWidth: '200px' }}>
             <Search size={16} className="search-icon" />
             <input type="text" placeholder="Cari nama, ID, SN..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
-
           <div className="date-filter-group" style={{ position: 'relative', flex: 1, minWidth: '150px', maxWidth: '250px' }}>
             <input
               type={dateFilter ? 'date' : 'text'}
@@ -205,12 +330,8 @@ export default function OntReplacement() {
               style={{ width: '100%', paddingRight: dateFilter ? '30px' : '12px' }}
             />
             {dateFilter && (
-              <button
-                className="btn-clear-date"
-                onClick={() => setDateFilter('')}
-                title="Tampilkan semua tanggal"
-                style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', padding: '4px' }}
-              >
+              <button className="btn-clear-date" onClick={() => setDateFilter('')}
+                style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', padding: '4px' }}>
                 <X size={16} />
               </button>
             )}
@@ -239,7 +360,7 @@ export default function OntReplacement() {
                 <tbody>
                   {paginated.map(item => (
                     <tr key={item.id}>
-                      <td className="text-secondary">{format(new Date(item.replacement_date), 'dd MMM yyyy', { locale: id })}</td>
+                      <td className="text-secondary">{fmtDate(item.replacement_date)}</td>
                       <td>
                         <span className="badge badge-accent">
                           {SITES.find(s => s.value === item.site)?.label || item.site || '-'}
@@ -253,14 +374,14 @@ export default function OntReplacement() {
                       <td><ArrowRight size={14} style={{ color: 'var(--text-muted)' }} /></td>
                       <td>
                         <span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--success)' }}>
-                          {item.new_sn?.serial_number || '-'}
+                          {getSnDisplay(item)}
                         </span>
                         {item.new_sn?.brand && (
                           <div className="text-secondary" style={{ fontSize: '10px' }}>{item.new_sn.brand.brand_name} {item.new_sn.type?.type_name}</div>
                         )}
                       </td>
                       <td className="text-secondary">{item.reason || '-'}</td>
-                      <td style={{ fontSize: '12px' }}>{getTechNames(item.technicians)}</td>
+                      <td style={{ fontSize: '12px' }}>{getTechDisplay(item)}</td>
                       {can(role, 'ont.delete') && (
                         <td style={{ textAlign: 'right' }}>
                           <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
@@ -279,29 +400,21 @@ export default function OntReplacement() {
                         <div className="mobile-card-title">{item.customer_name}</div>
                         <div className="mobile-card-subtitle">{item.customer_id}</div>
                       </div>
-                      <div className="text-secondary" style={{ fontSize: '12px' }}>
-                        {format(new Date(item.replacement_date), 'dd MMM yyyy', { locale: id })}
-                      </div>
+                      <div className="text-secondary" style={{ fontSize: '12px' }}>{fmtDate(item.replacement_date)}</div>
                     </div>
                     {expandedId === item.id && (
                       <div className="mobile-card-body">
-                        <div className="mobile-info-row">
-                          <span className="mobile-info-label">Lokasi</span>
-                          <span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site || '-'}</span>
-                        </div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site || '-'}</span></div>
                         <div className="mobile-info-row">
                           <span className="mobile-info-label">SN Lama</span>
                           <span className="mobile-info-value" style={{ fontFamily: 'monospace', color: 'var(--danger)' }}>{item.old_serial_number}</span>
                         </div>
                         <div className="mobile-info-row">
                           <span className="mobile-info-label">SN Baru</span>
-                          <span className="mobile-info-value">
-                            <span style={{ fontFamily: 'monospace', color: 'var(--success)' }}>{item.new_sn?.serial_number || '-'}</span>
-                            {item.new_sn?.brand && <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{item.new_sn.brand.brand_name} {item.new_sn.type?.type_name}</div>}
-                          </span>
+                          <span className="mobile-info-value" style={{ fontFamily: 'monospace', color: 'var(--success)' }}>{getSnDisplay(item)}</span>
                         </div>
                         <div className="mobile-info-row"><span className="mobile-info-label">Alasan</span><span className="mobile-info-value">{item.reason || '-'}</span></div>
-                        <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(item.technicians)}</span></div>
+                        <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechDisplay(item)}</span></div>
                         {can(role, 'ont.delete') && (
                           <div className="mobile-card-actions">
                             <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
@@ -312,14 +425,8 @@ export default function OntReplacement() {
                   </div>
                 ))}
               </div>
-              {/* Pagination */}
-              <Pagination 
-                page={page} 
-                setPage={setPage} 
-                perPage={perPage} 
-                setPerPage={setPerPage} 
-                totalItems={filtered.length} 
-              />
+
+              <Pagination page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} totalItems={filtered.length} />
             </>
           ) : (
             <div className="empty-state"><RefreshCcw size={48} /><h3>Belum Ada Data</h3><p>Belum ada riwayat pergantian ONT.</p></div>
@@ -327,140 +434,81 @@ export default function OntReplacement() {
         </div>
       </div>
 
-      {isModalOpen && (
+      {/* ── Input Modal ─────────────────────────────────────────────────────── */}
+      {isModalOpen && createPortal(
         <div className="modal-overlay">
-          <div className="modal modal-lg">
-            <div className="modal-header">
-              <h3>Tambah Pergantian ONT</h3>
+          <div className="modal modal-lg" style={{ display: 'flex', flexDirection: 'column', maxHeight: '92vh', width: '90%', maxWidth: '680px' }}>
+            <div className="modal-header" style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', padding: '16px 20px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ClipboardPaste size={16} /> Input Pergantian ONT dari WA
+              </h3>
               <button className="btn-icon" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
             </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">Tanggal</label>
-                  <input type="date" className="form-input" value={form.replacement_date} onChange={e => setForm(f => ({ ...f, replacement_date: e.target.value }))} disabled={role !== 'superadmin'} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Lokasi</label>
-                  <select className="form-input" style={{ height: 'auto' }} value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}>
-                    {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </select>
-                </div>
+
+            <div className="modal-body" style={{ overflowY: 'auto', flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+              {/* Lokasi */}
+              <div className="form-group">
+                <label className="form-label">Lokasi</label>
+                <select className="form-input" style={{ height: 'auto' }} value={site} onChange={e => setSite(e.target.value)}>
+                  {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
               </div>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">ID Pelanggan <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input className="form-input" placeholder="ID Pelanggan" value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Nama Pelanggan <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input className="form-input" placeholder="Nama lengkap pelanggan" value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} />
-                </div>
+
+              {/* Format contoh */}
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', padding: '12px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', lineHeight: '1.8' }}>
+                <strong style={{ color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>Format pesan WA:</strong>
+                <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '11px', whiteSpace: 'pre-wrap', color: 'var(--text-primary)' }}>{TEMPLATE}</pre>
               </div>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">SN Lama <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input className="form-input" placeholder="Serial number ONT lama" style={{ fontFamily: 'monospace' }} value={form.old_serial_number} onChange={e => setForm(f => ({ ...f, old_serial_number: e.target.value }))} />
-                </div>
-                <div className="form-group" style={{ position: 'relative' }}>
-                  <label className="form-label">SN Baru <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  {/* Jika sudah dipilih, tampilkan chip dengan tombol X */}
-                  {form.new_serial_number_id ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', background: 'rgba(0,200,83,0.08)', border: '1px solid var(--success)', borderRadius: '8px' }}>
-                      <span style={{ fontFamily: 'monospace', fontSize: '12px', flex: 1, wordBreak: 'break-all' }}>
-                        {snList.find(s => s.id === form.new_serial_number_id)?.serial_number}
-                      </span>
-                      <span className="text-secondary" style={{ fontSize: '10px', whiteSpace: 'nowrap' }}>
-                        {snList.find(s => s.id === form.new_serial_number_id)?.brand?.brand_name}
-                      </span>
-                      <button type="button" onClick={() => { setForm(f => ({ ...f, new_serial_number_id: '' })); setSnSearch('') }} className="btn-icon" style={{ width: '18px', height: '18px', minWidth: 'unset', flexShrink: 0 }}>
-                        <X size={13} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={{ position: 'relative' }}>
-                      <div style={{ position: 'relative' }}>
-                        <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                        <input
-                          className="form-input"
-                          style={{ paddingLeft: '30px', fontFamily: 'monospace', fontSize: '12px' }}
-                          placeholder="Cari SN..."
-                          value={snSearch}
-                          onChange={e => { setSnSearch(e.target.value); setSnDropdownOpen(true) }}
-                          onFocus={() => setSnDropdownOpen(true)}
-                          onBlur={() => setTimeout(() => setSnDropdownOpen(false), 200)}
-                        />
+
+              {/* Textarea paste */}
+              <div className="form-group">
+                <label className="form-label">Paste pesan WA di sini</label>
+                <textarea
+                  className="form-input"
+                  rows={10}
+                  value={waText}
+                  onChange={e => handleWaChange(e.target.value)}
+                  placeholder="Paste teks WA di sini..."
+                  style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: '13px', padding: '12px' }}
+                />
+              </div>
+
+              {/* Preview hasil parse */}
+              {parsed && (
+                <div style={{ background: 'linear-gradient(135deg,rgba(16,185,129,.08),rgba(5,150,105,.04))', border: '1px solid rgba(16,185,129,.3)', borderRadius: '10px', overflow: 'hidden' }}>
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(16,185,129,.2)', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '13px', color: 'var(--success)' }}>
+                    <CheckCircle size={14} /> Preview Hasil Parsing
+                  </div>
+                  <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {[
+                      ['Tanggal Pergantian', fmtDate(parsed.replacement_date)],
+                      ['Nama Pelanggan', parsed.customer_name || '—'],
+                      ['ID Pelanggan', parsed.customer_id || '—'],
+                      ['SN Lama', parsed.old_serial_number || '—'],
+                      ['SN Baru', parsed.new_serial_number_raw || '—'],
+                      ['Alasan', parsed.reason || '—'],
+                      ['Teknisi', parsed.technician_raw || '—'],
+                    ].map(([label, val]) => (
+                      <div key={label} style={{ display: 'flex', gap: '12px', fontSize: '13px' }}>
+                        <span style={{ minWidth: '160px', color: 'var(--text-secondary)', flexShrink: 0 }}>{label}</span>
+                        <span style={{ fontWeight: 600, wordBreak: 'break-all', fontFamily: label.includes('SN') ? 'monospace' : 'inherit' }}>{val}</span>
                       </div>
-                      {snDropdownOpen && (
-                        <div style={{
-                          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 300,
-                          background: 'var(--bg-card)', border: '1px solid var(--border-color)',
-                          borderRadius: '8px', maxHeight: '180px', overflowY: 'auto',
-                          marginTop: '4px', boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
-                        }}>
-                          {snList
-                            .filter(s =>
-                              s.serial_number.toLowerCase().includes(snSearch.toLowerCase()) ||
-                              s.brand?.brand_name?.toLowerCase().includes(snSearch.toLowerCase()) ||
-                              s.type?.type_name?.toLowerCase().includes(snSearch.toLowerCase())
-                            )
-                            .slice(0, 50)
-                            .map(s => (
-                              <div
-                                key={s.id}
-                                onMouseDown={() => { setForm(f => ({ ...f, new_serial_number_id: s.id })); setSnDropdownOpen(false); setSnSearch('') }}
-                                style={{
-                                  padding: '9px 12px', cursor: 'pointer',
-                                  borderBottom: '1px solid var(--border-color)',
-                                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                  gap: '8px'
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
-                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                              >
-                                <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{s.serial_number}</span>
-                                <span className="text-secondary" style={{ fontSize: '10px', whiteSpace: 'nowrap' }}>
-                                  {s.brand?.brand_name} {s.type?.type_name}
-                                </span>
-                              </div>
-                            ))}
-                          {snList.filter(s =>
-                            s.serial_number.toLowerCase().includes(snSearch.toLowerCase()) ||
-                            s.brand?.brand_name?.toLowerCase().includes(snSearch.toLowerCase())
-                          ).length === 0 && (
-                            <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>Tidak ditemukan</div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Alasan Pergantian</label>
-                <input className="form-input" placeholder="Contoh: ONT rusak, tidak bisa konek" value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Pilih Teknisi</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
-                  {technicians.map(t => (
-                    <button key={t.id} type="button" onClick={() => toggleTech(t.id)}
-                      className={`badge ${form.technicians.includes(t.id) ? 'badge-accent' : 'badge-muted'}`}
-                      style={{ border: 'none', cursor: 'pointer', padding: '5px 10px' }}>
-                      {t.full_name}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              )}
             </div>
+
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving || !parsed}>
                 {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : 'Simpan'}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
