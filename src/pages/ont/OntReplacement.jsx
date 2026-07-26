@@ -74,11 +74,16 @@ function parseWaText(text) {
 
   const rawDate = getField('Tanggal Pergantian')
   const parsedDate = parseIndonesianDate(rawDate) || format(new Date(), 'yyyy-MM-dd')
+  
+  let customerId = getField('ID PELANGGAN').toLowerCase()
+  if (customerId && !customerId.includes('@')) {
+    customerId += '@bms.wifian.net.id'
+  }
 
   return {
     replacement_date: parsedDate,
     customer_name: up(getField('NAMA PELANGGAN')),
-    customer_id: up(getField('ID PELANGGAN')),
+    customer_id: customerId,
     old_serial_number: up(getField('SN LAMA')),
     new_serial_number_raw: up(getField('SN BARU')),
     reason: up(getField('ALASAN DI GANTI')),
