@@ -139,6 +139,21 @@ export default function OntReplacement() {
     }
     setSaving(true)
     try {
+      // Cek apakah data duplicate (tanggal, id pelanggan, sn lama yang sama)
+      const { data: existing, error: checkError } = await supabase
+        .from('ont_replacements')
+        .select('id')
+        .eq('replacement_date', parsed.replacement_date)
+        .eq('customer_id', parsed.customer_id)
+        .eq('old_serial_number', parsed.old_serial_number)
+        
+      if (checkError) throw checkError
+      if (existing && existing.length > 0) {
+        toast.error('Gagal: Data pergantian ONT ini sudah pernah diinput (Data Ganda)')
+        setSaving(false)
+        return
+      }
+
       const submitData = {
         replacement_date: parsed.replacement_date,
         site,
