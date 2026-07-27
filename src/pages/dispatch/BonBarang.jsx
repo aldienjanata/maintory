@@ -412,6 +412,34 @@ export default function BonBarang() {
   const handleSaveLapor = async () => {
     setLaporSaving(true)
     try {
+      // Validasi wajib: maps lokasi harus diisi
+      for (const it of selectedDispatch.items) {
+        const lapor = laporForm[it.id]
+        if (it.item_type === 'other') {
+          const isTiang = it.warehouse_item?.item_name?.toLowerCase().includes('tiang')
+          if (isTiang && Number(lapor?.qty_used || 0) > 0 && !lapor?.share_lokasi?.trim()) {
+            toast.error(`Share Lokasi Tiang wajib diisi untuk item "${it.warehouse_item?.item_name}"!`)
+            setLaporSaving(false)
+            return
+          }
+        }
+        if (it.item_type === 'adss') {
+          const meters = Number(lapor?.meters_used || 0)
+          if (meters > 0) {
+            if (!lapor?.titik_awal?.trim()) {
+              toast.error(`Titik Awal Penarikan ADSS (${it.adss?.haspel_code || ''}) wajib diisi!`)
+              setLaporSaving(false)
+              return
+            }
+            if (!lapor?.titik_akhir?.trim()) {
+              toast.error(`Titik Akhir Penarikan ADSS (${it.adss?.haspel_code || ''}) wajib diisi!`)
+              setLaporSaving(false)
+              return
+            }
+          }
+        }
+      }
+
       // Validasi Pemakaian melebihi bawaan
       for (const it of selectedDispatch.items) {
         const lapor = laporForm[it.id]
@@ -807,6 +835,52 @@ export default function BonBarang() {
         }
       }
       applyDataRowStyles(ws2)
+
+      // ===== SHEET LOKASI: Lokasi Tiang & ADSS =====
+      showProgress('Mengekspor Data', 'Memproses Data Lokasi...', 42)
+      const wsLokasi = workbook.addWorksheet('Lokasi Pemasangan')
+      const headersLokasi = ['Tanggal', 'Teknisi', 'Jenis Pekerjaan', 'Lokasi', 'Jenis Item', 'Kode / Nama', 'Tipe Lokasi', 'URL Maps']
+      setColumnWidths(wsLokasi, [14, 28, 20, 20, 18, 26, 18, 60])
+      applyHeaderStyle(wsLokasi, headersLokasi, '7C3AED') // purple
+
+      for (const d of filteredData) {
+        if (!d.items) continue
+        const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
+        const site = SITES.find(s => s.value === d.site)?.label || d.site
+        const workTypeLabel = WORK_TYPES.find(w => w.value === d.work_type)?.label || '-'
+
+        for (const it of d.items) {
+          // Tiang dari Material: pisahkan multi-URL per baris
+          if (it.item_type === 'other' && it.tiang_lokasi_url && it.warehouse_item?.item_name?.toLowerCase().includes('tiang')) {
+            const urls = it.tiang_lokasi_url.split(',').map(u => u.trim()).filter(Boolean)
+            urls.forEach((url, idx) => {
+              wsLokasi.addRow([
+                d.dispatch_date, techName, workTypeLabel, site,
+                'Tiang', it.warehouse_item?.item_name || '-',
+                urls.length > 1 ? `Lokasi ${idx + 1}` : 'Lokasi',
+                url
+              ])
+            })
+          }
+          // ADSS: titik awal dan titik akhir
+          if (it.item_type === 'adss' && (it.adss_titik_awal || it.adss_titik_akhir)) {
+            const haspelCode = it.adss?.haspel_code || '-'
+            if (it.adss_titik_awal) {
+              wsLokasi.addRow([
+                d.dispatch_date, techName, workTypeLabel, site,
+                'Kabel ADSS', haspelCode, 'Titik Awal Penarikan', it.adss_titik_awal
+              ])
+            }
+            if (it.adss_titik_akhir) {
+              wsLokasi.addRow([
+                d.dispatch_date, techName, workTypeLabel, site,
+                'Kabel ADSS', haspelCode, 'Titik Akhir Penarikan', it.adss_titik_akhir
+              ])
+            }
+          }
+        }
+      }
+      applyDataRowStyles(wsLokasi)
 
       // ===== SHEET 3: Catatan Serial Number =====
       showProgress('Mengekspor Data', 'Memproses Serial Number...', 45)
