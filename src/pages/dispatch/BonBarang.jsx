@@ -862,9 +862,9 @@ export default function BonBarang() {
         const workTypeLabel = WORK_TYPES.find(w => w.value === d.work_type)?.label || '-'
 
         for (const it of d.items) {
-          // Tiang dari Material: pisahkan multi-URL per baris
+          // Tiang dari Material: pisahkan multi-URL per baris dengan aman (bisa dipisah koma/spasi)
           if (it.item_type === 'other' && it.tiang_lokasi_url && it.warehouse_item?.item_name?.toLowerCase().includes('tiang')) {
-            const urls = it.tiang_lokasi_url.split(',').map(u => u.trim()).filter(Boolean)
+            const urls = it.tiang_lokasi_url.split(/(?=https?:\/\/)/gi).map(u => u.trim().replace(/,$/, '')).filter(Boolean)
             urls.forEach((url, idx) => {
               wsLokasi.addRow([
                 d.dispatch_date, techName, workTypeLabel, site,
@@ -903,7 +903,16 @@ export default function BonBarang() {
 
       for (let i = 0; i < filteredData.length; i++) {
         const d = filteredData[i]
-        const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
+        const techIds = d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id].filter(Boolean)
+        const isBackbone = techIds.some(tId => {
+          const user = allUsers.find(u => u.id === tId)
+          return user?.role === 'backbone'
+        })
+        
+        // Skip backbone dispatches for SN sheet
+        if (isBackbone) continue
+
+        const techName = getTechNames(techIds)
         const site = SITES.find(s => s.value === d.site)?.label || d.site
         const isSelesai = d.status === 'selesai'
         const workTypeLabel = WORK_TYPES.find(w => w.value === d.work_type)?.label || 'Instalasi/PSB'
