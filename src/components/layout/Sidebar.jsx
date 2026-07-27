@@ -23,23 +23,23 @@ export default function Sidebar({ isOpen, onClose }) {
   const role = profile?.role || 'teknisi' // fallback
 
   const navItems = [
-    { label: 'Dashboard', path: '/', icon: <LayoutDashboard />, section: 'MAIN MENU' },
-    { label: 'Maintenance', path: '/maintenance', icon: <Wrench />, section: 'MAIN MENU' },
+    { label: 'Dashboard', path: '/', icon: <LayoutDashboard />, section: 'MAIN MENU', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
+    { label: 'Maintenance', path: '/maintenance', icon: <Wrench />, section: 'MAIN MENU', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     
     // Inventory section - combined in UI or separated
-    { label: 'Stok Gudang', path: '/inventory/stok', icon: <Package />, section: 'INVENTORY' },
-    { label: 'Serial Number', path: '/inventory/sn', icon: <Hash />, section: 'INVENTORY' },
-    { label: 'Dropcore', path: '/inventory/dropcore', icon: <Cable />, section: 'INVENTORY' },
-    { label: 'Kabel ADSS', path: '/inventory/adss', icon: <Cable />, section: 'INVENTORY' },
+    { label: 'Stok Gudang', path: '/inventory/stok', icon: <Package />, section: 'INVENTORY', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
+    { label: 'Serial Number', path: '/inventory/sn', icon: <Hash />, section: 'INVENTORY', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
+    { label: 'Dropcore', path: '/inventory/dropcore', icon: <Cable />, section: 'INVENTORY', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
+    { label: 'Kabel ADSS', path: '/inventory/adss', icon: <Cable />, section: 'INVENTORY', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     
-    { label: 'Bon Barang', path: '/bon-barang', icon: <ClipboardList />, section: 'OPERATIONS' },
-    { label: 'Pengeluaran', path: '/pengeluaran', icon: <Truck />, section: 'OPERATIONS' },
-    { label: 'Dismantle', path: '/dismantle', icon: <ArrowDownToLine />, section: 'OPERATIONS' },
-    { label: 'Pergantian ONT', path: '/ont', icon: <RefreshCcw />, section: 'OPERATIONS' },
-    { label: 'Laporan Pemasangan', path: '/laporan-pemasangan', icon: <FileText />, section: 'OPERATIONS' },
+    { label: 'Bon Barang', path: '/bon-barang', icon: <ClipboardList />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
+    { label: 'Pengeluaran', path: '/pengeluaran', icon: <Truck />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
+    { label: 'Dismantle', path: '/dismantle', icon: <ArrowDownToLine />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
+    { label: 'Pergantian ONT', path: '/ont', icon: <RefreshCcw />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
+    { label: 'Laporan Pemasangan', path: '/laporan-pemasangan', icon: <FileText />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     
-    { label: 'Log Aktivitas', path: '/logs', icon: <History />, section: 'SYSTEM' },
-    { label: 'Pengaturan', path: '/settings', icon: <Settings />, section: 'SYSTEM' },
+    { label: 'Log Aktivitas', path: '/logs', icon: <History />, section: 'SYSTEM', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
+    { label: 'Pengaturan', path: '/settings', icon: <Settings />, section: 'SYSTEM', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
   ]
 
   // Filter based on basic permissions logic (visibility)
@@ -48,7 +48,7 @@ export default function Sidebar({ isOpen, onClose }) {
   // Superadmin/Admin see all.
 
   const renderNavSection = (sectionName) => {
-    const items = navItems.filter(item => item.section === sectionName)
+    const items = navItems.filter(item => item.section === sectionName && (!item.allowedRoles || item.allowedRoles.includes(role)))
     if (items.length === 0) return null
 
     return (

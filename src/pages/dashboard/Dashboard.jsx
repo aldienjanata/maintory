@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { getDailyQuote } from '../../utils/quotes'
@@ -33,6 +33,11 @@ const WORK_LABELS = { ikr_psb: 'IKR/PSB', maintenance: 'Maintenance', odc_odp: '
 export default function Dashboard() {
   const { profile } = useAuth()
   const role = profile?.role || 'teknisi'
+
+  if (role === 'backbone') {
+    return <Navigate to="/bon-barang" replace />
+  }
+
   const [quote, setQuote] = useState({ text: '', author: '' })
   const [loading, setLoading] = useState(true)
   const [logs, setLogs] = useState([])

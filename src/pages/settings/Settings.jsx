@@ -12,7 +12,7 @@ import {
 import * as XLSX from 'xlsx'
 import { useProgress } from '../../contexts/ProgressContext'
 
-const ROLES = ['superadmin', 'admin', 'teknisi']
+const ROLES = ['superadmin', 'admin', 'teknisi', 'backbone']
 
 export default function Settings() {
   const { profile, refreshProfile } = useAuth()
@@ -259,7 +259,7 @@ export default function Settings() {
   }
 
   const getRoleBadge = (r) => {
-    const map = { superadmin: 'badge-danger', admin: 'badge-accent', teknisi: 'badge-success' }
+    const map = { superadmin: 'badge-danger', admin: 'badge-accent', teknisi: 'badge-success', backbone: 'badge-warning' }
     return <span className={`badge ${map[r] || 'badge-muted'}`}><Shield size={10} /> {r}</span>
   }
 

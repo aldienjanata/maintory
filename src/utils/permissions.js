@@ -4,6 +4,7 @@ export const ROLES = {
   SUPERADMIN: 'superadmin',
   ADMIN: 'admin',
   TEKNISI: 'teknisi',
+  BACKBONE: 'backbone',
 }
 
 export const can = (role, action) => {
@@ -17,7 +18,7 @@ export const can = (role, action) => {
     'maintenance.export': ['superadmin', 'admin'],
 
     // Inventory - Stok Gudang
-    'inventory.stok.view': ['superadmin', 'admin', 'teknisi'],
+    'inventory.stok.view': ['superadmin', 'admin', 'teknisi', 'backbone'],
     'inventory.stok.manage': ['superadmin', 'admin'],
     'inventory.stok.export': ['superadmin', 'admin'],
     'inventory.stok.import': ['superadmin'],
@@ -31,15 +32,15 @@ export const can = (role, action) => {
     'inventory.sn.export': ['superadmin', 'admin'],
 
     // Inventory - Dropcore
-    'inventory.dropcore.view': ['superadmin', 'admin', 'teknisi'],
-    'inventory.dropcore.add': ['superadmin', 'admin', 'teknisi'],
+    'inventory.dropcore.view': ['superadmin', 'admin', 'teknisi', 'backbone'],
+    'inventory.dropcore.add': ['superadmin', 'admin', 'teknisi', 'backbone'],
     'inventory.dropcore.edit': ['superadmin', 'admin'],
     'inventory.dropcore.delete': ['superadmin', 'admin'],
     'inventory.dropcore.export': ['superadmin', 'admin'],
 
     // Inventory - ADSS
-    'inventory.Adss.view': ['superadmin', 'admin', 'teknisi'],
-    'inventory.Adss.add': ['superadmin', 'admin', 'teknisi'],
+    'inventory.Adss.view': ['superadmin', 'admin', 'teknisi', 'backbone'],
+    'inventory.Adss.add': ['superadmin', 'admin', 'teknisi', 'backbone'],
     'inventory.Adss.edit': ['superadmin', 'admin'],
     'inventory.Adss.delete': ['superadmin', 'admin'],
     'inventory.Adss.export': ['superadmin', 'admin'],
@@ -48,10 +49,10 @@ export const can = (role, action) => {
     'pengeluaran.jadwal.create': ['superadmin', 'admin'],
     'pengeluaran.jadwal.edit': ['superadmin', 'admin'],
     'pengeluaran.jadwal.delete': ['superadmin', 'admin'],
-    'pengeluaran.input': ['superadmin', 'admin', 'teknisi'],
+    'pengeluaran.input': ['superadmin', 'admin', 'teknisi', 'backbone'],
     'pengeluaran.edit': ['superadmin', 'admin'],
     'pengeluaran.delete': ['superadmin'],
-    'pengeluaran.view': ['superadmin', 'admin', 'teknisi'],
+    'pengeluaran.view': ['superadmin', 'admin', 'teknisi', 'backbone'],
     'pengeluaran.export': ['superadmin', 'admin'],
 
     // Dismantle
