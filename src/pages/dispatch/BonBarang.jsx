@@ -399,7 +399,10 @@ export default function BonBarang() {
       if (it.item_type === 'ont') initForm[it.id] = { used: false }
       else if (it.item_type === 'dropcore') initForm[it.id] = { meters_used: '' }
       else if (it.item_type === 'adss') initForm[it.id] = { meters_used: '' }
-      else if (it.item_type === 'other') initForm[it.id] = { qty_used: '' }
+      else if (it.item_type === 'other') {
+        const isTiang = it.warehouse_item?.item_name?.toLowerCase().includes('tiang')
+        initForm[it.id] = { qty_used: '', ...(isTiang ? { share_lokasi: it.tiang_lokasi_url || '' } : {}) }
+      }
     })
     setLaporForm(initForm)
     setIsLaporModalOpen(true)
@@ -463,7 +466,7 @@ export default function BonBarang() {
         } else if (it.item_type === 'other') {
           const qUsed = Number(lapor?.qty_used || 0)
           const qRet = Number(it.quantity_dispatched) - qUsed
-          dispatchUpdates.push({ id: it.id, quantity_used: qUsed, quantity_returned: qRet })
+          dispatchUpdates.push({ id: it.id, quantity_used: qUsed, quantity_returned: qRet, ...(lapor?.share_lokasi ? { tiang_lokasi_url: lapor.share_lokasi } : {}) })
           if (qUsed > 0) { expItemsToInsert.push({ item_type: 'other', warehouse_item_id: it.warehouse_item_id, quantity: qUsed }); whUsed.push({ id: it.warehouse_item_id, qty: qUsed }) }
           if (qRet > 0) whReturns.push({ id: it.warehouse_item_id, qty: qRet })
         }
@@ -1385,7 +1388,6 @@ export default function BonBarang() {
                     <button className="btn btn-secondary btn-sm" onClick={() => addItemType('ont')}><Plus size={13} /> ONT</button>
                     <button className="btn btn-secondary btn-sm" onClick={() => addItemType('dropcore')}><Plus size={13} /> Dropcore</button>
                     <button className="btn btn-secondary btn-sm" onClick={() => addItemType('adss')}><Plus size={13} /> Kabel ADSS</button>
-                    <button className="btn btn-secondary btn-sm" onClick={() => addItemType('tiang')} style={{ color: '#e67e22', borderColor: '#e67e22' }}><Plus size={13} /> Tiang</button>
                     <button className="btn btn-secondary btn-sm" onClick={() => addItemType('other')}><Plus size={13} /> Material</button>
                   </div>
                 </div>
@@ -1541,17 +1543,28 @@ export default function BonBarang() {
                           </div>
                         )
                       })()}
-                      {it.item_type === 'other' && (
-                        <div>
-                          <div style={{ fontWeight: 600, marginBottom: '8px' }}>{it.warehouse_item?.item_name || 'Barang'}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Qty terpakai:</span><input type="number" className="form-input" style={{ width: '75px', height: '36px', textAlign: 'center' }} min="0" max={it.quantity_dispatched} placeholder="0" value={laporForm[it.id]?.qty_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { qty_used: e.target.value } })} /><span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>dari {it.quantity_dispatched}</span>
-                            {Number(laporForm[it.id]?.qty_used || 0) < Number(it.quantity_dispatched) && (
-                              <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: 'auto' }}>{Number(it.quantity_dispatched) - Number(laporForm[it.id]?.qty_used || 0)} kembali</span>
+                      {it.item_type === 'other' && (() => {
+                        const isTiang = it.warehouse_item?.item_name?.toLowerCase().includes('tiang')
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <div style={{ fontWeight: 600 }}>{it.warehouse_item?.item_name || 'Barang'}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Qty terpakai:</span>
+                              <input type="number" className="form-input" style={{ width: '75px', height: '36px', textAlign: 'center' }} min="0" max={it.quantity_dispatched} placeholder="0" value={laporForm[it.id]?.qty_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], qty_used: e.target.value } })} />
+                              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>dari {it.quantity_dispatched}</span>
+                              {Number(laporForm[it.id]?.qty_used || 0) < Number(it.quantity_dispatched) && (
+                                <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: 'auto' }}>{Number(it.quantity_dispatched) - Number(laporForm[it.id]?.qty_used || 0)} kembali</span>
+                              )}
+                            </div>
+                            {isTiang && (
+                              <div>
+                                <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px', color: '#e67e22' }}>📍 Share Lokasi Tiang (Google Maps URL)</label>
+                                <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Tempel link Google Maps titik lokasi tiang..." value={laporForm[it.id]?.share_lokasi || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], share_lokasi: e.target.value } })} />
+                              </div>
                             )}
                           </div>
-                        </div>
-                      )}
+                        )
+                      })()}
                     </div>
                   </div>
                 ))}
