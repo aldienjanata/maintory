@@ -102,7 +102,7 @@ export default function BonBarang() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [dispRes, schedRes, techRes, snRes, haspelRes, otherRes] = await Promise.all([
+      const [dispRes, schedRes, techRes, snRes, haspelRes, adssRes, otherRes] = await Promise.all([
         // Note: we might not have a reliable foreign key to users if we use UUID array `technicians`
         // We will fetch users separately and map them locally.
         supabase
@@ -110,15 +110,32 @@ export default function BonBarang() {
           .select('*, items:dispatch_items(*, sn:serial_numbers(serial_number), haspel:dropcore_haspels(*), adss:adss_haspels(*), warehouse_item:warehouses(item_name))')
           .order('created_at', { ascending: false }),
         supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }),
-        supabase.from('users').select('id, full_name').in('role', ['admin', 'teknisi']).eq('is_active', true),
+        supabase.from('users').select('id, full_name, role').in('role', ['admin', 'teknisi', 'backbone']).eq('is_active', true),
         supabase.from('serial_numbers').select('id, serial_number').eq('status', 'tersedia'),
         supabase.from('dropcore_haspels').select('id, haspel_code, initial_meters, used_meters, type').in('status', ['tersedia']),
         supabase.from('adss_haspels').select('id, haspel_code, initial_meters, used_meters, type, tube_type, brand').in('status', ['tersedia']),
         supabase.from('warehouses').select('id, item_name, initial_stock').gt('initial_stock', 0)
       ])
 
-      if (dispRes.data) setDispatches(dispRes.data)
-      if (techRes.data) setTechnicians(techRes.data.map(t => ({ value: t.id, label: t.full_name, id: t.id, full_name: t.full_name })))
+      if (techRes.data) {
+        const users = techRes.data
+        if (dispRes.data) {
+          if (profile.role === 'backbone') {
+            const backboneIds = users.filter(u => u.role === 'backbone').map(u => u.id)
+            setDispatches(dispRes.data.filter(d => backboneIds.includes(d.created_by)))
+          } else {
+            setDispatches(dispRes.data)
+          }
+        }
+        
+        let filteredTechs = users
+        if (profile.role === 'backbone') {
+          filteredTechs = users.filter(u => u.role === 'backbone')
+        }
+        setTechnicians(filteredTechs.map(t => ({ value: t.id, label: t.full_name, id: t.id, full_name: t.full_name })))
+      } else if (dispRes.data) {
+         setDispatches(dispRes.data)
+      }
       if (snRes.data) setSnList(snRes.data)
       if (haspelRes.data) setHaspelList(haspelRes.data)
       if (adssRes.data) setAdssList(adssRes.data)
