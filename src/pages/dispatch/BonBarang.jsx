@@ -1147,14 +1147,14 @@ export default function BonBarang() {
                                 <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{getTechNames(s.technicians) || '-'}</span></div>
                                 <div className="mobile-info-row"><span className="mobile-info-label">Pekerjaan</span><span className="mobile-info-value">{WORK_TYPES.find(x => x.value === s.work_type)?.label}</span></div>
                                 {s.note && <div className="mobile-info-row"><span className="mobile-info-label">Catatan</span><span className="mobile-info-value">{s.note}</span></div>}
-                                <div className="mobile-card-actions" style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+                                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                                   {s.status !== 'completed' && (
-                                    <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => handleOpenAdd(s)}>
-                                      <Plus size={13} /> Buat Bon dari Jadwal
+                                    <button className="btn btn-primary btn-sm" onClick={() => handleOpenAdd(s)}>
+                                      <Plus size={13} /> Buat Bon
                                     </button>
                                   )}
                                   {role === 'superadmin' && (
-                                    <button className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDeleteSchedule(s)}>
+                                    <button className="btn btn-secondary btn-sm" style={{ padding: '5px 10px', color: 'var(--danger)', marginLeft: 'auto' }} onClick={() => handleDeleteSchedule(s)}>
                                       <Trash2 size={13} />
                                     </button>
                                   )}
@@ -1938,10 +1938,12 @@ function BonCard({ d, role, getTechNames, expandedId, setExpandedId, handleOpenL
             </div>
           </div>
           {d.status === 'sedang_dibawa' && (
-            <div className="mobile-card-actions" style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)', display: 'flex', gap: '8px' }}>
-              <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => handleOpenLapor(d)}><CheckCircle size={13} /> Lapor Pemakaian</button>
-              {role === 'superadmin' && <button className="btn btn-secondary btn-sm" style={{ color: 'var(--warning)' }} onClick={() => handleOpenEdit(d)} title="Edit"><Edit2 size={13} /></button>}
-              {(role === 'superadmin' || role === 'admin') && <button className="btn btn-secondary btn-sm" style={{ color: 'var(--danger)' }} onClick={() => handleDelete(d)} title="Batalkan"><Trash2 size={13} /></button>}
+            <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <button className="btn btn-primary btn-sm" onClick={() => handleOpenLapor(d)} style={{ gap: '5px' }}><CheckCircle size={13} /> Lapor Pemakaian</button>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {role === 'superadmin' && <button className="btn btn-secondary btn-sm" onClick={() => handleOpenEdit(d)} title="Edit" style={{ padding: '5px 10px', color: 'var(--warning)' }}><Edit2 size={13} /></button>}
+                {(role === 'superadmin' || role === 'admin') && <button className="btn btn-secondary btn-sm" onClick={() => handleDelete(d)} title="Batalkan" style={{ padding: '5px 10px', color: 'var(--danger)' }}><Trash2 size={13} /></button>}
+              </div>
             </div>
           )}
         </div>
