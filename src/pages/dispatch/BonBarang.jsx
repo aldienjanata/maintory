@@ -91,6 +91,7 @@ export default function BonBarang() {
   // Modal: Export
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
   const [exportMonth, setExportMonth] = useState('')
+  const [exportTeam, setExportTeam] = useState('')
   const [detailDispatch, setDetailDispatch] = useState(null)
 
   // Modal: Tambah Susulan
@@ -684,7 +685,7 @@ export default function BonBarang() {
   }
 
   // --- EXPORT ---
-  const handleExport = async (monthFilter = '') => {
+  const handleExport = async (monthFilter = '', teamFilter = '') => {
     setIsExportModalOpen(false)
     try {
       showProgress('Menyiapkan Export', 'Menginisialisasi file Excel...', 10)
@@ -698,8 +699,19 @@ export default function BonBarang() {
       
       const baseData = [...activeDispatches, ...historyDispatches]
       const filteredData = baseData.filter(d => {
-        if (!monthFilter) return true
-        return d.dispatch_date?.startsWith(monthFilter)
+        if (monthFilter && !d.dispatch_date?.startsWith(monthFilter)) return false
+        
+        if (teamFilter) {
+          const techIds = d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id].filter(Boolean)
+          const isBackbone = techIds.some(tId => {
+            const user = allUsers.find(u => u.id === tId)
+            return user?.role === 'backbone'
+          })
+          if (teamFilter === 'backbone' && !isBackbone) return false
+          if (teamFilter === 'biasa' && isBackbone) return false
+        }
+        
+        return true
       }).sort((a, b) => new Date(a.dispatch_date) - new Date(b.dispatch_date))
 
       if (filteredData.length === 0) {
@@ -1892,15 +1904,23 @@ export default function BonBarang() {
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: 0 }}>Export riwayat bon barang yang sudah selesai ke file Excel.</p>
               <div className="form-group">
+                <label className="form-label">Pilih Tim (opsional)</label>
+                <select className="form-input" value={exportTeam} onChange={e => setExportTeam(e.target.value)}>
+                  <option value="">Semua Tim</option>
+                  <option value="biasa">Tim Biasa (IKR/Maintenance)</option>
+                  <option value="backbone">Tim Backbone</option>
+                </select>
+              </div>
+              <div className="form-group">
                 <label className="form-label">Pilih Bulan (opsional)</label>
                 <select className="form-input" value={exportMonth} onChange={e => setExportMonth(e.target.value)}>
-                  <option value="">Semua Data</option>
+                  <option value="">Semua Bulan</option>
                   {Array.from({ length: 12 }).map((_, i) => { const d = new Date(); d.setMonth(d.getMonth() - i); const val = format(d, 'yyyy-MM'); return <option key={val} value={val}>{format(d, 'MMMM yyyy', { locale: id })}</option> })}
                 </select>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>{exportMonth ? `Export bulan: ${exportMonth}` : 'Kosongkan untuk export semua data'}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>{exportMonth ? `Export bulan: ${exportMonth}` : 'Kosongkan untuk export semua waktu'}</div>
               </div>
             </div>
-            <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setIsExportModalOpen(false)}>Batal</button><button className="btn btn-primary" onClick={() => handleExport(exportMonth)}><Download size={15} /> Export</button></div>
+            <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setIsExportModalOpen(false)}>Batal</button><button className="btn btn-primary" onClick={() => handleExport(exportMonth, exportTeam)}><Download size={15} /> Export</button></div>
           </div>
         </div>
       )}
