@@ -398,7 +398,7 @@ export default function BonBarang() {
     dispatch.items.forEach(it => {
       if (it.item_type === 'ont') initForm[it.id] = { used: false }
       else if (it.item_type === 'dropcore') initForm[it.id] = { meters_used: '' }
-      else if (it.item_type === 'adss') initForm[it.id] = { meters_used: '' }
+      else if (it.item_type === 'adss') initForm[it.id] = { meters_used: '', titik_awal: it.adss_titik_awal || '', titik_akhir: it.adss_titik_akhir || '' }
       else if (it.item_type === 'other') {
         const isTiang = it.warehouse_item?.item_name?.toLowerCase().includes('tiang')
         initForm[it.id] = { qty_used: '', ...(isTiang ? { share_lokasi: it.tiang_lokasi_url || '' } : {}) }
@@ -460,7 +460,10 @@ export default function BonBarang() {
         } else if (it.item_type === 'adss') {
           const meters = Number(lapor?.meters_used || 0)
           const isReturned = meters === 0
-          dispatchUpdates.push({ id: it.id, meters_used: meters, quantity_returned: isReturned ? 1 : 0 })
+          const adssUpdate = { id: it.id, meters_used: meters, quantity_returned: isReturned ? 1 : 0 }
+          if (lapor?.titik_awal) adssUpdate.adss_titik_awal = lapor.titik_awal
+          if (lapor?.titik_akhir) adssUpdate.adss_titik_akhir = lapor.titik_akhir
+          dispatchUpdates.push(adssUpdate)
           if (meters > 0) expItemsToInsert.push({ item_type: 'adss', adss_id: it.adss_id, meters_used: meters, quantity: 1 })
           adssUpdates.push({ id: it.adss_id, add_meters: meters })
         } else if (it.item_type === 'other') {
@@ -1526,19 +1529,29 @@ export default function BonBarang() {
                         const inputMeter = Number(laporForm[it.id]?.meters_used || 0)
                         const isOverLimit = inputMeter > sisaMeter
                         return (
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                               <span style={{ fontWeight: 600 }}>{it.adss?.haspel_code || '-'}</span>
                               <span style={{ fontSize: '11px', color: 'var(--purple)', background: 'rgba(139,92,246,0.1)', padding: '2px 8px', borderRadius: '20px' }}>{it.adss?.type?.toUpperCase()}</span>
                               <span style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'var(--bg-primary)', padding: '2px 8px', borderRadius: '20px', border: '1px solid var(--border)' }}>Sisa: {sisaMeter}m</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Meter terpakai:</span>
-                              <input type="number" className="form-input" style={{ width: '110px', height: '36px', textAlign: 'center', border: isOverLimit ? '1.5px solid var(--danger)' : undefined }} min="0" max={sisaMeter} placeholder="0" value={laporForm[it.id]?.meters_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { meters_used: e.target.value } })} />
+                              <input type="number" className="form-input" style={{ width: '110px', height: '36px', textAlign: 'center', border: isOverLimit ? '1.5px solid var(--danger)' : undefined }} min="0" max={sisaMeter} placeholder="0" value={laporForm[it.id]?.meters_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], meters_used: e.target.value } })} />
                               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>meter</span>
                               {inputMeter === 0 && <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: '4px' }}>↩ Dikembalikan</span>}
                               {inputMeter > 0 && !isOverLimit && <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '4px' }}>Sisa: {sisaMeter - inputMeter}m</span>}
                               {isOverLimit && <span style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 600 }}>⚠ Melebihi sisa!</span>}
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div>
+                                <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px', color: '#4ade80' }}>📍 Titik Awal Penarikan (Maps URL)</label>
+                                <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Link Google Maps titik awal..." value={laporForm[it.id]?.titik_awal || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], titik_awal: e.target.value } })} />
+                              </div>
+                              <div>
+                                <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px', color: '#f87171' }}>🏁 Titik Akhir Penarikan (Maps URL)</label>
+                                <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Link Google Maps titik akhir..." value={laporForm[it.id]?.titik_akhir || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], titik_akhir: e.target.value } })} />
+                              </div>
                             </div>
                           </div>
                         )
