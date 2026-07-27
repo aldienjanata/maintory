@@ -169,7 +169,7 @@ export default function Adss() {
       }
 
       // Aman untuk dihapus
-      const { error } = await supabase.from('Adss_haspels').delete().eq('id', h.id)
+      const { error } = await supabase.from('adss_haspels').delete().eq('id', h.id)
       if (error) throw error
       await logActivity({ userId: profile.id, username: profile.username, role, module: 'Adss', action: 'Hapus Haspel', detail: h.haspel_code })
       toast.success(`Haspel ${h.haspel_code} berhasil dihapus`)
