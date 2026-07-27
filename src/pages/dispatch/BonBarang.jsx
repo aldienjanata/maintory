@@ -46,6 +46,7 @@ export default function BonBarang() {
 
   // Options
   const [technicians, setTechnicians] = useState([])
+  const [allUsers, setAllUsers] = useState([])
   const [snList, setSnList] = useState([])
   const [haspelList, setHaspelList] = useState([])
   const [adssList, setAdssList] = useState([])
@@ -119,6 +120,7 @@ export default function BonBarang() {
 
       if (techRes.data) {
         const users = techRes.data
+        setAllUsers(users)
         if (dispRes.data) {
           if (profile.role === 'backbone') {
             const backboneIds = users.filter(u => u.role === 'backbone').map(u => u.id)
@@ -142,7 +144,13 @@ export default function BonBarang() {
       if (otherRes.data) setOtherItems(otherRes.data)
 
       if (schedRes.data) {
-        const allScheds = schedRes.data || []
+        let allScheds = schedRes.data || []
+        
+        if (profile.role === 'backbone' && techRes.data) {
+           const backboneIds = techRes.data.filter(u => u.role === 'backbone').map(u => u.id)
+           allScheds = allScheds.filter(s => s.technicians?.some(t => backboneIds.includes(t)))
+        }
+
         setSchedules(allScheds)
         const today = format(new Date(), 'yyyy-MM-dd')
         setMyPendingSchedules(allScheds.filter(s =>
@@ -955,7 +963,7 @@ export default function BonBarang() {
 
   const getTechNames = (techIds = []) => {
     if (!techIds || techIds.length === 0) return '-'
-    return techIds.map(tid => technicians.find(t => t.id === tid)?.full_name || tid).filter(Boolean).join(', ')
+    return techIds.map(tid => allUsers.find(u => u.id === tid)?.full_name || tid).filter(Boolean).join(', ')
   }
 
   const openScheduleModal = () => {
@@ -1251,8 +1259,8 @@ export default function BonBarang() {
                                   <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site}</span></div>
                                   <div className="mobile-info-row"><span className="mobile-info-label">Pekerjaan</span><span className="mobile-info-value">{WORK_TYPES.find(w => w.value === item.work_type)?.label}</span></div>
                                   {item.note && <div className="mobile-info-row"><span className="mobile-info-label">Catatan</span><span className="mobile-info-value">{item.note}</span></div>}
-                                  <div className="mobile-card-actions" style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
-                                    <button className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => handleOpenAdd(item)}><Plus size={13} /> Buat Bon dari Jadwal Ini</button>
+                                  <div className="mobile-card-actions" style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)', justifyContent: 'flex-start' }}>
+                                    <button className="btn btn-primary btn-sm" onClick={() => handleOpenAdd(item)}><Plus size={13} /> Buat Bon</button>
                                   </div>
                                 </div>
                               )}
