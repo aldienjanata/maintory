@@ -1907,7 +1907,10 @@ function BonCard({ d, role, getTechNames, expandedId, setExpandedId, handleOpenL
                       {detail && <span style={{ fontSize: '11px', color: 'var(--text-secondary)', flexShrink: 0 }}>{detail}</span>}{badge}
                     </div>
                     {it.item_type === 'tiang' && it.tiang_lokasi_url && (
-                      <a href={it.tiang_lokasi_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: 'var(--accent)', marginLeft: '14px', display: 'flex', alignItems: 'center', gap: '3px' }}>📍 Buka Lokasi di Maps</a>
+                      <a href={it.tiang_lokasi_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#e67e22', marginLeft: '14px', display: 'flex', alignItems: 'center', gap: '3px' }}>📍 Buka Lokasi di Maps</a>
+                    )}
+                    {it.item_type === 'other' && it.tiang_lokasi_url && it.warehouse_item?.item_name?.toLowerCase().includes('tiang') && (
+                      <a href={it.tiang_lokasi_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#e67e22', marginLeft: '14px', display: 'flex', alignItems: 'center', gap: '3px' }}>📍 Lokasi Tiang di Maps</a>
                     )}
                     {it.item_type === 'adss' && (it.adss_titik_awal || it.adss_titik_akhir) && (
                       <div style={{ marginLeft: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
