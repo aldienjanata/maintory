@@ -35,14 +35,14 @@ export default async function handler(req, res) {
 
     if (authErr) throw authErr
 
-    // 2. Insert profil user ke tabel public.users
-    const { error: dbErr } = await supabaseAdmin.from('users').insert({
+    // 2. Upsert profil user ke tabel public.users (karena mungkin trigger sudah membuat row-nya)
+    const { error: dbErr } = await supabaseAdmin.from('users').upsert({
       id: authData.user.id,
       username,
       full_name,
       role,
       is_active: true
-    })
+    }, { onConflict: 'id' })
 
     if (dbErr) {
       // Rollback jika insert ke tabel users gagal
