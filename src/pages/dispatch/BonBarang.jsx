@@ -21,7 +21,8 @@ const SITES = [
 const WORK_TYPES = [
   { value: 'ikr_psb', label: 'IKR/PSB' },
   { value: 'maintenance', label: 'Maintenance' },
-  { value: 'odc_odp', label: 'Instalasi ODC/ODP' }
+  { value: 'odc_odp', label: 'Instalasi ODC/ODP' },
+  { value: 'backbone', label: 'Backbone' }
 ]
 
 const ITEM_TYPE_LABELS = { ont: 'ONT', dropcore: 'Dropcore', adss: 'Kabel ADSS', tiang: 'Tiang', other: 'Material Lain' }
