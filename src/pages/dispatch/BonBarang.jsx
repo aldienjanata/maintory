@@ -752,6 +752,7 @@ export default function BonBarang() {
 
       // Pre-calculate the first dispatch for each haspel to correctly label "Haspel Utuh"
       const firstDispatchByHaspel = {}
+      const firstDispatchAdss = {}
       baseData.forEach(d => {
         if (!d.items) return
         d.items.filter(it => it.item_type === 'dropcore').forEach(it => {
@@ -768,6 +769,24 @@ export default function BonBarang() {
                 firstDispatchByHaspel[hId] = { dispatch_date: dDate, created_at: cDate, dispatchId: d.id }
               } else if (dDate.getTime() === current.dispatch_date.getTime() && cDate < current.created_at) {
                 firstDispatchByHaspel[hId] = { dispatch_date: dDate, created_at: cDate, dispatchId: d.id }
+              }
+            }
+          }
+        })
+        d.items.filter(it => it.item_type === 'adss').forEach(it => {
+          const hId = it.adss_id || (it.adss && it.adss.id)
+          if (hId) {
+            const current = firstDispatchAdss[hId]
+            const dDate = new Date(d.dispatch_date)
+            const cDate = new Date(d.created_at)
+            
+            if (!current) {
+              firstDispatchAdss[hId] = { dispatch_date: dDate, created_at: cDate, dispatchId: d.id }
+            } else {
+              if (dDate < current.dispatch_date) {
+                firstDispatchAdss[hId] = { dispatch_date: dDate, created_at: cDate, dispatchId: d.id }
+              } else if (dDate.getTime() === current.dispatch_date.getTime() && cDate < current.created_at) {
+                firstDispatchAdss[hId] = { dispatch_date: dDate, created_at: cDate, dispatchId: d.id }
               }
             }
           }
@@ -818,6 +837,19 @@ export default function BonBarang() {
               kode = it.haspel?.haspel_code || '-'
               const hId = it.haspel_id || (it.haspel && it.haspel.id)
               const isUtuh = hId && firstDispatchByHaspel[hId]?.dispatchId === d.id
+              qtyDibawa = isUtuh ? 1 : 0
+              satuan = 'Haspel (Bawa) / Meter (Pakai)'
+              if (isSelesai) {
+                qtyTerpakai = it.meters_used || 0
+                qtyKembali = 0
+                statusItem = 'Terpakai'
+              }
+            } else if (it.item_type === 'adss') {
+              const hType = (it.adss?.type || '24c').toUpperCase()
+              jenisBarang = `KABEL ADSS ${hType}`
+              kode = it.adss?.haspel_code || '-'
+              const hId = it.adss_id || (it.adss && it.adss.id)
+              const isUtuh = hId && firstDispatchAdss[hId]?.dispatchId === d.id
               qtyDibawa = isUtuh ? 1 : 0
               satuan = 'Haspel (Bawa) / Meter (Pakai)'
               if (isSelesai) {
@@ -895,40 +927,42 @@ export default function BonBarang() {
       applyDataRowStyles(wsLokasi)
 
       // ===== SHEET 3: Catatan Serial Number =====
-      showProgress('Mengekspor Data', 'Memproses Serial Number...', 45)
-      const ws3 = workbook.addWorksheet('Catatan Serial Number')
-      const headers3 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Serial Number', 'Status Terpakai']
-      setColumnWidths(ws3, [14, 20, 20, 32, 26, 20])
-      applyHeaderStyle(ws3, headers3, '047857') // teal
+      if (teamFilter !== 'backbone') {
+        showProgress('Mengekspor Data', 'Memproses Serial Number...', 45)
+        const ws3 = workbook.addWorksheet('Catatan Serial Number')
+        const headers3 = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Serial Number', 'Status Terpakai']
+        setColumnWidths(ws3, [14, 20, 20, 32, 26, 20])
+        applyHeaderStyle(ws3, headers3, '047857') // teal
 
-      for (let i = 0; i < filteredData.length; i++) {
-        const d = filteredData[i]
-        const techIds = d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id].filter(Boolean)
-        const isBackbone = techIds.some(tId => {
-          const user = allUsers.find(u => u.id === tId)
-          return user?.role === 'backbone'
-        })
-        
-        // Skip backbone dispatches for SN sheet
-        if (isBackbone) continue
-
-        const techName = getTechNames(techIds)
-        const site = SITES.find(s => s.value === d.site)?.label || d.site
-        const isSelesai = d.status === 'selesai'
-        const workTypeLabel = WORK_TYPES.find(w => w.value === d.work_type)?.label || 'Instalasi/PSB'
-
-        if (d.items && d.items.length > 0) {
-          d.items.filter(it => it.item_type === 'ont').forEach(it => {
-            const sn = it.sn?.serial_number || '-'
-            let status = 'Sedang Dibawa'
-            if (isSelesai) {
-              status = it.quantity_used > 0 ? 'Terpakai' : 'Dikembalikan'
-            }
-            ws3.addRow([d.dispatch_date, site, workTypeLabel, techName, sn, status])
+        for (let i = 0; i < filteredData.length; i++) {
+          const d = filteredData[i]
+          const techIds = d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id].filter(Boolean)
+          const isBackbone = techIds.some(tId => {
+            const user = allUsers.find(u => u.id === tId)
+            return user?.role === 'backbone'
           })
+          
+          // Skip backbone dispatches for SN sheet
+          if (isBackbone) continue
+
+          const techName = getTechNames(techIds)
+          const site = SITES.find(s => s.value === d.site)?.label || d.site
+          const isSelesai = d.status === 'selesai'
+          const workTypeLabel = WORK_TYPES.find(w => w.value === d.work_type)?.label || 'Instalasi/PSB'
+
+          if (d.items && d.items.length > 0) {
+            d.items.filter(it => it.item_type === 'ont').forEach(it => {
+              const sn = it.sn?.serial_number || '-'
+              let status = 'Sedang Dibawa'
+              if (isSelesai) {
+                status = it.quantity_used > 0 ? 'Terpakai' : 'Dikembalikan'
+              }
+              ws3.addRow([d.dispatch_date, site, workTypeLabel, techName, sn, status])
+            })
+          }
         }
+        applyDataRowStyles(ws3)
       }
-      applyDataRowStyles(ws3)
 
       // ===== SHEET 4: Catatan Dropcore =====
       showProgress('Mengekspor Data', 'Memproses Dropcore...', 60)
@@ -962,6 +996,38 @@ export default function BonBarang() {
         }
       }
       applyDataRowStyles(ws4)
+
+      // ===== SHEET 4.5: Catatan ADSS =====
+      showProgress('Mengekspor Data', 'Memproses ADSS...', 65)
+      const wsAdss = workbook.addWorksheet('Catatan ADSS')
+      const headersAdss = ['Tanggal', 'Lokasi', 'Jenis Pekerjaan', 'Teknisi', 'Tipe Kabel', 'Kode Haspel', 'Keterangan', 'Qty Dibawa (Haspel)', 'Meter Terpakai']
+      setColumnWidths(wsAdss, [14, 20, 20, 32, 18, 26, 24, 22, 18])
+      applyHeaderStyle(wsAdss, headersAdss, '6D28D9') // purple-700
+
+      for (let i = 0; i < filteredData.length; i++) {
+        const d = filteredData[i]
+        const techName = getTechNames(d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id])
+        const site = SITES.find(s => s.value === d.site)?.label || d.site
+        const isSelesai = d.status === 'selesai'
+        const workTypeLabel = WORK_TYPES.find(w => w.value === d.work_type)?.label || 'Instalasi/PSB'
+
+        if (d.items && d.items.length > 0) {
+          d.items.filter(it => it.item_type === 'adss').forEach(it => {
+            const hId = it.adss_id || (it.adss && it.adss.id)
+            const hType = it.adss?.type ? `ADSS ${it.adss.type.toUpperCase()}` : 'KABEL ADSS'
+            const haspel = it.adss?.haspel_code || '-'
+            const usedThisDispatch = isSelesai ? (it.meters_used || 0) : 0
+            
+            const isUtuh = hId && firstDispatchAdss[hId]?.dispatchId === d.id
+            const ket = isUtuh ? `Haspel Utuh (${it.adss?.initial_meters || 4000}m)` : 'Sisa Haspel / Potongan'
+            const meterTerpakai = isSelesai ? usedThisDispatch : 0
+            const qtyDibawa = it.quantity_dispatched || 1
+            
+            wsAdss.addRow([d.dispatch_date, site, workTypeLabel, techName, hType, haspel, ket, qtyDibawa, meterTerpakai])
+          })
+        }
+      }
+      applyDataRowStyles(wsAdss)
 
       // ===== SHEET 5: Rekap Pertanggal =====
       showProgress('Mengekspor Data', 'Membuat Rekap Pertanggal...', 75)
@@ -1000,6 +1066,14 @@ export default function BonBarang() {
               const hType = (it.haspel?.type || '1c').toUpperCase()
               const haspelCode = it.haspel?.haspel_code || null
               addDaily(dateStr, `DROPCORE ${hType} (Keluar Utuh)`, 1, 'Haspel', haspelCode)
+            }
+          } else if (it.item_type === 'adss') {
+            const hId = it.adss_id || (it.adss && it.adss.id)
+            const isUtuh = hId && firstDispatchAdss[hId]?.dispatchId === d.id
+            if (isUtuh) {
+              const hType = (it.adss?.type || '24c').toUpperCase()
+              const haspelCode = it.adss?.haspel_code || null
+              addDaily(dateStr, `KABEL ADSS ${hType} (Keluar Utuh)`, 1, 'Haspel', haspelCode)
             }
           } else if (it.item_type === 'other') {
             const itemLabel = it.warehouse_item?.item_name || '-'
