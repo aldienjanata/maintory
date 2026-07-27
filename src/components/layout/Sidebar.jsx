@@ -30,6 +30,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { label: 'Stok Gudang', path: '/inventory/stok', icon: <Package />, section: 'INVENTORY' },
     { label: 'Serial Number', path: '/inventory/sn', icon: <Hash />, section: 'INVENTORY' },
     { label: 'Dropcore', path: '/inventory/dropcore', icon: <Cable />, section: 'INVENTORY' },
+    { label: 'Kabel ADSS', path: '/inventory/adss', icon: <Cable />, section: 'INVENTORY' },
     
     { label: 'Bon Barang', path: '/bon-barang', icon: <ClipboardList />, section: 'OPERATIONS' },
     { label: 'Pengeluaran', path: '/pengeluaran', icon: <Truck />, section: 'OPERATIONS' },

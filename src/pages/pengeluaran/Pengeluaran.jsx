@@ -36,6 +36,7 @@ export default function Pengeluaran() {
   const [technicians, setTechnicians] = useState([])
   const [snList, setSnList] = useState([])
   const [haspelList, setHaspelList] = useState([])
+  const [adssList, setAdssList] = useState([])
   const [otherItems, setOtherItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -114,11 +115,12 @@ export default function Pengeluaran() {
 
   const fetchAll = async () => {
     setLoading(true)
-    const [expRes, techRes, snRes, haspelRes, schedRes, whRes] = await Promise.all([
-      supabase.from('daily_expenses').select('*, items:expense_items(*, warehouse_item:warehouses(item_name), haspel:dropcore_haspels(haspel_code, remaining_meters, used_meters), sn:serial_numbers(serial_number))').order('expense_date', { ascending: false }),
+    const [expRes, techRes, snRes, haspelRes, adssRes, schedRes, whRes] = await Promise.all([
+      supabase.from('daily_expenses').select('*, items:expense_items(*, warehouse_item:warehouses(item_name), haspel:dropcore_haspels(haspel_code, remaining_meters, used_meters), adss:adss_haspels(haspel_code, type, used_meters), sn:serial_numbers(serial_number))').order('expense_date', { ascending: false }),
       supabase.from('users').select('id, full_name, username').in('role', ['admin', 'teknisi']).eq('is_active', true),
       supabase.from('serial_numbers').select('id, serial_number, brand:ont_brands(brand_name), type:ont_types(type_name)').eq('status', 'tersedia'),
       supabase.from('dropcore_haspels').select('id, haspel_code, type, initial_meters, used_meters').eq('status', 'tersedia'),
+      supabase.from('adss_haspels').select('id, haspel_code, type, tube_type, brand, initial_meters, used_meters').eq('status', 'tersedia'),
       supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }),
       supabase.from('warehouses').select('id, item_name, initial_stock').eq('item_type', 'other')
     ])
@@ -126,6 +128,7 @@ export default function Pengeluaran() {
     if (!techRes.error) setTechnicians(techRes.data || [])
     if (!snRes.error) setSnList(snRes.data || [])
     if (!haspelRes.error) setHaspelList(haspelRes.data || [])
+    if (!adssRes.error) setAdssList(adssRes.data || [])
     if (!whRes.error) setOtherItems(whRes.data || [])
     if (!schedRes.error) {
       const allScheds = schedRes.data || []
@@ -157,6 +160,14 @@ export default function Pengeluaran() {
     .map(h => {
       const sisa = Number(h.initial_meters || 0) - Number(h.used_meters || 0)
       return { value: h.id, label: `${h.haspel_code} (${h.type?.toUpperCase() || ''}, sisa: ${sisa}m)`, sisa }
+    })
+    .filter(h => h.sisa > 0)
+  const adssOptions = adssList
+    .map(h => {
+      const sisa = Number(h.initial_meters || 0) - Number(h.used_meters || 0)
+      const typeLabel = h.type ? `ADSS ${h.type.toUpperCase()}` : 'ADSS'
+      const brandInfo = h.brand ? ` | ${h.brand}` : ''
+      return { value: h.id, label: `${h.haspel_code} (${typeLabel}${brandInfo}, sisa: ${sisa}m)`, sisa }
     })
     .filter(h => h.sisa > 0)
   const otherOptions = otherItems
@@ -237,6 +248,17 @@ export default function Pengeluaran() {
       }
     }
 
+    // 2b. Revert ADSS
+    const adssItems = itemsToRevert.filter(i => i.item_type === 'adss')
+    for (const adss of adssItems) {
+      const { data: haspel } = await supabase.from('adss_haspels').select('id, initial_meters, used_meters').eq('id', adss.adss_id).single()
+      if (haspel) {
+        const newUsed = Math.max(0, Number(haspel.used_meters || 0) - Number(adss.meters_used))
+        const newStatus = newUsed >= Number(haspel.initial_meters) ? 'habis' : 'tersedia'
+        await supabase.from('adss_haspels').update({ used_meters: newUsed, status: newStatus }).eq('id', adss.adss_id)
+      }
+    }
+
     // 3. Revert Warehouse
     const otherItemsList = itemsToRevert.filter(i => i.item_type === 'other')
     for (const other of otherItemsList) {
@@ -273,6 +295,19 @@ export default function Pengeluaran() {
         item_type: 'dropcore',
         selected_haspels,
         haspel_meters
+      })
+    }
+
+    const adssExpItems = exp.items.filter(i => i.item_type === 'adss')
+    if (adssExpItems.length > 0) {
+      const selected_adss = adssExpItems.map(d => ({ value: d.adss_id, label: d.adss?.haspel_code || 'Unknown' }))
+      const adss_meters = {}
+      adssExpItems.forEach(d => { adss_meters[d.adss_id] = d.meters_used })
+      formItems.push({
+        id: 'adss_edit',
+        item_type: 'adss',
+        selected_adss,
+        adss_meters
       })
     }
 
@@ -381,6 +416,11 @@ export default function Pengeluaran() {
             const meters = item.haspel_meters?.[opt.value] || 0
             if (meters > 0) itemsToInsert.push({ item_type: 'dropcore', haspel_id: opt.value, meters_used: meters, quantity: 1 })
           })
+        } else if (item.item_type === 'adss') {
+          (item.selected_adss || []).forEach(opt => {
+            const meters = item.adss_meters?.[opt.value] || 0
+            if (meters > 0) itemsToInsert.push({ item_type: 'adss', adss_id: opt.value, meters_used: meters, quantity: 1 })
+          })
         } else if (item.item_type === 'other') {
           (item.selected_others || []).forEach(opt => {
              const qty = item.other_quantities?.[opt.value] || 1
@@ -452,6 +492,13 @@ export default function Pengeluaran() {
                  itemsToInsert.push({ expense_id: expId, item_type: 'dropcore', haspel_id: opt.value, meters_used: meters, quantity: 1 })
               }
             })
+          } else if (item.item_type === 'adss') {
+            (item.selected_adss || []).forEach(opt => {
+              const meters = item.adss_meters?.[opt.value] || 0
+              if (meters > 0) {
+                itemsToInsert.push({ expense_id: expId, item_type: 'adss', adss_id: opt.value, meters_used: meters, quantity: 1 })
+              }
+            })
           } else if (item.item_type === 'other') {
             (item.selected_others || []).forEach(opt => {
                const qty = item.other_quantities?.[opt.value] || 1
@@ -482,6 +529,20 @@ export default function Pengeluaran() {
                 .update({ used_meters: newUsed, status: newStatus })
                 .eq('id', dc.haspel_id)
               if (dcError) console.error("Gagal update dropcore:", dcError)
+            }
+          }
+
+          // Update ADSS haspels
+          const adssItems = itemsToInsert.filter(i => i.item_type === 'adss')
+          for (const adss of adssItems) {
+            const { data: haspel } = await supabase.from('adss_haspels').select('id, initial_meters, used_meters').eq('id', adss.adss_id).single()
+            if (haspel) {
+              const newUsed = Number(haspel.used_meters || 0) + Number(adss.meters_used)
+              const newStatus = newUsed >= Number(haspel.initial_meters) ? 'habis' : 'tersedia'
+              const { error: adssError } = await supabase.from('adss_haspels')
+                .update({ used_meters: newUsed, status: newStatus })
+                .eq('id', adss.adss_id)
+              if (adssError) console.error("Gagal update adss:", adssError)
             }
           }
 
@@ -1168,6 +1229,7 @@ export default function Pengeluaran() {
                       <select className="form-input" style={{ height: 'auto' }} value={item.item_type} onChange={e => updateItem(item.id, 'item_type', e.target.value)}>
                         <option value="ont">ONT / Modem</option>
                         <option value="dropcore">Dropcore</option>
+                        <option value="adss">Kabel ADSS</option>
                         <option value="other">Barang Lainnya</option>
                       </select>
                       {item.item_type === 'ont' && (
@@ -1260,6 +1322,61 @@ export default function Pengeluaran() {
                                 style={{ width: '130px' }}
                                 value={(item.haspel_meters || {})[h.value] || ''} 
                                 onChange={e => updateItem(item.id, 'haspel_meters', { ...(item.haspel_meters || {}), [h.value]: e.target.value })} 
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {item.item_type === 'adss' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <Select 
+                            isMulti 
+                            options={adssOptions} 
+                            placeholder="Pilih beberapa Haspel ADSS..."
+                            value={item.selected_adss || []}
+                            onChange={val => updateItem(item.id, 'selected_adss', val)}
+                            styles={{
+                              control: (base) => ({
+                                ...base,
+                                background: 'var(--bg-input)',
+                                borderColor: 'var(--border)',
+                                color: 'var(--text-primary)',
+                              }),
+                              menu: (base) => ({
+                                ...base,
+                                background: 'var(--bg-input)',
+                                color: 'var(--text-primary)',
+                              }),
+                              input: (base) => ({
+                                ...base,
+                                color: 'var(--text-primary)',
+                              }),
+                              option: (base, state) => ({
+                                ...base,
+                                backgroundColor: state.isFocused ? 'var(--accent-dim)' : 'transparent',
+                                color: state.isFocused ? 'var(--accent)' : 'var(--text-primary)',
+                                cursor: 'pointer'
+                              }),
+                              multiValue: (base) => ({
+                                ...base,
+                                backgroundColor: 'var(--accent-dim)',
+                              }),
+                              multiValueLabel: (base) => ({
+                                ...base,
+                                color: 'var(--accent)',
+                              })
+                            }}
+                          />
+                          {(item.selected_adss || []).map(h => (
+                            <div key={h.value} className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <div style={{ flex: 1, fontSize: '12px', color: 'var(--text-secondary)' }}>{h.label}</div>
+                              <input 
+                                type="number" 
+                                className="form-input" 
+                                placeholder="Meter dipakai" 
+                                style={{ width: '130px' }}
+                                value={(item.adss_meters || {})[h.value] || ''} 
+                                onChange={e => updateItem(item.id, 'adss_meters', { ...(item.adss_meters || {}), [h.value]: e.target.value })} 
                               />
                             </div>
                           ))}

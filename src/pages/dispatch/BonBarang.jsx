@@ -24,8 +24,8 @@ const WORK_TYPES = [
   { value: 'odc_odp', label: 'Instalasi ODC/ODP' }
 ]
 
-const ITEM_TYPE_LABELS = { ont: 'ONT', dropcore: 'Dropcore', other: 'Material Lain' }
-const ITEM_TYPE_COLORS = { ont: 'var(--accent)', dropcore: 'var(--warning)', other: 'var(--success)' }
+const ITEM_TYPE_LABELS = { ont: 'ONT', dropcore: 'Dropcore', adss: 'Kabel ADSS', other: 'Material Lain' }
+const ITEM_TYPE_COLORS = { ont: 'var(--accent)', dropcore: 'var(--warning)', adss: 'var(--purple)', other: 'var(--success)' }
 
 export default function BonBarang() {
   const { profile } = useAuth()
@@ -48,6 +48,7 @@ export default function BonBarang() {
   const [technicians, setTechnicians] = useState([])
   const [snList, setSnList] = useState([])
   const [haspelList, setHaspelList] = useState([])
+  const [adssList, setAdssList] = useState([])
   const [otherItems, setOtherItems] = useState([])
 
   // Banner for teknisi
@@ -106,12 +107,13 @@ export default function BonBarang() {
         // We will fetch users separately and map them locally.
         supabase
           .from('dispatches')
-          .select('*, items:dispatch_items(*, sn:serial_numbers(serial_number), haspel:dropcore_haspels(*), warehouse_item:warehouses(item_name))')
+          .select('*, items:dispatch_items(*, sn:serial_numbers(serial_number), haspel:dropcore_haspels(*), adss:adss_haspels(*), warehouse_item:warehouses(item_name))')
           .order('created_at', { ascending: false }),
         supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }),
         supabase.from('users').select('id, full_name').in('role', ['admin', 'teknisi']).eq('is_active', true),
         supabase.from('serial_numbers').select('id, serial_number').eq('status', 'tersedia'),
         supabase.from('dropcore_haspels').select('id, haspel_code, initial_meters, used_meters, type').in('status', ['tersedia']),
+        supabase.from('adss_haspels').select('id, haspel_code, initial_meters, used_meters, type, tube_type, brand').in('status', ['tersedia']),
         supabase.from('warehouses').select('id, item_name, initial_stock').gt('initial_stock', 0)
       ])
 
@@ -119,6 +121,7 @@ export default function BonBarang() {
       if (techRes.data) setTechnicians(techRes.data.map(t => ({ value: t.id, label: t.full_name, id: t.id, full_name: t.full_name })))
       if (snRes.data) setSnList(snRes.data)
       if (haspelRes.data) setHaspelList(haspelRes.data)
+      if (adssRes.data) setAdssList(adssRes.data)
       if (otherRes.data) setOtherItems(otherRes.data)
 
       if (schedRes.data) {
@@ -199,6 +202,7 @@ export default function BonBarang() {
     
     const onts = dispatch.items.filter(i => i.item_type === 'ont')
     const dcs = dispatch.items.filter(i => i.item_type === 'dropcore')
+    const adsss = dispatch.items.filter(i => i.item_type === 'adss')
     const others = dispatch.items.filter(i => i.item_type === 'other')
 
     const newItems = []
@@ -214,6 +218,13 @@ export default function BonBarang() {
         id: 'edit_dc',
         item_type: 'dropcore',
         selected_haspels: dcs.map(d => ({ value: d.haspel_id, label: d.haspel?.haspel_code }))
+      })
+    }
+    if (adsss.length > 0) {
+      newItems.push({
+        id: 'edit_adss',
+        item_type: 'adss',
+        selected_adss: adsss.map(a => ({ value: a.adss_id, label: a.adss?.haspel_code }))
       })
     }
     if (others.length > 0) {
@@ -258,6 +269,8 @@ export default function BonBarang() {
           (item.selected_onts || []).forEach(opt => { itemsToInsert.push({ item_type: 'ont', serial_number_id: opt.value, quantity_dispatched: 1 }); ontIds.push(opt.value) })
         } else if (item.item_type === 'dropcore') {
           (item.selected_haspels || []).forEach(opt => { itemsToInsert.push({ item_type: 'dropcore', haspel_id: opt.value, quantity_dispatched: 1 }); dcIds.push(opt.value) })
+        } else if (item.item_type === 'adss') {
+          (item.selected_adss || []).forEach(opt => { itemsToInsert.push({ item_type: 'adss', adss_id: opt.value, quantity_dispatched: 1 }) })
         } else if (item.item_type === 'other') {
           (item.selected_others || []).forEach(opt => {
             const qty = item.other_quantities?.[opt.value] || 1
@@ -285,14 +298,16 @@ export default function BonBarang() {
         const oldDispatch = dispatches.find(d => d.id === editingDispatchId)
         if (oldDispatch) {
           // 1. REVERT OLD STOCK
-          const oldOnt = [], oldDc = [], oldWh = []
+          const oldOnt = [], oldDc = [], oldAdss = [], oldWh = []
           for (const it of oldDispatch.items) {
             if (it.item_type === 'ont') oldOnt.push(it.serial_number_id)
             if (it.item_type === 'dropcore') oldDc.push(it.haspel_id)
+            if (it.item_type === 'adss') oldAdss.push(it.adss_id)
             if (it.item_type === 'other') oldWh.push({ id: it.warehouse_item_id, qty: it.quantity_dispatched })
           }
           if (oldOnt.length > 0) await supabase.from('serial_numbers').update({ status: 'tersedia' }).in('id', oldOnt)
           if (oldDc.length > 0) await supabase.from('dropcore_haspels').update({ status: 'tersedia' }).in('id', oldDc)
+          if (oldAdss.length > 0) await supabase.from('adss_haspels').update({ status: 'tersedia' }).in('id', oldAdss)
           for (const wh of oldWh) {
             const { data: wData } = await supabase.from('warehouses').select('initial_stock, stock_on_hold').eq('id', wh.id).single()
             if (wData) {
@@ -355,6 +370,7 @@ export default function BonBarang() {
     dispatch.items.forEach(it => {
       if (it.item_type === 'ont') initForm[it.id] = { used: false }
       else if (it.item_type === 'dropcore') initForm[it.id] = { meters_used: '' }
+      else if (it.item_type === 'adss') initForm[it.id] = { meters_used: '' }
       else if (it.item_type === 'other') initForm[it.id] = { qty_used: '' }
     })
     setLaporForm(initForm)
@@ -377,11 +393,16 @@ export default function BonBarang() {
           }
         }
         // FIX #1: Validasi meter Dropcore tidak melebihi sisa meter di haspel
-        if (it.item_type === 'dropcore') {
+        if (it.item_type === 'dropcore' || it.item_type === 'adss') {
+          const isAdss = it.item_type === 'adss'
+          const label = isAdss ? 'ADSS' : 'Dropcore'
+          const haspel = isAdss ? it.adss : it.haspel
+          const haspelIdKey = isAdss ? 'adss_id' : 'haspel_id'
+
           const meters = Number(lapor?.meters_used || 0)
-          const sisaMeter = Number(it.haspel?.initial_meters || 0) - Number(it.haspel?.used_meters || 0)
+          const sisaMeter = Number(haspel?.initial_meters || 0) - Number(haspel?.used_meters || 0)
           if (meters > sisaMeter) {
-            toast.error(`Meter terpakai untuk ${it.haspel?.haspel_code || 'haspel'} (${meters}m) melebihi sisa yang tersedia (${sisaMeter}m)!`)
+            toast.error(`Meter terpakai untuk ${haspel?.haspel_code || label} (${meters}m) melebihi sisa yang tersedia (${sisaMeter}m)!`)
             setLaporSaving(false)
             return
           }
@@ -389,7 +410,7 @@ export default function BonBarang() {
       }
 
       const expItemsToInsert = [], dispatchUpdates = []
-      const ontReturns = [], ontUsed = [], dcUpdates = [], whReturns = [], whUsed = []
+      const ontReturns = [], ontUsed = [], dcUpdates = [], adssUpdates = [], whReturns = [], whUsed = []
 
       for (const it of selectedDispatch.items) {
         const lapor = laporForm[it.id]
@@ -405,6 +426,12 @@ export default function BonBarang() {
           dispatchUpdates.push({ id: it.id, meters_used: meters, quantity_returned: isReturned ? 1 : 0 })
           if (meters > 0) expItemsToInsert.push({ item_type: 'dropcore', haspel_id: it.haspel_id, meters_used: meters, quantity: 1 })
           dcUpdates.push({ id: it.haspel_id, add_meters: meters })
+        } else if (it.item_type === 'adss') {
+          const meters = Number(lapor?.meters_used || 0)
+          const isReturned = meters === 0
+          dispatchUpdates.push({ id: it.id, meters_used: meters, quantity_returned: isReturned ? 1 : 0 })
+          if (meters > 0) expItemsToInsert.push({ item_type: 'adss', adss_id: it.adss_id, meters_used: meters, quantity: 1 })
+          adssUpdates.push({ id: it.adss_id, add_meters: meters })
         } else if (it.item_type === 'other') {
           const qUsed = Number(lapor?.qty_used || 0)
           const qRet = Number(it.quantity_dispatched) - qUsed
@@ -437,6 +464,10 @@ export default function BonBarang() {
         const { data: hData } = await supabase.from('dropcore_haspels').select('initial_meters, used_meters').eq('id', dc.id).single()
         if (hData) { const newUsed = Number(hData.used_meters || 0) + Number(dc.add_meters); await supabase.from('dropcore_haspels').update({ used_meters: newUsed, status: newUsed >= Number(hData.initial_meters) ? 'habis' : 'tersedia' }).eq('id', dc.id) }
       }
+      for (const adss of adssUpdates) {
+        const { data: hData } = await supabase.from('adss_haspels').select('initial_meters, used_meters').eq('id', adss.id).single()
+        if (hData) { const newUsed = Number(hData.used_meters || 0) + Number(adss.add_meters); await supabase.from('adss_haspels').update({ used_meters: newUsed, status: newUsed >= Number(hData.initial_meters) ? 'habis' : 'tersedia' }).eq('id', adss.id) }
+      }
       for (const wh of [...whReturns]) {
         const { data: wData } = await supabase.from('warehouses').select('initial_stock, stock_on_hold').eq('id', wh.id).single()
         if (wData) await supabase.from('warehouses').update({ initial_stock: Number(wData.initial_stock || 0) + Number(wh.qty), stock_on_hold: Math.max(0, Number(wData.stock_on_hold || 0) - Number(wh.qty)) }).eq('id', wh.id)
@@ -459,7 +490,7 @@ export default function BonBarang() {
     if (susulanForm.items.length === 0) { toast.error('Tambahkan minimal 1 barang susulan'); return }
     setSusulanSaving(true)
     try {
-      const itemsToInsert = [], expItemsToInsert = [], ontUsed = [], dcUpdates = [], whUpdates = []
+      const itemsToInsert = [], expItemsToInsert = [], ontUsed = [], dcUpdates = [], adssUpdates = [], whUpdates = []
       for (const item of susulanForm.items) {
         if (item.item_type === 'ont') {
           (item.selected_onts || []).forEach(opt => { 
@@ -489,6 +520,26 @@ export default function BonBarang() {
             expItemsToInsert.push({ item_type: 'dropcore', haspel_id: opt.value, meters_used: m, quantity: 1 })
           })
           if (!susulanDcValid) { setSusulanSaving(false); return }
+        } else if (item.item_type === 'adss') {
+          let susulanAdssValid = true
+          ;(item.selected_adss || []).forEach(opt => {
+            const m = Number(item.adss_meters?.[opt.value] || 0)
+            if (!m || m <= 0) {
+              toast.error(`Isi meter terpakai untuk ADSS ${opt.label.split(' ')[0]}!`)
+              susulanAdssValid = false
+              return
+            }
+            const sisaMeter = opt.sisa || 0
+            if (m > sisaMeter) {
+              toast.error(`Meter terpakai (${m}m) melebihi sisa ADSS ${opt.label.split(' ')[0]} (${sisaMeter}m)!`)
+              susulanAdssValid = false
+              return
+            }
+            itemsToInsert.push({ item_type: 'adss', adss_id: opt.value, quantity_dispatched: 1, meters_used: m })
+            adssUpdates.push({ id: opt.value, add_meters: m })
+            expItemsToInsert.push({ item_type: 'adss', adss_id: opt.value, meters_used: m, quantity: 1 })
+          })
+          if (!susulanAdssValid) { setSusulanSaving(false); return }
         } else if (item.item_type === 'other') {
           (item.selected_others || []).forEach(opt => {
             const qty = item.other_quantities?.[opt.value] || 1
@@ -527,6 +578,10 @@ export default function BonBarang() {
         const { data: hData } = await supabase.from('dropcore_haspels').select('initial_meters, used_meters').eq('id', dc.id).single()
         if (hData) { const newUsed = Number(hData.used_meters || 0) + Number(dc.add_meters); await supabase.from('dropcore_haspels').update({ used_meters: newUsed, status: newUsed >= Number(hData.initial_meters) ? 'habis' : 'tersedia' }).eq('id', dc.id) }
       }
+      for (const adss of adssUpdates) {
+        const { data: hData } = await supabase.from('adss_haspels').select('initial_meters, used_meters').eq('id', adss.id).single()
+        if (hData) { const newUsed = Number(hData.used_meters || 0) + Number(adss.add_meters); await supabase.from('adss_haspels').update({ used_meters: newUsed, status: newUsed >= Number(hData.initial_meters) ? 'habis' : 'tersedia' }).eq('id', adss.id) }
+      }
       for (const wh of whUpdates) {
         // Kurangi initial_stock langsung, tidak sentuh stock_on_hold karena ini susulan otomatis terpakai
         const { data: wItem } = await supabase.from('warehouses').select('initial_stock').eq('id', wh.id).single()
@@ -545,14 +600,16 @@ export default function BonBarang() {
 
   const handleDelete = async (dispatch) => {
     if (!window.confirm('Yakin ingin membatalkan bon ini? Semua stok akan dikembalikan ke gudang.')) return
-    const ontR = [], dcR = [], whR = []
+    const ontR = [], dcR = [], adssR = [], whR = []
     for (const it of dispatch.items) {
       if (it.item_type === 'ont') ontR.push(it.serial_number_id)
       if (it.item_type === 'dropcore') dcR.push(it.haspel_id)
+      if (it.item_type === 'adss') adssR.push(it.adss_id)
       if (it.item_type === 'other') whR.push({ id: it.warehouse_item_id, qty: it.quantity_dispatched })
     }
     if (ontR.length > 0) await supabase.from('serial_numbers').update({ status: 'tersedia' }).in('id', ontR)
     if (dcR.length > 0) await supabase.from('dropcore_haspels').update({ status: 'tersedia' }).in('id', dcR)
+    if (adssR.length > 0) await supabase.from('adss_haspels').update({ status: 'tersedia' }).in('id', adssR)
     for (const wh of whR) {
       const { data: wData } = await supabase.from('warehouses').select('initial_stock, stock_on_hold').eq('id', wh.id).single()
       if (wData) await supabase.from('warehouses').update({ initial_stock: Number(wData.initial_stock || 0) + Number(wh.qty), stock_on_hold: Math.max(0, Number(wData.stock_on_hold || 0) - Number(wh.qty)) }).eq('id', wh.id)
@@ -850,6 +907,12 @@ export default function BonBarang() {
     const sisa = Number(h.initial_meters || 0) - Number(h.used_meters || 0)
     const typeLabel = h.type === '4c' ? '4C' : '1C'
     return { value: h.id, label: `${h.haspel_code} [DROPCORE ${typeLabel}] — Sisa: ${sisa}m`, sisa, initial_meters: h.initial_meters, used_meters: h.used_meters }
+  }).filter(h => h.sisa > 0)
+  const adssOptions = adssList.map(h => {
+    const sisa = Number(h.initial_meters || 0) - Number(h.used_meters || 0)
+    const typeLabel = h.type ? `ADSS ${h.type.toUpperCase()}` : 'ADSS'
+    const brandInfo = h.brand ? ` | ${h.brand}` : ''
+    return { value: h.id, label: `${h.haspel_code} [${typeLabel}${brandInfo}] — Sisa: ${sisa}m`, sisa, initial_meters: h.initial_meters, used_meters: h.used_meters }
   }).filter(h => h.sisa > 0)
   const otherOptions = otherItems.map(w => ({ value: w.id, label: `${w.item_name} (stok: ${w.initial_stock})` }))
 
@@ -1293,6 +1356,7 @@ export default function BonBarang() {
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                     <button className="btn btn-secondary btn-sm" onClick={() => addItemType('ont')}><Plus size={13} /> ONT</button>
                     <button className="btn btn-secondary btn-sm" onClick={() => addItemType('dropcore')}><Plus size={13} /> Dropcore</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => addItemType('adss')}><Plus size={13} /> Kabel ADSS</button>
                     <button className="btn btn-secondary btn-sm" onClick={() => addItemType('other')}><Plus size={13} /> Material</button>
                   </div>
                 </div>
@@ -1317,6 +1381,11 @@ export default function BonBarang() {
                                   ⚠ {(item.selected_haspels || []).length} haspel dipilih. Pastikan jumlah ini wajar untuk 1 tim.
                                 </div>
                               )}
+                            </div>
+                          )}
+                          {item.item_type === 'adss' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <Select isMulti options={adssOptions} placeholder="Pilih Haspel ADSS..." value={item.selected_adss || []} onChange={val => updateItem(item.id, 'selected_adss', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }), input: (b) => ({ ...b, color: 'var(--text-primary)' }), singleValue: (b) => ({ ...b, color: 'var(--text-primary)' }) }} />
                             </div>
                           )}
                           {item.item_type === 'other' && (
@@ -1384,6 +1453,28 @@ export default function BonBarang() {
                               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>meter</span>
                               {inputMeter === 0 && <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: '4px' }}>↩ Dikembalikan</span>}
                               {inputMeter > 0 && !isOverLimit && <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '4px' }}>Sisa setelah lapor: {sisaMeter - inputMeter}m</span>}
+                              {isOverLimit && <span style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 600 }}>⚠ Melebihi sisa!</span>}
+                            </div>
+                          </div>
+                        )
+                      })()}
+                      {it.item_type === 'adss' && (() => {
+                        const sisaMeter = Number(it.adss?.initial_meters || 0) - Number(it.adss?.used_meters || 0)
+                        const inputMeter = Number(laporForm[it.id]?.meters_used || 0)
+                        const isOverLimit = inputMeter > sisaMeter
+                        return (
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 600 }}>{it.adss?.haspel_code || '-'}</span>
+                              <span style={{ fontSize: '11px', color: 'var(--purple)', background: 'rgba(139,92,246,0.1)', padding: '2px 8px', borderRadius: '20px' }}>{it.adss?.type?.toUpperCase()}</span>
+                              <span style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'var(--bg-primary)', padding: '2px 8px', borderRadius: '20px', border: '1px solid var(--border)' }}>Sisa: {sisaMeter}m</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Meter terpakai:</span>
+                              <input type="number" className="form-input" style={{ width: '110px', height: '36px', textAlign: 'center', border: isOverLimit ? '1.5px solid var(--danger)' : undefined }} min="0" max={sisaMeter} placeholder="0" value={laporForm[it.id]?.meters_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { meters_used: e.target.value } })} />
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>meter</span>
+                              {inputMeter === 0 && <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: '4px' }}>↩ Dikembalikan</span>}
+                              {inputMeter > 0 && !isOverLimit && <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '4px' }}>Sisa: {sisaMeter - inputMeter}m</span>}
                               {isOverLimit && <span style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 600 }}>⚠ Melebihi sisa!</span>}
                             </div>
                           </div>
@@ -1471,6 +1562,11 @@ export default function BonBarang() {
                       sub = 'Dropcore Haspel'
                       qtyLabel = `${it.quantity_dispatched || 1} Haspel dibawa`
                       if (detailDispatch.status === 'selesai') usedLabel = `${it.meters_used || 0} m terpakai`
+                    } else if (it.item_type === 'adss') {
+                      name = it.adss?.haspel_code || '-'
+                      sub = `Kabel ADSS ${it.adss?.type?.toUpperCase() || ''}`
+                      qtyLabel = `${it.quantity_dispatched || 1} Haspel dibawa`
+                      if (detailDispatch.status === 'selesai') usedLabel = `${it.meters_used || 0} m terpakai`
                     } else if (it.item_type === 'other') {
                       name = it.warehouse_item?.item_name || 'Material Lain'
                       sub = 'Material'
@@ -1527,10 +1623,11 @@ export default function BonBarang() {
                     <label className="form-label">Tipe Item</label>
                     <select className="form-input" value={item.item_type} onChange={e => {
                       const newType = e.target.value
-                      setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, item_type: newType, selected_haspels: [], selected_onts: [], selected_others: [], other_quantities: {}, dropcore_meters: {} } : i) }))
+                      setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, item_type: newType, selected_haspels: [], selected_onts: [], selected_others: [], selected_adss: [], other_quantities: {}, dropcore_meters: {}, adss_meters: {} } : i) }))
                     }}>
                       <option value="ont">ONT / Modem (Serial Number)</option>
                       <option value="dropcore">Dropcore / Kabel</option>
+                      <option value="adss">Kabel ADSS</option>
                       <option value="other">Material Lainnya</option>
                     </select>
                   </div>
@@ -1557,6 +1654,29 @@ export default function BonBarang() {
                               <input type="number" min="1" className="form-input" style={{ width: '80px', padding: '6px' }} value={item.dropcore_meters?.[opt.value] || ''} onChange={e => {
                                 const val = e.target.value
                                 setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, dropcore_meters: { ...i.dropcore_meters, [opt.value]: val } } : i) }))
+                              }} placeholder="Meter" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {item.item_type === 'adss' && (
+                    <>
+                      <div className="form-group mb-3">
+                        <label className="form-label">Pilih Haspel ADSS</label>
+                        <Select isMulti options={adssOptions} value={item.selected_adss} onChange={val => setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, selected_adss: val } : i) }))} placeholder="Cari Kode Haspel ADSS..." menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }), input: (b) => ({ ...b, color: 'var(--text-primary)' }), singleValue: (b) => ({ ...b, color: 'var(--text-primary)' }) }} />
+                      </div>
+                      {(item.selected_adss || []).length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <label className="form-label">Meter Terpakai per Haspel ADSS</label>
+                          {(item.selected_adss || []).map(opt => (
+                            <div key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span style={{ fontSize: '13px', width: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{opt.label.split(' - ')[0]}</span>
+                              <input type="number" min="1" className="form-input" style={{ width: '80px', padding: '6px' }} value={item.adss_meters?.[opt.value] || ''} onChange={e => {
+                                const val = e.target.value
+                                setSusulanForm(f => ({ ...f, items: f.items.map(i => i.id === item.id ? { ...i, adss_meters: { ...i.adss_meters, [opt.value]: val } } : i) }))
                               }} placeholder="Meter" />
                             </div>
                           ))}
