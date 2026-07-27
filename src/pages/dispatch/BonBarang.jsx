@@ -24,8 +24,8 @@ const WORK_TYPES = [
   { value: 'odc_odp', label: 'Instalasi ODC/ODP' }
 ]
 
-const ITEM_TYPE_LABELS = { ont: 'ONT', dropcore: 'Dropcore', adss: 'Kabel ADSS', other: 'Material Lain' }
-const ITEM_TYPE_COLORS = { ont: 'var(--accent)', dropcore: 'var(--warning)', adss: 'var(--purple)', other: 'var(--success)' }
+const ITEM_TYPE_LABELS = { ont: 'ONT', dropcore: 'Dropcore', adss: 'Kabel ADSS', tiang: 'Tiang', other: 'Material Lain' }
+const ITEM_TYPE_COLORS = { ont: 'var(--accent)', dropcore: 'var(--warning)', adss: 'var(--purple)', tiang: '#e67e22', other: 'var(--success)' }
 
 export default function BonBarang() {
   const { profile } = useAuth()
@@ -295,7 +295,10 @@ export default function BonBarang() {
         } else if (item.item_type === 'dropcore') {
           (item.selected_haspels || []).forEach(opt => { itemsToInsert.push({ item_type: 'dropcore', haspel_id: opt.value, quantity_dispatched: 1 }); dcIds.push(opt.value) })
         } else if (item.item_type === 'adss') {
-          (item.selected_adss || []).forEach(opt => { itemsToInsert.push({ item_type: 'adss', adss_id: opt.value, quantity_dispatched: 1 }) })
+          (item.selected_adss || []).forEach(opt => { itemsToInsert.push({ item_type: 'adss', adss_id: opt.value, quantity_dispatched: 1, adss_lokasi_url: item.adss_lokasi_url || null, adss_titik_awal: item.adss_titik_awal || null, adss_titik_akhir: item.adss_titik_akhir || null }) })
+        } else if (item.item_type === 'tiang') {
+          const qty = Number(item.tiang_jumlah) || 1
+          itemsToInsert.push({ item_type: 'tiang', quantity_dispatched: qty, tiang_tujuan: item.tiang_tujuan || null, tiang_lokasi_url: item.tiang_lokasi_url || null })
         } else if (item.item_type === 'other') {
           (item.selected_others || []).forEach(opt => {
             const qty = item.other_quantities?.[opt.value] || 1
@@ -1382,6 +1385,7 @@ export default function BonBarang() {
                     <button className="btn btn-secondary btn-sm" onClick={() => addItemType('ont')}><Plus size={13} /> ONT</button>
                     <button className="btn btn-secondary btn-sm" onClick={() => addItemType('dropcore')}><Plus size={13} /> Dropcore</button>
                     <button className="btn btn-secondary btn-sm" onClick={() => addItemType('adss')}><Plus size={13} /> Kabel ADSS</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => addItemType('tiang')} style={{ color: '#e67e22', borderColor: '#e67e22' }}><Plus size={13} /> Tiang</button>
                     <button className="btn btn-secondary btn-sm" onClick={() => addItemType('other')}><Plus size={13} /> Material</button>
                   </div>
                 </div>
@@ -1409,8 +1413,44 @@ export default function BonBarang() {
                             </div>
                           )}
                           {item.item_type === 'adss' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                               <Select isMulti options={adssOptions} placeholder="Pilih Haspel ADSS..." value={item.selected_adss || []} onChange={val => updateItem(item.id, 'selected_adss', val)} menuPortalTarget={document.body} menuPosition="fixed" styles={{ control: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), menuPortal: (b) => ({ ...b, zIndex: 9999 }), menu: (b) => ({ ...b, background: 'var(--bg-card)', border: '1px solid var(--border)' }), option: (b, s) => ({ ...b, background: s.isFocused ? 'var(--bg-hover)' : 'var(--bg-card)', color: 'var(--text-primary)' }), multiValue: (b) => ({ ...b, background: 'var(--accent-dim)' }), multiValueLabel: (b) => ({ ...b, color: 'var(--accent)' }), input: (b) => ({ ...b, color: 'var(--text-primary)' }), singleValue: (b) => ({ ...b, color: 'var(--text-primary)' }) }} />
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                <div>
+                                  <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px' }}>📍 Titik Awal Penarikan (Maps URL)</label>
+                                  <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Tempel link Google Maps titik awal..." value={item.adss_titik_awal || ''} onChange={e => updateItem(item.id, 'adss_titik_awal', e.target.value)} />
+                                </div>
+                                <div>
+                                  <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px' }}>🏁 Titik Akhir Penarikan (Maps URL)</label>
+                                  <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Tempel link Google Maps titik akhir..." value={item.adss_titik_akhir || ''} onChange={e => updateItem(item.id, 'adss_titik_akhir', e.target.value)} />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px' }}>📌 Share Lokasi Utama (Maps URL)</label>
+                                <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Tempel link Google Maps share lokasi..." value={item.adss_lokasi_url || ''} onChange={e => updateItem(item.id, 'adss_lokasi_url', e.target.value)} />
+                              </div>
+                            </div>
+                          )}
+                          {item.item_type === 'tiang' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                              <div>
+                                <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px' }}>🏗️ Tujuan / Keterangan Lokasi Tiang</label>
+                                <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Contoh: ODC Kebonagung, Jl. Raya No.12..." value={item.tiang_tujuan || ''} onChange={e => updateItem(item.id, 'tiang_tujuan', e.target.value)} />
+                              </div>
+                              <div>
+                                <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px' }}>📍 Share Lokasi (Google Maps URL)</label>
+                                <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Tempel link Google Maps share lokasi tiang..." value={item.tiang_lokasi_url || ''} onChange={e => updateItem(item.id, 'tiang_lokasi_url', e.target.value)} />
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                <div>
+                                  <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px' }}>Jumlah Tiang</label>
+                                  <input type="number" className="form-input" style={{ height: '36px', textAlign: 'center' }} min="1" placeholder="1" value={item.tiang_jumlah || ''} onChange={e => updateItem(item.id, 'tiang_jumlah', e.target.value)} />
+                                </div>
+                                <div>
+                                  <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px' }}>Jenis Tiang</label>
+                                  <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Beton 7m / Besi 9m..." value={item.tiang_jenis || ''} onChange={e => updateItem(item.id, 'tiang_jenis', e.target.value)} />
+                                </div>
+                              </div>
                             </div>
                           )}
                           {item.item_type === 'other' && (
@@ -1847,12 +1887,26 @@ function BonCard({ d, role, getTechNames, expandedId, setExpandedId, handleOpenL
                 let name = '', detail = '', badge = null
                 if (it.item_type === 'ont') { name = it.sn?.serial_number || '-'; if (d.status === 'selesai') badge = it.quantity_used > 0 ? <span className="badge badge-danger" style={{ fontSize: '10px', padding: '1px 5px' }}>Terpakai</span> : <span className="badge badge-success" style={{ fontSize: '10px', padding: '1px 5px' }}>Kembali</span> }
                 else if (it.item_type === 'dropcore') { name = it.haspel?.haspel_code || '-'; if (d.status === 'selesai') detail = `${it.meters_used}m terpakai` }
+                else if (it.item_type === 'adss') { name = it.adss?.haspel_code || '-'; if (d.status === 'selesai') detail = `${it.meters_used}m terpakai` }
+                else if (it.item_type === 'tiang') { name = it.tiang_tujuan ? `Tiang → ${it.tiang_tujuan}` : `Tiang × ${it.quantity_dispatched}`; detail = '' }
                 else if (it.item_type === 'other') { name = it.warehouse_item?.item_name || 'Barang'; detail = d.status === 'selesai' ? `${it.quantity_used} terpakai` : `× ${it.quantity_dispatched}` }
                 return (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 10px', background: 'var(--bg-primary)', borderRadius: '6px' }}>
-                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: ITEM_TYPE_COLORS[it.item_type], flexShrink: 0 }} />
-                    <span style={{ fontSize: '12px', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                    {detail && <span style={{ fontSize: '11px', color: 'var(--text-secondary)', flexShrink: 0 }}>{detail}</span>}{badge}
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '3px', padding: '6px 10px', background: 'var(--bg-primary)', borderRadius: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: ITEM_TYPE_COLORS[it.item_type], flexShrink: 0 }} />
+                      <span style={{ fontSize: '12px', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                      {detail && <span style={{ fontSize: '11px', color: 'var(--text-secondary)', flexShrink: 0 }}>{detail}</span>}{badge}
+                    </div>
+                    {it.item_type === 'tiang' && it.tiang_lokasi_url && (
+                      <a href={it.tiang_lokasi_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: 'var(--accent)', marginLeft: '14px', display: 'flex', alignItems: 'center', gap: '3px' }}>📍 Buka Lokasi di Maps</a>
+                    )}
+                    {it.item_type === 'adss' && (it.adss_titik_awal || it.adss_titik_akhir || it.adss_lokasi_url) && (
+                      <div style={{ marginLeft: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
+                        {it.adss_titik_awal && <a href={it.adss_titik_awal} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#4ade80', display: 'flex', alignItems: 'center', gap: '3px' }}>📍 Titik Awal</a>}
+                        {it.adss_titik_akhir && <a href={it.adss_titik_akhir} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#f87171', display: 'flex', alignItems: 'center', gap: '3px' }}>🏁 Titik Akhir</a>}
+                        {it.adss_lokasi_url && <a href={it.adss_lokasi_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '3px' }}>📌 Lokasi Utama</a>}
+                      </div>
+                    )}
                   </div>
                 )
               })}
