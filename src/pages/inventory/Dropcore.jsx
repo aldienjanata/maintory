@@ -21,6 +21,7 @@ export default function Dropcore() {
   const [searchTerm, setSearchTerm] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [sortFilter, setSortFilter] = useState('date_desc')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editItem, setEditItem] = useState(null)
   const [form, setForm] = useState({ haspel_code: '', type: '1c', initial_meters: 1000, used_meters: 0, date_in: format(new Date(), 'yyyy-MM-dd'), note: '' })
@@ -37,7 +38,7 @@ export default function Dropcore() {
   const [confirmDelete, setConfirmDelete] = useState(null)
 
   useEffect(() => { fetchHaspels() }, [])
-  useEffect(() => { setPage(1) }, [searchTerm, typeFilter, statusFilter])
+  useEffect(() => { setPage(1) }, [searchTerm, typeFilter, statusFilter, sortFilter])
 
   const fetchHaspels = async () => {
     setLoading(true)
@@ -242,6 +243,17 @@ export default function Dropcore() {
     const matchType = typeFilter === 'all' || h.type === typeFilter
     const matchStatus = statusFilter === 'all' || h.status === statusFilter
     return matchSearch && matchType && matchStatus
+  }).sort((a, b) => {
+    if (sortFilter === 'date_desc') return new Date(b.date_in) - new Date(a.date_in)
+    if (sortFilter === 'date_asc') return new Date(a.date_in) - new Date(b.date_in)
+    
+    const sisaA = Number(a.initial_meters) - Number(a.used_meters)
+    const sisaB = Number(b.initial_meters) - Number(b.used_meters)
+    
+    if (sortFilter === 'stock_desc') return sisaB - sisaA
+    if (sortFilter === 'stock_asc') return sisaA - sisaB
+    
+    return 0
   })
 
   const paginated = filtered.slice((page - 1) * perPage, page * perPage)
@@ -494,6 +506,12 @@ export default function Dropcore() {
             <option value="all">Semua Status</option>
             <option value="tersedia">Tersedia</option>
             <option value="habis">Habis</option>
+          </select>
+          <select className="filter-select" value={sortFilter} onChange={e => setSortFilter(e.target.value)}>
+            <option value="date_desc">Tanggal Terbaru</option>
+            <option value="date_asc">Tanggal Terlama</option>
+            <option value="stock_desc">Sisa Stok Terbanyak</option>
+            <option value="stock_asc">Sisa Stok Sedikit</option>
           </select>
         </div>
 
