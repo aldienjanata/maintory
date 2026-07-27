@@ -40,6 +40,7 @@ export default function Settings() {
 
   // Data Cleanup
   const [tableCounts, setTableCounts] = useState({})
+  const [dbSize, setDbSize] = useState(null)
   const [cleanupForm, setCleanupForm] = useState({ table: 'activity_logs', age: '3_months' })
   const [cleanupExecuting, setCleanupExecuting] = useState(false)
 
@@ -69,6 +70,13 @@ export default function Settings() {
       counts[table] = count || 0
     }
     setTableCounts(counts)
+
+    try {
+      const { data, error } = await supabase.rpc('get_db_size')
+      if (!error && data) setDbSize(data)
+    } catch (err) {
+      console.log('get_db_size rpc might not exist yet')
+    }
   }
 
   const openAdd = () => { setEditUser(null); setForm(emptyForm); setIsModalOpen(true) }
@@ -420,10 +428,31 @@ export default function Settings() {
           {/* Bagian Kiri: Analyzer */}
           <div className="card">
             <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Database size={16} className="text-accent" /> Storage Analyzer (Row Count)
+              <Database size={16} className="text-accent" /> Storage Analyzer
             </h3>
-            <p className="text-secondary" style={{ fontSize: '13px', marginBottom: '20px' }}>
-              Perkiraan jumlah baris pada tabel-tabel utama. Supabase free tier dibatasi hingga 500MB total database size.
+            
+            {dbSize !== null && (
+              <div style={{ marginBottom: '24px', padding: '16px', background: 'var(--bg-hover)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', fontWeight: 600 }}>
+                  <span>Penggunaan Database</span>
+                  <span>{((dbSize / (1024 * 1024))).toFixed(2)} MB / 500 MB</span>
+                </div>
+                <div style={{ width: '100%', height: '10px', background: 'var(--border)', borderRadius: '5px', overflow: 'hidden', marginBottom: '8px' }}>
+                  <div style={{ 
+                    height: '100%', 
+                    background: (dbSize / (500 * 1024 * 1024)) > 0.8 ? 'var(--danger)' : (dbSize / (500 * 1024 * 1024)) > 0.5 ? 'var(--warning)' : 'var(--success)',
+                    width: `${Math.min((dbSize / (500 * 1024 * 1024)) * 100, 100)}%`,
+                    transition: 'width 0.3s ease'
+                  }} />
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--secondary)' }}>
+                  Sisa kapasitas: <strong>{((500 * 1024 * 1024 - dbSize) / (1024 * 1024)).toFixed(2)} MB</strong>
+                </div>
+              </div>
+            )}
+
+            <p className="text-secondary" style={{ fontSize: '13px', marginBottom: '16px' }}>
+              Perkiraan jumlah baris pada tabel-tabel utama:
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {[
