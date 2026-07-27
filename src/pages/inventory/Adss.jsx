@@ -194,8 +194,8 @@ export default function Adss() {
     const { data: expItems } = await supabase
       .from('expense_items')
       .select('*, expense:daily_expenses(expense_date, site, technicians, work_type)')
-      .eq('item_type', 'Adss')
-      .eq('haspel_id', haspel.id)
+      .eq('item_type', 'adss')
+      .eq('adss_id', haspel.id)
       .order('created_at', { ascending: true })
 
     // Fetch all users to map technician IDs
