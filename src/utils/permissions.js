@@ -82,6 +82,7 @@ export const can = (role, action) => {
     'settings.branch': ['superadmin'],
     'settings.users': ['superadmin'],
     'settings.notif': ['superadmin', 'admin', 'teknisi'],
+    'settings.archive': ['superadmin'],
   }
 
   return permissions[action]?.includes(role) ?? false

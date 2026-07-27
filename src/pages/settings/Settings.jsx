@@ -6,14 +6,18 @@ import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
 import { 
   Settings as SettingsIcon, Users, UserPlus, Trash2, Edit2, X, 
-  Eye, EyeOff, Key, Building, Shield, CheckCircle
+  Eye, EyeOff, Key, Building, Shield, CheckCircle,
+  Database, Download, AlertTriangle
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { useProgress } from '../../contexts/ProgressContext'
 
 const ROLES = ['superadmin', 'admin', 'teknisi']
 
 export default function Settings() {
   const { profile, refreshProfile } = useAuth()
   const role = profile?.role || 'teknisi'
+  const { showProgress, hideProgress } = useProgress()
 
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -34,9 +38,15 @@ export default function Settings() {
   const [changePwForm, setChangePwForm] = useState({ current: '', newPw: '', confirm: '' })
   const [savingPw, setSavingPw] = useState(false)
 
+  // Data Cleanup
+  const [tableCounts, setTableCounts] = useState({})
+  const [cleanupForm, setCleanupForm] = useState({ table: 'activity_logs', age: '3_months' })
+  const [cleanupExecuting, setCleanupExecuting] = useState(false)
+
   useEffect(() => {
     fetchUsers()
     fetchBranchSettings()
+    if (can(role, 'settings.archive')) fetchTableCounts()
   }, [])
 
   const fetchUsers = async () => {
@@ -49,6 +59,16 @@ export default function Settings() {
   const fetchBranchSettings = async () => {
     const { data } = await supabase.from('app_settings').select('*').single()
     if (data) setBranchName(data.branch_name)
+  }
+
+  const fetchTableCounts = async () => {
+    const tables = ['activity_logs', 'dispatches', 'daily_expenses', 'serial_numbers', 'dropcore_haspels', 'adss_haspels']
+    const counts = {}
+    for (const table of tables) {
+      const { count } = await supabase.from(table).select('*', { count: 'exact', head: true })
+      counts[table] = count || 0
+    }
+    setTableCounts(counts)
   }
 
   const openAdd = () => { setEditUser(null); setForm(emptyForm); setIsModalOpen(true) }
@@ -135,6 +155,101 @@ export default function Settings() {
     setSavingBranch(false)
   }
 
+  const handleCleanup = async () => {
+    if (!cleanupForm.table) return
+    if (!window.confirm(`Yakin ingin MENGARSIPKAN dan MENGHAPUS data dari ${cleanupForm.table}? Data yang dihapus tidak bisa dikembalikan ke sistem.`)) return
+    
+    // Calculate cutoff date based on age
+    const cutoff = new Date()
+    if (cleanupForm.age === '1_month') cutoff.setMonth(cutoff.getMonth() - 1)
+    else if (cleanupForm.age === '3_months') cutoff.setMonth(cutoff.getMonth() - 3)
+    else if (cleanupForm.age === '6_months') cutoff.setMonth(cutoff.getMonth() - 6)
+    else if (cleanupForm.age === '1_year') cutoff.setFullYear(cutoff.getFullYear() - 1)
+    
+    const cutoffIso = cutoff.toISOString()
+    const cutoffDate = cutoffIso.split('T')[0] // for dates
+
+    setCleanupExecuting(true)
+    showProgress('Pembersihan Data', 'Mengambil data lama...', 10)
+
+    try {
+      let dataToExport = []
+      let parentIds = []
+
+      if (cleanupForm.table === 'activity_logs') {
+        const { data, error } = await supabase.from('activity_logs').select('*').lt('created_at', cutoffIso)
+        if (error) throw error
+        dataToExport = data
+      } else if (cleanupForm.table === 'dispatches') {
+        const { data, error } = await supabase.from('dispatches').select('*, dispatch_items(*)').lt('dispatch_date', cutoffDate)
+        if (error) throw error
+        parentIds = data.map(d => d.id)
+        
+        // Flatten for excel
+        dataToExport = data.flatMap(d => {
+           if (!d.dispatch_items || d.dispatch_items.length === 0) return [d]
+           return d.dispatch_items.map(item => ({ ...d, dispatch_items: undefined, item_id: item.id, item_type: item.item_type, qty: item.quantity, note: item.note }))
+        })
+      } else if (cleanupForm.table === 'daily_expenses') {
+        const { data, error } = await supabase.from('daily_expenses').select('*, expense_items(*)').lt('expense_date', cutoffDate)
+        if (error) throw error
+        parentIds = data.map(d => d.id)
+        
+        dataToExport = data.flatMap(d => {
+           if (!d.expense_items || d.expense_items.length === 0) return [d]
+           return d.expense_items.map(item => ({ ...d, expense_items: undefined, item_id: item.id, item_type: item.item_type, qty: item.quantity, note: item.note }))
+        })
+      }
+
+      if (dataToExport.length === 0) {
+        toast.success('Tidak ada data lama yang ditemukan untuk kriteria ini.')
+        hideProgress()
+        setCleanupExecuting(false)
+        return
+      }
+
+      showProgress('Pembersihan Data', 'Membuat file Excel...', 40)
+      
+      // Export to Excel
+      const ws = XLSX.utils.json_to_sheet(dataToExport)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, "Arsip")
+      XLSX.writeFile(wb, `Arsip_${cleanupForm.table}_${cutoffDate}.xlsx`)
+
+      showProgress('Pembersihan Data', 'Menghapus data dari database...', 70)
+
+      // Delete from DB Safely (Items first if needed)
+      let delError = null
+      if (cleanupForm.table === 'activity_logs') {
+        const { error } = await supabase.from('activity_logs').delete().lt('created_at', cutoffIso)
+        delError = error
+      } else if (cleanupForm.table === 'dispatches' && parentIds.length > 0) {
+        // Delete items first to prevent FK error
+        await supabase.from('dispatch_items').delete().in('dispatch_id', parentIds)
+        const { error } = await supabase.from('dispatches').delete().in('id', parentIds)
+        delError = error
+      } else if (cleanupForm.table === 'daily_expenses' && parentIds.length > 0) {
+        await supabase.from('expense_items').delete().in('expense_id', parentIds)
+        const { error } = await supabase.from('daily_expenses').delete().in('id', parentIds)
+        delError = error
+      }
+
+      if (delError) throw delError
+
+      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Settings', action: 'Archive & Delete Data', detail: `Tabel ${cleanupForm.table} sebelum ${cutoffDate}` })
+      
+      toast.success(`${dataToExport.length} baris berhasil diarsip dan dihapus!`)
+      fetchTableCounts()
+      
+    } catch (err) {
+      console.error(err)
+      toast.error('Terjadi kesalahan: ' + err.message)
+    }
+    
+    hideProgress()
+    setCleanupExecuting(false)
+  }
+
   const getRoleBadge = (r) => {
     const map = { superadmin: 'badge-danger', admin: 'badge-accent', teknisi: 'badge-success' }
     return <span className={`badge ${map[r] || 'badge-muted'}`}><Shield size={10} /> {r}</span>
@@ -161,6 +276,11 @@ export default function Settings() {
         {can(role, 'settings.branch') && (
           <button className={`tab-item ${activeTab === 'branch' ? 'active' : ''}`} onClick={() => setActiveTab('branch')}>
             <Building size={14} style={{ marginRight: '6px' }} /> Konfigurasi Cabang
+          </button>
+        )}
+        {can(role, 'settings.archive') && (
+          <button className={`tab-item ${activeTab === 'cleanup' ? 'active' : ''}`} onClick={() => setActiveTab('cleanup')}>
+            <Database size={14} style={{ marginRight: '6px' }} /> Pembersihan Data
           </button>
         )}
       </div>
@@ -289,6 +409,79 @@ export default function Settings() {
             </div>
             <button className="btn btn-primary" onClick={handleSaveBranch} disabled={savingBranch}>
               {savingBranch ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : <><Building size={15} /> Simpan Konfigurasi</>}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Pembersihan Data */}
+      {activeTab === 'cleanup' && can(role, 'settings.archive') && (
+        <div className="grid-2">
+          {/* Bagian Kiri: Analyzer */}
+          <div className="card">
+            <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Database size={16} className="text-accent" /> Storage Analyzer (Row Count)
+            </h3>
+            <p className="text-secondary" style={{ fontSize: '13px', marginBottom: '20px' }}>
+              Perkiraan jumlah baris pada tabel-tabel utama. Supabase free tier dibatasi hingga 500MB total database size.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {[
+                { key: 'activity_logs', label: 'Log Aktivitas' },
+                { key: 'dispatches', label: 'Bon Barang (Dispatches)' },
+                { key: 'daily_expenses', label: 'Pengeluaran Jadwal Tim' },
+                { key: 'serial_numbers', label: 'Serial Number (Data Master)' },
+                { key: 'dropcore_haspels', label: 'Haspel Dropcore (Data Master)' },
+                { key: 'adss_haspels', label: 'Haspel ADSS (Data Master)' },
+              ].map(t => (
+                <div key={t.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-hover)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 500 }}>{t.label}</span>
+                  <span className={`badge ${tableCounts[t.key] > 5000 ? 'badge-danger' : tableCounts[t.key] > 1000 ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: '12px' }}>
+                    {tableCounts[t.key] !== undefined ? tableCounts[t.key].toLocaleString() : '...'} baris
+                  </span>
+                </div>
+              ))}
+            </div>
+            <button className="btn btn-secondary btn-sm" style={{ marginTop: '16px', width: '100%', justifyContent: 'center' }} onClick={fetchTableCounts}>
+              Refresh Data
+            </button>
+          </div>
+
+          {/* Bagian Kanan: Eksekusi */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger)' }}>
+              <AlertTriangle size={16} /> Arsip & Hapus Data Lama
+            </h3>
+            <div style={{ padding: '12px', background: 'var(--danger-dim)', border: '1px solid var(--danger)', borderRadius: '6px', marginBottom: '20px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--danger)', margin: 0, lineHeight: 1.5 }}>
+                <strong>Peringatan:</strong> Fitur ini akan menghapus data lama dari database secara permanen untuk menghemat ruang. 
+                Data akan <strong>diunduh ke format Excel (XLSX)</strong> terlebih dahulu sebelum dihapus. Simpan file hasil unduhan dengan baik.
+              </p>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
+              <div className="form-group">
+                <label className="form-label">Tabel yang Dibersihkan</label>
+                <select className="form-input" style={{ height: 'auto' }} value={cleanupForm.table} onChange={e => setCleanupForm({ ...cleanupForm, table: e.target.value })}>
+                  <option value="activity_logs">Log Aktivitas (Paling disarankan)</option>
+                  <option value="dispatches">Bon Barang (Termasuk Item)</option>
+                  <option value="daily_expenses">Pengeluaran Tim (Termasuk Item)</option>
+                </select>
+              </div>
+              
+              <div className="form-group">
+                <label className="form-label">Rentang Waktu (Hapus Data Lebih Lama Dari)</label>
+                <select className="form-input" style={{ height: 'auto' }} value={cleanupForm.age} onChange={e => setCleanupForm({ ...cleanupForm, age: e.target.value })}>
+                  <option value="1_month">1 Bulan Lalu</option>
+                  <option value="3_months">3 Bulan Lalu</option>
+                  <option value="6_months">6 Bulan Lalu</option>
+                  <option value="1_year">1 Tahun Lalu</option>
+                </select>
+              </div>
+            </div>
+
+            <button className="btn btn-primary" style={{ background: 'var(--danger)', color: 'white', marginTop: '20px' }} onClick={handleCleanup} disabled={cleanupExecuting}>
+              {cleanupExecuting ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px', borderColor: 'white', borderRightColor: 'transparent' }} /> : <><Download size={15} /> Arsip & Hapus Data</>}
             </button>
           </div>
         </div>
