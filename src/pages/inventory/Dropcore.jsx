@@ -86,26 +86,27 @@ export default function Dropcore() {
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dropcore', action: 'Edit Haspel', detail: `Haspel: ${form.haspel_code}` })
         toast.success('Haspel berhasil diperbarui')
       } else {
-        const existing = haspels.find(h => h.haspel_code.toLowerCase() === form.haspel_code.toLowerCase())
+        // Check if ANY existing haspel with this code is currently 'tersedia'
+        const isTersedia = haspels.some(h => h.haspel_code.toLowerCase() === form.haspel_code.toLowerCase() && h.status === 'tersedia')
         let finalHaspelId = null
 
-        if (existing) {
-          if (existing.status === 'tersedia') {
-            toast.error('Kode haspel masih tersedia dan memiliki sisa. Gunakan kode lain atau habiskan dulu yang ini.')
-            setSaving(false)
-            return
-          }
-          // Reuse existing 'habis' haspel
-          const { error } = await supabase.from('dropcore_haspels').update({ ...form, status, updated_at: new Date().toISOString(), created_by: profile.id }).eq('id', existing.id)
-          if (error) throw error
-          finalHaspelId = existing.id
+        if (isTersedia) {
+          toast.error('Kode haspel masih tersedia dan memiliki sisa. Gunakan kode lain atau habiskan dulu yang ini.')
+          setSaving(false)
+          return
+        }
+        
+        const wasUsedBefore = haspels.some(h => h.haspel_code.toLowerCase() === form.haspel_code.toLowerCase())
+        
+        // Always insert new row so it gets a fresh UUID for the new cycle
+        const { data: insertedData, error } = await supabase.from('dropcore_haspels').insert({ ...form, status, created_by: profile.id }).select().single()
+        if (error) throw error
+        finalHaspelId = insertedData.id
+        
+        if (wasUsedBefore) {
           await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dropcore', action: 'Tambah Haspel (Re-use)', detail: `Haspel: ${form.haspel_code}` })
           toast.success('Kode haspel dipakai ulang untuk stok baru!')
         } else {
-          // Insert new
-          const { data: insertedData, error } = await supabase.from('dropcore_haspels').insert({ ...form, status, created_by: profile.id }).select().single()
-          if (error) throw error
-          finalHaspelId = insertedData.id
           await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dropcore', action: 'Tambah Haspel', detail: `Haspel: ${form.haspel_code}` })
           toast.success('Haspel berhasil ditambahkan')
         }

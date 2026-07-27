@@ -625,8 +625,18 @@ export default function BonBarang() {
         d.items.filter(it => it.item_type === 'dropcore').forEach(it => {
           const hId = it.haspel_id || (it.haspel && it.haspel.id)
           if (hId) {
-            if (!firstDispatchByHaspel[hId] || new Date(d.created_at) < new Date(firstDispatchByHaspel[hId].created_at)) {
-              firstDispatchByHaspel[hId] = { created_at: d.created_at, dispatchId: d.id }
+            const current = firstDispatchByHaspel[hId]
+            const dDate = new Date(d.dispatch_date)
+            const cDate = new Date(d.created_at)
+            
+            if (!current) {
+              firstDispatchByHaspel[hId] = { dispatch_date: dDate, created_at: cDate, dispatchId: d.id }
+            } else {
+              if (dDate < current.dispatch_date) {
+                firstDispatchByHaspel[hId] = { dispatch_date: dDate, created_at: cDate, dispatchId: d.id }
+              } else if (dDate.getTime() === current.dispatch_date.getTime() && cDate < current.created_at) {
+                firstDispatchByHaspel[hId] = { dispatch_date: dDate, created_at: cDate, dispatchId: d.id }
+              }
             }
           }
         })
