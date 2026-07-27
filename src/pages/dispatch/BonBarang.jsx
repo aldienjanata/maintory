@@ -18,12 +18,22 @@ const SITES = [
   { value: 'cilacap_herman', label: 'Cilacap (Herman)' }
 ]
 
+// List work types
 const WORK_TYPES = [
   { value: 'ikr_psb', label: 'IKR/PSB' },
   { value: 'maintenance', label: 'Maintenance' },
   { value: 'odc_odp', label: 'Instalasi ODC/ODP' },
   { value: 'backbone', label: 'Backbone' }
 ]
+
+// Helper function to check if item requires maps URL
+const isItemRequiresLocation = (itemName) => {
+  if (!itemName) return false
+  const name = itemName.toLowerCase().trim()
+  if (name.includes('tiang')) return true
+  const reqList = ['odp 1:16 komplit', 'splitter 1:16', 'splitter 1:8', 'passive splitter 1:8', 'passive splitter 1:2', 'passive splitter 1:16']
+  return reqList.some(r => name === r)
+}
 
 const ITEM_TYPE_LABELS = { ont: 'ONT', dropcore: 'Dropcore', adss: 'Kabel ADSS', tiang: 'Tiang', other: 'Material Lain' }
 const ITEM_TYPE_COLORS = { ont: 'var(--accent)', dropcore: 'var(--warning)', adss: 'var(--purple)', tiang: '#e67e22', other: 'var(--success)' }
@@ -412,8 +422,8 @@ export default function BonBarang() {
       else if (it.item_type === 'dropcore') initForm[it.id] = { meters_used: '' }
       else if (it.item_type === 'adss') initForm[it.id] = { meters_used: '', titik_awal: it.adss_titik_awal || '', titik_akhir: it.adss_titik_akhir || '' }
       else if (it.item_type === 'other') {
-        const isTiang = it.warehouse_item?.item_name?.toLowerCase().includes('tiang')
-        initForm[it.id] = { qty_used: '', ...(isTiang ? { share_lokasi: it.tiang_lokasi_url || '' } : {}) }
+        const reqLoc = isItemRequiresLocation(it.warehouse_item?.item_name)
+        initForm[it.id] = { qty_used: '', ...(reqLoc ? { share_lokasi: it.tiang_lokasi_url || '' } : {}) }
       }
     })
     setLaporForm(initForm)
@@ -427,11 +437,15 @@ export default function BonBarang() {
       for (const it of selectedDispatch.items) {
         const lapor = laporForm[it.id]
         if (it.item_type === 'other') {
-          const isTiang = it.warehouse_item?.item_name?.toLowerCase().includes('tiang')
-          if (isTiang && Number(lapor?.qty_used || 0) > 0 && !lapor?.share_lokasi?.trim()) {
-            toast.error(`Share Lokasi Tiang wajib diisi untuk item "${it.warehouse_item?.item_name}"!`)
-            setLaporSaving(false)
-            return
+          const reqLoc = isItemRequiresLocation(it.warehouse_item?.item_name)
+          const qUsed = Number(lapor?.qty_used || 0)
+          if (reqLoc && qUsed > 0) {
+            const urls = (lapor?.share_lokasi || '').split(/(?=https?:\/\/)/gi).map(u => u.trim().replace(/,$/, '')).filter(Boolean)
+            if (urls.length !== qUsed) {
+              toast.error(`Barang "${it.warehouse_item?.item_name}" terpakai ${qUsed}, mohon sertakan tepat ${qUsed} link URL Maps yang dipisahkan dengan spasi/koma.`)
+              setLaporSaving(false)
+              return
+            }
           }
         }
         if (it.item_type === 'adss') {
@@ -911,13 +925,15 @@ export default function BonBarang() {
         const workTypeLabel = WORK_TYPES.find(w => w.value === d.work_type)?.label || '-'
 
         for (const it of d.items) {
-          // Tiang dari Material: pisahkan multi-URL per baris dengan aman (bisa dipisah koma/spasi)
-          if (it.item_type === 'other' && it.tiang_lokasi_url && it.warehouse_item?.item_name?.toLowerCase().includes('tiang')) {
+          // Tiang & ODP/Splitter: pisahkan multi-URL per baris dengan aman (bisa dipisah koma/spasi)
+          if (it.item_type === 'other' && it.tiang_lokasi_url && isItemRequiresLocation(it.warehouse_item?.item_name)) {
+            const itemName = it.warehouse_item?.item_name || '-'
+            const isTiang = itemName.toLowerCase().includes('tiang')
             const urls = it.tiang_lokasi_url.split(/(?=https?:\/\/)/gi).map(u => u.trim().replace(/,$/, '')).filter(Boolean)
             urls.forEach((url, idx) => {
               wsLokasi.addRow([
                 d.dispatch_date, techName, workTypeLabel, site,
-                'Tiang', it.warehouse_item?.item_name || '-',
+                isTiang ? 'Tiang' : 'ODP/Splitter', itemName,
                 urls.length > 1 ? `Lokasi ${idx + 1}` : 'Lokasi',
                 url
               ])
@@ -1756,10 +1772,11 @@ export default function BonBarang() {
                                 <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: 'auto' }}>{Number(it.quantity_dispatched) - Number(laporForm[it.id]?.qty_used || 0)} kembali</span>
                               )}
                             </div>
-                            {isTiang && (
-                              <div>
-                                <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px', color: '#e67e22' }}>📍 Share Lokasi Tiang (Google Maps URL)</label>
-                                <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Tempel link Google Maps titik lokasi tiang..." value={laporForm[it.id]?.share_lokasi || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], share_lokasi: e.target.value } })} />
+                            {isItemRequiresLocation(it.warehouse_item?.item_name) && (
+                              <div style={{ marginTop: '4px' }}>
+                                <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px', color: '#e67e22' }}>📍 Share Lokasi (Google Maps URL)</label>
+                                <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Pisahkan dengan spasi jika lebih dari satu link..." value={laporForm[it.id]?.share_lokasi || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], share_lokasi: e.target.value } })} />
+                                <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '4px' }}>Wajib lampirkan jumlah link sesuai qty yang terpakai.</div>
                               </div>
                             )}
                           </div>
@@ -2140,8 +2157,14 @@ function BonCard({ d, role, getTechNames, expandedId, setExpandedId, handleOpenL
                     {it.item_type === 'tiang' && it.tiang_lokasi_url && (
                       <a href={it.tiang_lokasi_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#e67e22', marginLeft: '14px', display: 'flex', alignItems: 'center', gap: '3px' }}>📍 Buka Lokasi di Maps</a>
                     )}
-                    {it.item_type === 'other' && it.tiang_lokasi_url && it.warehouse_item?.item_name?.toLowerCase().includes('tiang') && (
-                      <a href={it.tiang_lokasi_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#e67e22', marginLeft: '14px', display: 'flex', alignItems: 'center', gap: '3px' }}>📍 Lokasi Tiang di Maps</a>
+                    {it.item_type === 'other' && it.tiang_lokasi_url && isItemRequiresLocation(it.warehouse_item?.item_name) && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px', marginLeft: '14px' }}>
+                        {it.tiang_lokasi_url.split(/(?=https?:\/\/)/gi).map(u => u.trim().replace(/,$/, '')).filter(Boolean).map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#e67e22', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            📍 Buka Lokasi di Maps {i > 0 ? `(${i + 1})` : ''}
+                          </a>
+                        ))}
+                      </div>
                     )}
                     {it.item_type === 'adss' && (it.adss_titik_awal || it.adss_titik_akhir) && (
                       <div style={{ marginLeft: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
