@@ -98,7 +98,7 @@ export default function Settings() {
         toast.success('User berhasil diperbarui')
       } else {
         // Buat user baru melalui Vercel API
-        const email = `${form.username}@maintory.com`
+        const email = `${form.username}@maintory.local`
         const response = await fetch('/api/createUser', {
           method: 'POST',
           headers: {
