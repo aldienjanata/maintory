@@ -37,6 +37,13 @@ export const can = (role, action) => {
     'inventory.dropcore.delete': ['superadmin', 'admin'],
     'inventory.dropcore.export': ['superadmin', 'admin'],
 
+    // Inventory - ADSS
+    'inventory.Adss.view': ['superadmin', 'admin', 'teknisi'],
+    'inventory.Adss.add': ['superadmin', 'admin', 'teknisi'],
+    'inventory.Adss.edit': ['superadmin', 'admin'],
+    'inventory.Adss.delete': ['superadmin', 'admin'],
+    'inventory.Adss.export': ['superadmin', 'admin'],
+
     // Pengeluaran
     'pengeluaran.jadwal.create': ['superadmin', 'admin'],
     'pengeluaran.jadwal.edit': ['superadmin', 'admin'],
