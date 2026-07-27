@@ -1425,10 +1425,6 @@ export default function BonBarang() {
                                   <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Tempel link Google Maps titik akhir..." value={item.adss_titik_akhir || ''} onChange={e => updateItem(item.id, 'adss_titik_akhir', e.target.value)} />
                                 </div>
                               </div>
-                              <div>
-                                <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px' }}>📌 Share Lokasi Utama (Maps URL)</label>
-                                <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Tempel link Google Maps share lokasi..." value={item.adss_lokasi_url || ''} onChange={e => updateItem(item.id, 'adss_lokasi_url', e.target.value)} />
-                              </div>
                             </div>
                           )}
                           {item.item_type === 'tiang' && (
@@ -1900,11 +1896,10 @@ function BonCard({ d, role, getTechNames, expandedId, setExpandedId, handleOpenL
                     {it.item_type === 'tiang' && it.tiang_lokasi_url && (
                       <a href={it.tiang_lokasi_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: 'var(--accent)', marginLeft: '14px', display: 'flex', alignItems: 'center', gap: '3px' }}>📍 Buka Lokasi di Maps</a>
                     )}
-                    {it.item_type === 'adss' && (it.adss_titik_awal || it.adss_titik_akhir || it.adss_lokasi_url) && (
+                    {it.item_type === 'adss' && (it.adss_titik_awal || it.adss_titik_akhir) && (
                       <div style={{ marginLeft: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
                         {it.adss_titik_awal && <a href={it.adss_titik_awal} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#4ade80', display: 'flex', alignItems: 'center', gap: '3px' }}>📍 Titik Awal</a>}
                         {it.adss_titik_akhir && <a href={it.adss_titik_akhir} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#f87171', display: 'flex', alignItems: 'center', gap: '3px' }}>🏁 Titik Akhir</a>}
-                        {it.adss_lokasi_url && <a href={it.adss_lokasi_url} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '3px' }}>📌 Lokasi Utama</a>}
                       </div>
                     )}
                   </div>
