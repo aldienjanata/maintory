@@ -99,6 +99,9 @@ export default function BonBarang() {
   const [susulanForm, setSusulanForm] = useState({ items: [] })
   const [susulanSaving, setSusulanSaving] = useState(false)
 
+  // Modal: Confirm
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null })
+
   useEffect(() => { fetchData() }, [])
   useEffect(() => { setPage(1) }, [activeTab])
 
@@ -193,11 +196,18 @@ export default function BonBarang() {
     } finally { setSchedSaving(false) }
   }
 
-  const handleDeleteSchedule = async (sched) => {
-    if (!window.confirm('Hapus jadwal ini?')) return
-    await supabase.from('technician_schedules').delete().eq('id', sched.id)
-    toast.success('Jadwal dihapus')
-    fetchData()
+  const handleDeleteSchedule = (sched) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Jadwal',
+      message: 'Yakin ingin menghapus jadwal ini?',
+      onConfirm: async () => {
+        setConfirmModal({ isOpen: false, onConfirm: null })
+        await supabase.from('technician_schedules').delete().eq('id', sched.id)
+        toast.success('Jadwal dihapus')
+        fetchData()
+      }
+    })
   }
 
   const toggleScheduleTech = (techId) => {
@@ -662,26 +672,33 @@ export default function BonBarang() {
     } finally { setSusulanSaving(false) }
   }
 
-  const handleDelete = async (dispatch) => {
-    if (!window.confirm('Yakin ingin membatalkan bon ini? Semua stok akan dikembalikan ke gudang.')) return
-    const ontR = [], dcR = [], adssR = [], whR = []
-    for (const it of dispatch.items) {
-      if (it.item_type === 'ont') ontR.push(it.serial_number_id)
-      if (it.item_type === 'dropcore') dcR.push(it.haspel_id)
-      if (it.item_type === 'adss') adssR.push(it.adss_id)
-      if (it.item_type === 'other') whR.push({ id: it.warehouse_item_id, qty: it.quantity_dispatched })
-    }
-    if (ontR.length > 0) await supabase.from('serial_numbers').update({ status: 'tersedia' }).in('id', ontR)
-    if (dcR.length > 0) await supabase.from('dropcore_haspels').update({ status: 'tersedia' }).in('id', dcR)
-    if (adssR.length > 0) await supabase.from('adss_haspels').update({ status: 'tersedia' }).in('id', adssR)
-    for (const wh of whR) {
-      const { data: wData } = await supabase.from('warehouses').select('initial_stock, stock_on_hold').eq('id', wh.id).single()
-      if (wData) await supabase.from('warehouses').update({ initial_stock: Number(wData.initial_stock || 0) + Number(wh.qty), stock_on_hold: Math.max(0, Number(wData.stock_on_hold || 0) - Number(wh.qty)) }).eq('id', wh.id)
-    }
-    if (dispatch.schedule_id) await supabase.from('technician_schedules').update({ status: 'pending' }).eq('id', dispatch.schedule_id)
-    await supabase.from('dispatches').delete().eq('id', dispatch.id)
-    toast.success('Bon berhasil dibatalkan')
-    fetchData()
+  const handleDelete = (dispatch) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Batalkan Bon Barang',
+      message: 'Yakin ingin membatalkan bon ini? Semua stok akan dikembalikan ke gudang.',
+      onConfirm: async () => {
+        setConfirmModal({ isOpen: false, onConfirm: null })
+        const ontR = [], dcR = [], adssR = [], whR = []
+        for (const it of dispatch.items) {
+          if (it.item_type === 'ont') ontR.push(it.serial_number_id)
+          if (it.item_type === 'dropcore') dcR.push(it.haspel_id)
+          if (it.item_type === 'adss') adssR.push(it.adss_id)
+          if (it.item_type === 'other') whR.push({ id: it.warehouse_item_id, qty: it.quantity_dispatched })
+        }
+        if (ontR.length > 0) await supabase.from('serial_numbers').update({ status: 'tersedia' }).in('id', ontR)
+        if (dcR.length > 0) await supabase.from('dropcore_haspels').update({ status: 'tersedia' }).in('id', dcR)
+        if (adssR.length > 0) await supabase.from('adss_haspels').update({ status: 'tersedia' }).in('id', adssR)
+        for (const wh of whR) {
+          const { data: wData } = await supabase.from('warehouses').select('initial_stock, stock_on_hold').eq('id', wh.id).single()
+          if (wData) await supabase.from('warehouses').update({ initial_stock: Number(wData.initial_stock || 0) + Number(wh.qty), stock_on_hold: Math.max(0, Number(wData.stock_on_hold || 0) - Number(wh.qty)) }).eq('id', wh.id)
+        }
+        if (dispatch.schedule_id) await supabase.from('technician_schedules').update({ status: 'pending' }).eq('id', dispatch.schedule_id)
+        await supabase.from('dispatches').delete().eq('id', dispatch.id)
+        toast.success('Bon berhasil dibatalkan')
+        fetchData()
+      }
+    })
   }
 
   // --- EXPORT ---
@@ -2004,6 +2021,29 @@ export default function BonBarang() {
               </div>
             </div>
             <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setIsExportModalOpen(false)}>Batal</button><button className="btn btn-primary" onClick={() => handleExport(exportMonth, exportTeam)}><Download size={15} /> Export</button></div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL CONFIRM ===== */}
+      {confirmModal.isOpen && (
+        <div className="modal-overlay" onClick={() => setConfirmModal({ isOpen: false, onConfirm: null })}>
+          <div className="modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{confirmModal.title}</h3>
+              <button className="btn-icon" onClick={() => setConfirmModal({ isOpen: false, onConfirm: null })}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
+                {confirmModal.message}
+              </p>
+            </div>
+            <div className="modal-footer" style={{ marginTop: '20px' }}>
+              <button className="btn btn-secondary" onClick={() => setConfirmModal({ isOpen: false, onConfirm: null })}>Batal</button>
+              <button className="btn btn-primary" style={{ backgroundColor: 'var(--danger)' }} onClick={confirmModal.onConfirm}>
+                Ya, Lanjutkan
+              </button>
+            </div>
           </div>
         </div>
       )}
