@@ -114,7 +114,7 @@ export default function Adss() {
         // Add to inventory_log
         await supabase.from('inventory_log').insert({
           log_date: form.date_in,
-          item_type: 'Adss',
+          item_type: 'adss',
           item_id: finalHaspelId,
           action: 'masuk',
           meters: Number(form.initial_meters),
@@ -187,7 +187,7 @@ export default function Adss() {
     const { data: logs } = await supabase
       .from('inventory_log')
       .select('*, user:users(full_name)')
-      .eq('item_type', 'Adss')
+      .in('item_type', ['adss', 'Adss'])
       .eq('item_id', haspel.id)
       .order('log_date', { ascending: true })
 
@@ -313,7 +313,7 @@ export default function Adss() {
 
       // Fetch all transactions
       const { data: allExpItems } = await supabase.from('expense_items').select('*, haspel:adss_haspels(haspel_code, type, tube_type, brand), expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type', 'adss').order('created_at', { ascending: true })
-      const { data: allLogs } = await supabase.from('inventory_log').select('*, user:users(full_name)').eq('item_type', 'adss').order('created_at', { ascending: true })
+      const { data: allLogs } = await supabase.from('inventory_log').select('*, user:users(full_name)').in('item_type', ['adss', 'Adss']).order('created_at', { ascending: true })
       const { data: usersData } = await supabase.from('users').select('id, full_name')
       
       const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
