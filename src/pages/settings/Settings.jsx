@@ -53,7 +53,7 @@ export default function Settings() {
 
   const fetchUsers = async () => {
     setLoading(true)
-    const { data, error } = await supabase.from('users').select('*').order('role').order('full_name')
+    const { data, error } = await supabase.from('users').select('*').not('username', 'like', '[deleted]%').order('role').order('full_name')
     if (!error) setUsers(data || [])
     setLoading(false)
   }
