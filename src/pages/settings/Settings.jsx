@@ -33,6 +33,7 @@ export default function Settings() {
 
   const emptyForm = { username: '', full_name: '', role: 'teknisi', password: '', is_active: true }
   const [form, setForm] = useState(emptyForm)
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, item: null, action: '', title: '', text: '' })
 
   // Change own password
   const [changePwForm, setChangePwForm] = useState({ current: '', newPw: '', confirm: '' })
@@ -127,6 +128,29 @@ export default function Settings() {
     } catch (err) {
       toast.error('Gagal: ' + (err.message || 'Terjadi kesalahan'))
     } finally { setSaving(false) }
+  }
+
+  const handleDeleteUser = async () => {
+    const u = confirmModal.item
+    setConfirmModal({ ...confirmModal, isOpen: false })
+    
+    const loadingToast = toast.loading('Menghapus user...')
+    try {
+      const response = await fetch('/api/deleteUser', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: u.id })
+      })
+
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Gagal menghapus user')
+
+      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Settings', action: 'Hapus User', detail: `User: ${u.username}` })
+      toast.success('User berhasil dihapus', { id: loadingToast })
+      fetchUsers()
+    } catch (err) {
+      toast.error(err.message, { id: loadingToast })
+    }
   }
 
   const handleToggleActive = async (u) => {
@@ -332,6 +356,7 @@ export default function Settings() {
                         <td style={{ textAlign: 'right' }}>
                           <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
                             <button className="btn-icon" onClick={() => openEdit(u)} title="Edit"><Edit2 size={15} /></button>
+                            <button className="btn-icon text-danger" onClick={() => setConfirmModal({ isOpen: true, item: u, action: 'delete_user', title: 'Hapus Pengguna', text: `Yakin ingin menghapus ${u.full_name} (${u.username}) secara permanen?` })} title="Hapus"><Trash2 size={15} /></button>
                             <button
                               className={`btn-icon ${u.is_active ? 'text-warning' : 'text-success'}`}
                               onClick={() => handleToggleActive(u)}
@@ -365,6 +390,7 @@ export default function Settings() {
                       <div className="mobile-card-body">
                         <div className="mobile-card-actions">
                           <button className="btn btn-secondary btn-sm" onClick={() => openEdit(u)}><Edit2 size={14} /> Edit</button>
+                          <button className="btn btn-secondary btn-sm text-danger" onClick={() => setConfirmModal({ isOpen: true, item: u, action: 'delete_user', title: 'Hapus Pengguna', text: `Yakin ingin menghapus ${u.full_name} (${u.username}) secara permanen?` })}><Trash2 size={14} /> Hapus</button>
                           <button
                             className={`btn btn-sm ${u.is_active ? 'btn-secondary text-warning' : 'btn-secondary text-success'}`}
                             onClick={() => handleToggleActive(u)}
@@ -553,6 +579,29 @@ export default function Settings() {
               <button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
               <button className="btn btn-primary" onClick={handleSaveUser} disabled={saving}>
                 {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : (editUser ? 'Simpan Perubahan' : 'Buat Pengguna')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Modal */}
+      {confirmModal.isOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>{confirmModal.title}</h2>
+              <button className="btn-icon" onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}><X size={20} /></button>
+            </div>
+            <div className="modal-body" style={{ color: 'var(--text-secondary)' }}>
+              {confirmModal.text}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setConfirmModal({ ...confirmModal, isOpen: false })}>Batal</button>
+              <button className="btn btn-primary" style={{ background: 'var(--danger)', color: 'white', borderColor: 'var(--danger)' }} onClick={() => {
+                if (confirmModal.action === 'delete_user') handleDeleteUser()
+              }}>
+                Ya, Hapus
               </button>
             </div>
           </div>
