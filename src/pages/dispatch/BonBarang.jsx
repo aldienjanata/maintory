@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import {
   Plus, ClipboardList, CheckCircle, X, Trash2, Edit2,
-  PackageCheck, Package, CalendarDays, AlertCircle, Download
+  PackageCheck, Package, CalendarDays, AlertCircle, Download, RefreshCw
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
@@ -112,8 +112,17 @@ export default function BonBarang() {
   // Modal: Confirm
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null })
 
+  const [refreshingStok, setRefreshingStok] = useState(false)
+
   useEffect(() => { fetchData() }, [])
   useEffect(() => { setPage(1) }, [activeTab])
+
+  // Auto-refresh stok setiap 30 detik saat modal buat bon terbuka
+  useEffect(() => {
+    if (!isModalOpen) return
+    const interval = setInterval(() => refreshStok(false), 30000)
+    return () => clearInterval(interval)
+  }, [isModalOpen])
 
   const fetchData = async () => {
     setLoading(true)
@@ -183,6 +192,29 @@ export default function BonBarang() {
       toast.error('Gagal mengambil data')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Refresh stok saja (SN, dropcore, ADSS, material) tanpa tutup modal atau reset form
+  const refreshStok = async (showToast = true) => {
+    if (refreshingStok) return
+    setRefreshingStok(true)
+    try {
+      const [snRes, haspelRes, adssRes, otherRes] = await Promise.all([
+        supabase.from('serial_numbers').select('id, serial_number').eq('status', 'tersedia'),
+        supabase.from('dropcore_haspels').select('id, haspel_code, initial_meters, used_meters, type').in('status', ['tersedia']),
+        supabase.from('adss_haspels').select('id, haspel_code, initial_meters, used_meters, type, tube_type, brand').in('status', ['tersedia']),
+        supabase.from('warehouses').select('id, item_name, initial_stock').gt('initial_stock', 0)
+      ])
+      if (snRes.data) setSnList(snRes.data)
+      if (haspelRes.data) setHaspelList(haspelRes.data)
+      if (adssRes.data) setAdssList(adssRes.data)
+      if (otherRes.data) setOtherItems(otherRes.data)
+      if (showToast) toast.success('Data stok berhasil diperbarui!', { icon: '🔄', duration: 2000 })
+    } catch (err) {
+      if (showToast) toast.error('Gagal memperbarui stok')
+    } finally {
+      setRefreshingStok(false)
     }
   }
 
@@ -1549,7 +1581,19 @@ export default function BonBarang() {
           <div className="modal modal-lg" style={{ display: 'flex', flexDirection: 'column', maxHeight: '93vh' }}>
             <div className="modal-header">
               <div><h3 style={{ margin: 0 }}>{editingDispatchId ? 'Edit Bon Barang' : 'Buat Bon Barang'}{selectedScheduleId && !editingDispatchId ? ' (dari Jadwal)' : ''}</h3><p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Catat barang yang akan dibawa ke lapangan</p></div>
-              <button className="btn-close" onClick={() => setIsModalOpen(false)}><X size={20} /></button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => refreshStok(true)}
+                  disabled={refreshingStok}
+                  title="Perbarui daftar stok tanpa keluar dari form"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 12px' }}
+                >
+                  <RefreshCw size={13} style={{ animation: refreshingStok ? 'spin 1s linear infinite' : 'none' }} />
+                  {refreshingStok ? 'Memperbarui...' : 'Perbarui Stok'}
+                </button>
+                <button className="btn-close" onClick={() => setIsModalOpen(false)}><X size={20} /></button>
+              </div>
             </div>
             <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
               <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
