@@ -31,7 +31,9 @@ export default async function handler(req, res) {
 
     // Delete from Supabase Auth
     const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(userId)
-    if (authErr) throw authErr
+    if (authErr && !authErr.message.toLowerCase().includes('not found')) {
+      throw authErr
+    }
 
     return res.status(200).json({ message: 'User berhasil dihapus' })
   } catch (error) {
