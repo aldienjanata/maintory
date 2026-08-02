@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   Download, Camera, AlertTriangle, Phone, Globe,
-  CheckCircle2, MapPin, AlertCircle, Calendar, Wrench, RefreshCw
+  CheckCircle2, MapPin, AlertCircle, Calendar, Wrench, RefreshCw, Instagram
 } from 'lucide-react'
 import { toPng } from 'html-to-image'
 import ReactCrop from 'react-image-crop'
@@ -464,7 +464,7 @@ export default function BannerMaintenance() {
                 <span>KAMI MOHON MAAF — TIM KAMI SEDANG BEKERJA SEMAKSIMAL MUNGKIN UNTUK ANDA 🙏🏻</span>
               </div>
               <div style={{ background: '#0EA5E9', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '18px', fontWeight: 700, padding: '0 20px', flex: 1 }}>
-                <span style={{ fontSize: '22px' }}>📸</span>
+                <Instagram size={22} color="white" />
                 <span>@wifiansolution | wifian.id</span>
               </div>
             </div>
