@@ -15,7 +15,7 @@ const PRESETS = {
     titleHuge: 'BERKALA',
     subtitleRibbon: 'PEMELIHARAAN JARINGAN RUTIN',
     titleBottom: 'UNTUK PENINGKATAN KUALITAS LAYANAN',
-    yellowBoxTitle: 'INFORMASI PENTING',
+    yellowBoxTitle: 'INFORMASI PENTING 🙏🏻',
     yellowBoxText: 'Koneksi akan mengalami penurunan kualitas sementara selama proses maintenance berlangsung.',
     area: 'Kecamatan Sampang, Nusajati, Ketanggung dan sekitarnya.',
     etr: 'Estimasi maintenance memakan waktu kurang lebih 2–3 jam kerja.',
@@ -26,7 +26,7 @@ const PRESETS = {
     titleHuge: 'GANGGUAN',
     subtitleRibbon: 'KONEKSI TERPUTUS SEMENTARA',
     titleBottom: 'JARINGAN INTERNET SEDANG DALAM PERBAIKAN',
-    yellowBoxTitle: 'MOHON BERSABAR',
+    yellowBoxTitle: 'MOHON BERSABAR 🙏🏻',
     yellowBoxText: 'Tim teknisi kami telah dikerahkan ke lokasi untuk melakukan perbaikan sesegera mungkin.',
     area: 'Kecamatan Sampang, Nusajati, Ketanggung dan sekitarnya.',
     etr: 'Estimasi perbaikan memakan waktu kurang lebih 2–3 jam kerja.',
@@ -437,12 +437,20 @@ export default function BannerMaintenance() {
                       <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: '28px', fontWeight: 900, color: '#FACC15' }}>Call Center: +62 852-2772-2095</div>
                     </div>
                   </div>
+
+                  {/* Date Badge for Selesai (inline below CS box) */}
+                  {preset === 'selesai' && date && (
+                    <div style={{ fontFamily: "'Inter', sans-serif", fontSize: '20px', fontWeight: 700, color: '#0F172A', background: '#FACC15', padding: '12px 20px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 4px 16px rgba(0,0,0,0.15)', marginTop: '4px' }}>
+                      <Calendar size={20} />
+                      {date}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Date Badge */}
-            {date && (
+            {preset !== 'selesai' && date && (
               <div style={{ position: 'absolute', right: '52px', bottom: '95px', zIndex: 4, fontFamily: "'Inter', sans-serif", fontSize: '20px', fontWeight: 700, color: '#0F172A', background: '#FACC15', padding: '8px 18px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
                 <Calendar size={20} />
                 {date}
@@ -453,7 +461,7 @@ export default function BannerMaintenance() {
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 4, display: 'flex', height: '75px' }}>
               <div style={{ background: '#DC2626', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', fontSize: '22px', fontWeight: 800, padding: '0 36px', flex: 2, letterSpacing: '0.3px' }}>
                 <AlertTriangle size={24} fill="white" color="white" />
-                KAMI MOHON MAAF — TIM KAMI SEDANG BEKERJA KERAS UNTUK ANDA
+                KAMI MOHON MAAF — TIM KAMI SEDANG BEKERJA SEMAKSIMAL MUNGKIN UNTUK ANDA 🙏🏻
               </div>
               <div style={{ background: '#0EA5E9', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', fontSize: '22px', fontWeight: 700, padding: '0 32px', flex: 1 }}>
                 <span style={{ fontSize: '24px' }}>📸</span>
