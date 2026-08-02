@@ -459,13 +459,13 @@ export default function BannerMaintenance() {
 
             {/* Footer Bars */}
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 4, display: 'flex', height: '75px' }}>
-              <div style={{ background: '#DC2626', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', fontSize: '22px', fontWeight: 800, padding: '0 36px', flex: 2, letterSpacing: '0.3px' }}>
-                <AlertTriangle size={24} fill="white" color="white" />
-                KAMI MOHON MAAF — TIM KAMI SEDANG BEKERJA SEMAKSIMAL MUNGKIN UNTUK ANDA 🙏🏻
+              <div style={{ background: '#DC2626', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', fontSize: '17px', fontWeight: 800, padding: '0 20px', flex: 2, letterSpacing: '0.3px', textAlign: 'center', lineHeight: 1.3 }}>
+                <AlertTriangle size={24} fill="white" color="white" style={{ flexShrink: 0 }} />
+                <span>KAMI MOHON MAAF — TIM KAMI SEDANG BEKERJA SEMAKSIMAL MUNGKIN UNTUK ANDA 🙏🏻</span>
               </div>
-              <div style={{ background: '#0EA5E9', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', fontSize: '22px', fontWeight: 700, padding: '0 32px', flex: 1 }}>
-                <span style={{ fontSize: '24px' }}>📸</span>
-                @wifiansolution | wifian.id
+              <div style={{ background: '#0EA5E9', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '18px', fontWeight: 700, padding: '0 20px', flex: 1 }}>
+                <span style={{ fontSize: '22px' }}>📸</span>
+                <span>@wifiansolution | wifian.id</span>
               </div>
             </div>
 
