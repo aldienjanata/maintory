@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
 import {
   Download, Camera, AlertTriangle, Phone, Globe,
   CheckCircle2, MapPin, AlertCircle, Calendar, Wrench, RefreshCw
@@ -44,6 +46,20 @@ const PRESETS = {
 }
 
 export default function BannerMaintenance() {
+  const { profile } = useAuth()
+  const navigate = useNavigate()
+
+  // Role guard — hanya admin & superadmin yang boleh akses
+  if (!profile || !['admin', 'superadmin'].includes(profile.role)) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '16px', color: 'var(--text-secondary)' }}>
+        <span style={{ fontSize: '48px' }}>🚫</span>
+        <h2 style={{ color: 'var(--text-primary)', margin: 0 }}>Akses Ditolak</h2>
+        <p style={{ margin: 0 }}>Halaman ini hanya bisa diakses oleh Admin dan Super Administrator.</p>
+        <button className="btn btn-secondary" style={{ marginTop: '8px' }} onClick={() => navigate('/')}>Kembali ke Dashboard</button>
+      </div>
+    )
+  }
   const [preset, setPreset] = useState('maintenance')
   const [previewScale, setPreviewScale] = useState(0.55)
   const previewAreaRef = useRef(null)
