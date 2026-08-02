@@ -347,7 +347,7 @@ export default function BannerMaintenance() {
             <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2, background: 'linear-gradient(90deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0.95) 35%, rgba(255,255,255,0.7) 55%, rgba(255,255,255,0) 75%)' }} />
 
             {/* Content */}
-            <div style={{ position: 'absolute', inset: 0, zIndex: 3, padding: '40px 52px 75px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ position: 'absolute', inset: 0, zIndex: 3, padding: '40px 48px 75px', display: 'flex', flexDirection: 'column' }}>
 
               {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexShrink: 0 }}>
@@ -359,82 +359,82 @@ export default function BannerMaintenance() {
               </div>
 
               {/* Main Content */}
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '16px', alignItems: 'flex-start' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '12px', alignItems: 'flex-start' }}>
 
                 {/* Typography */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ fontSize: '3.6rem', fontWeight: 900, color: '#0F172A', lineHeight: 1, letterSpacing: '-1.5px' }}>{titleTop}</div>
-                  <div style={{ fontSize: '8rem', fontWeight: 900, color: '#DC2626', fontStyle: 'italic', lineHeight: '0.9', letterSpacing: '-4px', textShadow: '6px 6px 0 rgba(0,0,0,0.08)' }}>{titleHuge}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ fontSize: '56px', fontWeight: 900, color: '#0F172A', lineHeight: 1, letterSpacing: '-1.5px' }}>{titleTop}</div>
+                  <div style={{ fontSize: '120px', fontWeight: 900, color: '#DC2626', fontStyle: 'italic', lineHeight: '0.9', letterSpacing: '-4px', textShadow: '6px 6px 0 rgba(0,0,0,0.08)' }}>{titleHuge}</div>
                   <div>
-                    <div style={{ background: '#0F172A', color: 'white', padding: '12px 30px', fontSize: '2.3rem', fontWeight: 900, display: 'inline-block', borderRadius: '10px', letterSpacing: '0.5px' }}>{subtitleRibbon}</div>
+                    <div style={{ background: '#0F172A', color: 'white', padding: '10px 24px', fontSize: '34px', fontWeight: 900, display: 'inline-block', borderRadius: '10px', letterSpacing: '0.5px' }}>{subtitleRibbon}</div>
                   </div>
-                  <div style={{ fontSize: '2.3rem', fontWeight: 900, lineHeight: 1.3, maxWidth: '720px' }}>
+                  <div style={{ fontSize: '34px', fontWeight: 900, lineHeight: 1.2, maxWidth: '720px' }}>
                     <span style={{ color: '#DC2626' }}>{titleBottom.split(' ')[0]} </span>
                     <span style={{ color: '#0F172A' }}>{titleBottom.substring(titleBottom.indexOf(' ') + 1)}</span>
                   </div>
                 </div>
 
                 {/* Info Boxes */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '740px', width: 'fit-content', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '740px', width: 'fit-content', alignItems: 'flex-start' }}>
 
                   {/* Cause Box (Red) */}
                   {cause && (
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '18px', padding: '16px 24px', borderRadius: '16px', background: '#DC2626', border: '2px solid #FCA5A5', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', width: 'fit-content' }}>
-                      <div style={{ width: '70px', minWidth: '70px', height: '70px', borderRadius: '12px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 4px rgba(0,0,0,0.08)' }}>
-                        <AlertCircle size={38} color="#DC2626" />
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '18px', padding: '14px 20px', borderRadius: '16px', background: '#DC2626', border: '2px solid #FCA5A5', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', width: 'fit-content' }}>
+                      <div style={{ width: '64px', minWidth: '64px', height: '64px', borderRadius: '12px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 4px rgba(0,0,0,0.08)' }}>
+                        <AlertCircle size={34} color="#DC2626" />
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: '1.55rem', fontWeight: 900, color: 'rgba(255,255,255,0.9)' }}>PENYEBAB GANGGUAN</div>
-                        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: '1.35rem', fontWeight: 500, lineHeight: 1.4, color: 'rgba(255,255,255,0.9)' }}>{cause}</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: '24px', fontWeight: 900, color: 'rgba(255,255,255,0.9)' }}>PENYEBAB GANGGUAN</div>
+                        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: '21px', fontWeight: 500, lineHeight: 1.4, color: 'rgba(255,255,255,0.9)' }}>{cause}</div>
                       </div>
                     </div>
                   )}
 
                   {/* Yellow Warning Box */}
-                  <div style={{ background: '#FACC15', padding: '20px 24px', borderRadius: '18px', display: 'flex', alignItems: 'flex-start', gap: '20px', boxShadow: '0 8px 24px rgba(250,204,21,0.4)', border: '4px solid white', maxWidth: '740px', width: 'fit-content' }}>
-                    <div style={{ background: 'white', width: '84px', minWidth: '84px', height: '84px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 0 0 3px #DC2626', flexShrink: 0 }}>
-                      <AlertTriangle size={48} strokeWidth={2.5} color="#DC2626" />
+                  <div style={{ background: '#FACC15', padding: '16px 20px', borderRadius: '18px', display: 'flex', alignItems: 'flex-start', gap: '20px', boxShadow: '0 8px 24px rgba(250,204,21,0.4)', border: '4px solid white', maxWidth: '740px', width: 'fit-content' }}>
+                    <div style={{ background: 'white', width: '76px', minWidth: '76px', height: '76px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 0 0 3px #DC2626', flexShrink: 0 }}>
+                      <AlertTriangle size={42} strokeWidth={2.5} color="#DC2626" />
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', color: '#0F172A', minWidth: 0 }}>
-                      <strong style={{ fontSize: '1.9rem', fontWeight: 900 }}>{yellowBoxTitle}</strong>
-                      <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '1.45rem', fontWeight: 600, lineHeight: 1.45 }}>{yellowBoxText}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', color: '#0F172A', minWidth: 0 }}>
+                      <strong style={{ fontSize: '28px', fontWeight: 900 }}>{yellowBoxTitle}</strong>
+                      <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '22px', fontWeight: 600, lineHeight: 1.4 }}>{yellowBoxText}</span>
                     </div>
                   </div>
 
                   {/* Area Box */}
                   {area && (
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '18px', padding: '16px 24px', borderRadius: '16px', background: '#0F172A', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', width: 'fit-content' }}>
-                      <div style={{ width: '70px', minWidth: '70px', height: '70px', borderRadius: '12px', background: '#FACC15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <MapPin size={38} color="#0F172A" />
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '18px', padding: '14px 20px', borderRadius: '16px', background: '#0F172A', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', width: 'fit-content' }}>
+                      <div style={{ width: '64px', minWidth: '64px', height: '64px', borderRadius: '12px', background: '#FACC15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <MapPin size={34} color="#0F172A" />
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: '1.55rem', fontWeight: 900, color: '#FACC15' }}>WILAYAH TERDAMPAK</div>
-                        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: '1.35rem', fontWeight: 500, lineHeight: 1.4, color: 'rgba(255,255,255,0.9)' }}>{area}</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: '24px', fontWeight: 900, color: '#FACC15' }}>WILAYAH TERDAMPAK</div>
+                        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: '21px', fontWeight: 500, lineHeight: 1.4, color: 'rgba(255,255,255,0.9)' }}>{area}</div>
                       </div>
                     </div>
                   )}
 
                   {/* ETR Box */}
                   {etr && (
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '18px', padding: '16px 24px', borderRadius: '16px', background: '#F0FDF4', border: '2px solid #BBF7D0', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', width: 'fit-content' }}>
-                      <div style={{ width: '70px', minWidth: '70px', height: '70px', borderRadius: '12px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 4px rgba(0,0,0,0.08)' }}>
-                        <CheckCircle2 size={38} color="#16A34A" />
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '18px', padding: '14px 20px', borderRadius: '16px', background: '#F0FDF4', border: '2px solid #BBF7D0', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', width: 'fit-content' }}>
+                      <div style={{ width: '64px', minWidth: '64px', height: '64px', borderRadius: '12px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 4px rgba(0,0,0,0.08)' }}>
+                        <CheckCircle2 size={34} color="#16A34A" />
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: '1.55rem', fontWeight: 900, color: '#0F172A' }}>ESTIMASI WAKTU</div>
-                        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: '1.35rem', fontWeight: 500, lineHeight: 1.4, color: '#0F172A' }}>{etr}</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: '24px', fontWeight: 900, color: '#0F172A' }}>ESTIMASI WAKTU</div>
+                        <div style={{ fontFamily: "'Inter', sans-serif", fontSize: '21px', fontWeight: 500, lineHeight: 1.4, color: '#0F172A' }}>{etr}</div>
                       </div>
                     </div>
                   )}
 
                   {/* CS Box */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '18px', padding: '16px 24px', borderRadius: '16px', background: 'linear-gradient(135deg, #1E3A8A, #2563EB)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', width: 'fit-content' }}>
-                    <div style={{ width: '70px', minWidth: '70px', height: '70px', borderRadius: '12px', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Phone size={38} color="white" />
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '18px', padding: '14px 20px', borderRadius: '16px', background: 'linear-gradient(135deg, #1E3A8A, #2563EB)', boxShadow: '0 4px 16px rgba(0,0,0,0.08)', width: 'fit-content' }}>
+                    <div style={{ width: '64px', minWidth: '64px', height: '64px', borderRadius: '12px', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Phone size={34} color="white" />
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: '1.45rem', fontWeight: 900, color: 'rgba(255,255,255,0.85)' }}>HUBUNGI KAMI</div>
-                      <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: '1.9rem', fontWeight: 900, color: '#FACC15' }}>Call Center: +62 852-2772-2095</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: '22px', fontWeight: 900, color: 'rgba(255,255,255,0.85)' }}>HUBUNGI KAMI</div>
+                      <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: '28px', fontWeight: 900, color: '#FACC15' }}>Call Center: +62 852-2772-2095</div>
                     </div>
                   </div>
                 </div>
@@ -443,7 +443,7 @@ export default function BannerMaintenance() {
 
             {/* Date Badge */}
             {date && (
-              <div style={{ position: 'absolute', right: '52px', bottom: '95px', zIndex: 4, fontFamily: "'Inter', sans-serif", fontSize: '1.25rem', fontWeight: 700, color: '#0F172A', background: '#FACC15', padding: '8px 18px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
+              <div style={{ position: 'absolute', right: '52px', bottom: '95px', zIndex: 4, fontFamily: "'Inter', sans-serif", fontSize: '20px', fontWeight: 700, color: '#0F172A', background: '#FACC15', padding: '8px 18px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
                 <Calendar size={20} />
                 {date}
               </div>
@@ -451,12 +451,12 @@ export default function BannerMaintenance() {
 
             {/* Footer Bars */}
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 4, display: 'flex', height: '75px' }}>
-              <div style={{ background: '#DC2626', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', fontSize: '1.45rem', fontWeight: 800, padding: '0 36px', flex: 2, letterSpacing: '0.3px' }}>
+              <div style={{ background: '#DC2626', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', fontSize: '22px', fontWeight: 800, padding: '0 36px', flex: 2, letterSpacing: '0.3px' }}>
                 <AlertTriangle size={24} fill="white" color="white" />
                 KAMI MOHON MAAF — TIM KAMI SEDANG BEKERJA KERAS UNTUK ANDA
               </div>
-              <div style={{ background: '#0EA5E9', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', fontSize: '1.4rem', fontWeight: 700, padding: '0 32px', flex: 1 }}>
-                <span style={{ fontSize: '1.6rem' }}>📸</span>
+              <div style={{ background: '#0EA5E9', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', fontSize: '22px', fontWeight: 700, padding: '0 32px', flex: 1 }}>
+                <span style={{ fontSize: '24px' }}>📸</span>
                 @wifiansolution | wifian.id
               </div>
             </div>
