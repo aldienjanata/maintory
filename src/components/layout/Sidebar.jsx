@@ -15,7 +15,8 @@ import {
   History,
   Settings,
   ClipboardList,
-  FileText
+  FileText,
+  Image
 } from 'lucide-react'
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -37,6 +38,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { label: 'Dismantle', path: '/dismantle', icon: <ArrowDownToLine />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     { label: 'Pergantian ONT', path: '/ont', icon: <RefreshCcw />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     { label: 'Laporan Pemasangan', path: '/laporan-pemasangan', icon: <FileText />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
+    { label: 'Generate Banner', path: '/banner-maintenance', icon: <Image />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin'] },
     
     { label: 'Log Aktivitas', path: '/logs', icon: <History />, section: 'SYSTEM', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     { label: 'Pengaturan', path: '/settings', icon: <Settings />, section: 'SYSTEM', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
