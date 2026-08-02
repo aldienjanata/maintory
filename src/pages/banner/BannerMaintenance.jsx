@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   Download, Camera, AlertTriangle, Phone, Globe,
-  CheckCircle2, MapPin, AlertCircle, Calendar, Wrench, RefreshCw, Instagram
+  CheckCircle2, MapPin, AlertCircle, Calendar, Wrench, RefreshCw
 } from 'lucide-react'
 import { toPng } from 'html-to-image'
 import ReactCrop from 'react-image-crop'
@@ -464,7 +464,11 @@ export default function BannerMaintenance() {
                 <span>KAMI MOHON MAAF — TIM KAMI SEDANG BEKERJA SEMAKSIMAL MUNGKIN UNTUK ANDA 🙏🏻</span>
               </div>
               <div style={{ background: '#0EA5E9', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '18px', fontWeight: 700, padding: '0 20px', flex: 1 }}>
-                <Instagram size={22} color="white" />
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect width="20" height="20" x="2" y="2" rx="5" ry="5"/>
+                  <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                  <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>
+                </svg>
                 <span>@wifiansolution | wifian.id</span>
               </div>
             </div>
