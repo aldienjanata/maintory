@@ -14,54 +14,68 @@ import Pagination from '../../components/common/Pagination'
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
- * Parse text from WA message format into a structured object.
- * e.g. "Nama Pelanggan : Budi" → { full_name: 'Budi' }
+ * Parse text from WA message format into an array of structured objects.
  */
-function parseWaMessage(text) {
-  const get = (keys) => {
-    for (const key of keys) {
-      const rx = new RegExp(`${key}\\s*:\\s*(.+)`, 'i')
-      const m = text.match(rx)
-      if (m) return m[1].trim()
-    }
-    return ''
-  }
+function parseWaPickups(text) {
+  if (!text.trim()) return []
 
-  // Parse tanggal: "Selasa,4 Agustus 2024" → "2024-08-04"
-  const parseTanggal = (raw) => {
-    if (!raw) return format(new Date(), 'yyyy-MM-dd')
-    // Remove day name prefix if present (e.g. "Selasa,")
-    const cleaned = raw.replace(/^[a-zA-Z]+,\s*/i, '').trim()
-    // Try to parse Indonesian date: "4 Agustus 2024"
-    const bulanMap = {
-      januari: 0, februari: 1, maret: 2, april: 3, mei: 4, juni: 5,
-      juli: 6, agustus: 7, september: 8, oktober: 9, november: 10, desember: 11
-    }
-    const m = cleaned.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/)
-    if (m) {
-      const bln = bulanMap[m[2].toLowerCase()]
-      if (bln !== undefined) {
-        const d = new Date(Number(m[3]), bln, Number(m[1]))
-        return format(d, 'yyyy-MM-dd')
+  // Split by "Tanggal Pengambilan" or double newlines to handle multiple blocks
+  const blocks = text.split(/(?=Tanggal Pengambilan\s*:|Tanggal\s*:)/i)
+
+  const parsed = blocks.map(block => {
+    const b = block.trim()
+    if (!b) return null
+
+    const get = (keys) => {
+      for (const key of keys) {
+        const rx = new RegExp(`${key}\\s*:\\s*(.+)`, 'i')
+        const m = b.match(rx)
+        if (m) return m[1].trim()
       }
+      return ''
     }
-    // Fallback: try native parse
-    const d = new Date(cleaned)
-    return isNaN(d) ? format(new Date(), 'yyyy-MM-dd') : format(d, 'yyyy-MM-dd')
-  }
 
-  return {
-    pickup_date: parseTanggal(get(['Tanggal Pengambilan', 'Tanggal'])),
-    full_name: get(['Nama Pelanggan', 'Nama']),
-    address: get(['Alamat']),
-    customer_id: get(['ID Pelanggan', 'ID']),
-    status_pelanggan: get(['Status Pelanggan', 'Status']),
-    alasan_berhenti: get(['Alasan Berhenti', 'Alasan']),
-    note: get(['Keterangan', 'Note', 'Catatan']),
-    teknisi_text: get(['Teknisi']),
-    serial_number: get(['SN Modem', 'Serial Number', 'SN ONT', 'SN']),
-    adaptor: get(['Adaptor', 'Adaptor Charger']),
-  }
+    const pickup_date_raw = get(['Tanggal Pengambilan', 'Tanggal'])
+    const full_name = get(['Nama Pelanggan', 'Nama'])
+    
+    // If it doesn't even have a name, skip
+    if (!full_name) return null
+
+    const parseTanggal = (raw) => {
+      if (!raw) return format(new Date(), 'yyyy-MM-dd')
+      const cleaned = raw.replace(/^[a-zA-Z]+,\s*/i, '').trim()
+      const bulanMap = {
+        januari: 0, februari: 1, maret: 2, april: 3, mei: 4, juni: 5,
+        juli: 6, agustus: 7, september: 8, oktober: 9, november: 10, desember: 11
+      }
+      const m = cleaned.match(/(\d{1,2})\s+(\w+)\s+(\d{4})/)
+      if (m) {
+        const bln = bulanMap[m[2].toLowerCase()]
+        if (bln !== undefined) {
+          const d = new Date(Number(m[3]), bln, Number(m[1]))
+          return format(d, 'yyyy-MM-dd')
+        }
+      }
+      const d = new Date(cleaned)
+      return isNaN(d) ? format(new Date(), 'yyyy-MM-dd') : format(d, 'yyyy-MM-dd')
+    }
+
+    return {
+      _id: Math.random().toString(36).substr(2, 9),
+      pickup_date: parseTanggal(pickup_date_raw),
+      full_name,
+      address: get(['Alamat']),
+      customer_id: get(['ID Pelanggan', 'ID']),
+      status_pelanggan: get(['Status Pelanggan', 'Status']),
+      alasan_berhenti: get(['Alasan Berhenti', 'Alasan']),
+      note: get(['Keterangan', 'Note', 'Catatan']),
+      teknisi_text: get(['Teknisi']),
+      serial_number: get(['SN Modem', 'Serial Number', 'SN ONT', 'SN']),
+      adaptor: get(['Adaptor', 'Adaptor Charger']),
+    }
+  }).filter(Boolean)
+
+  return parsed
 }
 
 const BULAN_LABEL = [
@@ -117,6 +131,7 @@ export default function Dismantle() {
   const [waText, setWaText] = useState('')
   const [showWaInput, setShowWaInput] = useState(false)
   const [expandedPickupId, setExpandedPickupId] = useState(null)
+  const [parsedPickups, setParsedPickups] = useState([])
 
   // Export month filter
   const currentYear = new Date().getFullYear()
@@ -250,6 +265,7 @@ export default function Dismantle() {
     setEditPickup(null)
     setPickupForm(emptyPickupForm)
     setWaText('')
+    setParsedPickups([])
     setShowWaInput(true)
     setIsPickupModalOpen(true)
   }
@@ -269,16 +285,64 @@ export default function Dismantle() {
       adaptor: item.adaptor || '',
     })
     setWaText('')
+    setParsedPickups([])
     setShowWaInput(false)
     setIsPickupModalOpen(true)
   }
 
   const handleParseWa = () => {
     if (!waText.trim()) { toast.error('Tempel pesan WA terlebih dahulu'); return }
-    const parsed = parseWaMessage(waText)
-    setPickupForm(f => ({ ...f, ...parsed }))
+    const parsed = parseWaPickups(waText)
+    if (parsed.length === 0) {
+      toast.error('Gagal parse pesan, pastikan ada baris "Nama Pelanggan"')
+      return
+    }
+    setParsedPickups(parsed)
     setShowWaInput(false)
-    toast.success('Pesan berhasil diparse! Silakan cek & koreksi field di bawah.')
+    toast.success(`${parsed.length} pesan berhasil diparse! Silakan cek preview di bawah.`)
+  }
+
+  const handleSaveParsedPickups = async () => {
+    if (parsedPickups.length === 0) return
+    setSavingPickup(true)
+    try {
+      showProgress('Menyimpan Data', 'Memulai proses penyimpanan...', 10)
+      
+      const toInsert = parsedPickups.map(({ _id, ...rest }) => ({
+        ...rest,
+        created_by: profile.id
+      }))
+
+      let inserted = 0
+      const batchSize = 10
+      for (let i = 0; i < toInsert.length; i += batchSize) {
+        const batch = toInsert.slice(i, i + batchSize)
+        const { error } = await supabase.from('dismantle_pickups').insert(batch)
+        if (error) throw error
+        inserted += batch.length
+        showProgress('Menyimpan ke Database', `Menyimpan ${inserted} dari ${toInsert.length} data...`, 10 + (inserted / toInsert.length) * 80)
+      }
+
+      await logActivity({
+        userId: profile.id,
+        username: profile.username,
+        role: profile.role,
+        module: 'Dismantle',
+        action: 'Catat Pengambilan Massal',
+        detail: `Menambahkan ${toInsert.length} data pengambilan`
+      })
+
+      toast.success(`${toInsert.length} data pengambilan berhasil dicatat`)
+      setIsPickupModalOpen(false)
+      setWaText('')
+      setParsedPickups([])
+      fetchAll()
+    } catch (err) {
+      toast.error('Gagal menyimpan data: ' + err.message)
+    } finally {
+      setSavingPickup(false)
+      hideProgress()
+    }
   }
 
   const handleSavePickup = async () => {
@@ -1089,68 +1153,108 @@ export default function Dismantle() {
                 </div>
               )}
 
-              {/* Manual Form Fields */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Data Pelanggan
-                </p>
-                <div className="grid-2">
-                  <div className="form-group">
-                    <label className="form-label">Tanggal Pengambilan <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <input type="date" className="form-input" value={pickupForm.pickup_date} onChange={e => setPickupForm(f => ({ ...f, pickup_date: e.target.value }))} />
+              {/* Manual Form Fields (Only if not using mass-parse or if editing) */}
+              {(parsedPickups.length === 0 || editPickup) ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Data Pelanggan
+                  </p>
+                  <div className="grid-2">
+                    <div className="form-group">
+                      <label className="form-label">Tanggal Pengambilan <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <input type="date" className="form-input" value={pickupForm.pickup_date} onChange={e => setPickupForm(f => ({ ...f, pickup_date: e.target.value }))} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">ID Pelanggan</label>
+                      <input className="form-input" placeholder="816801440@bms.wifian.net.id" value={pickupForm.customer_id} onChange={e => setPickupForm(f => ({ ...f, customer_id: e.target.value }))} />
+                    </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">ID Pelanggan</label>
-                    <input className="form-input" placeholder="816801440@bms.wifian.net.id" value={pickupForm.customer_id} onChange={e => setPickupForm(f => ({ ...f, customer_id: e.target.value }))} />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Nama Pelanggan <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input className="form-input" placeholder="Nama lengkap pelanggan" value={pickupForm.full_name} onChange={e => setPickupForm(f => ({ ...f, full_name: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Alamat</label>
-                  <input className="form-input" placeholder="Alamat pelanggan" value={pickupForm.address} onChange={e => setPickupForm(f => ({ ...f, address: e.target.value }))} />
-                </div>
-                <div className="grid-2">
-                  <div className="form-group">
-                    <label className="form-label">Status Pelanggan</label>
-                    <input className="form-input" placeholder="Berhenti Berlangganan" value={pickupForm.status_pelanggan} onChange={e => setPickupForm(f => ({ ...f, status_pelanggan: e.target.value }))} />
+                    <label className="form-label">Nama Pelanggan <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input className="form-input" placeholder="Nama lengkap pelanggan" value={pickupForm.full_name} onChange={e => setPickupForm(f => ({ ...f, full_name: e.target.value }))} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Alasan Berhenti</label>
-                    <input className="form-input" placeholder="Pindah Ke MyRep" value={pickupForm.alasan_berhenti} onChange={e => setPickupForm(f => ({ ...f, alasan_berhenti: e.target.value }))} />
+                    <label className="form-label">Alamat</label>
+                    <input className="form-input" placeholder="Alamat pelanggan" value={pickupForm.address} onChange={e => setPickupForm(f => ({ ...f, address: e.target.value }))} />
                   </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Teknisi</label>
-                  <input className="form-input" placeholder="Dika, Aldo" value={pickupForm.teknisi_text} onChange={e => setPickupForm(f => ({ ...f, teknisi_text: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Keterangan</label>
-                  <textarea className="form-input" rows={2} placeholder="Keterangan / catatan tambahan" value={pickupForm.note} onChange={e => setPickupForm(f => ({ ...f, note: e.target.value }))} />
-                </div>
+                  <div className="grid-2">
+                    <div className="form-group">
+                      <label className="form-label">Status Pelanggan</label>
+                      <input className="form-input" placeholder="Berhenti Berlangganan" value={pickupForm.status_pelanggan} onChange={e => setPickupForm(f => ({ ...f, status_pelanggan: e.target.value }))} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Alasan Berhenti</label>
+                      <input className="form-input" placeholder="Pindah Ke MyRep" value={pickupForm.alasan_berhenti} onChange={e => setPickupForm(f => ({ ...f, alasan_berhenti: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Teknisi</label>
+                    <input className="form-input" placeholder="Dika, Aldo" value={pickupForm.teknisi_text} onChange={e => setPickupForm(f => ({ ...f, teknisi_text: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Keterangan</label>
+                    <textarea className="form-input" rows={2} placeholder="Keterangan / catatan tambahan" value={pickupForm.note} onChange={e => setPickupForm(f => ({ ...f, note: e.target.value }))} />
+                  </div>
 
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Material
-                </p>
-                <div className="grid-2">
-                  <div className="form-group">
-                    <label className="form-label">SN Modem</label>
-                    <input className="form-input" placeholder="ZTEGC895C2E1" value={pickupForm.serial_number} onChange={e => setPickupForm(f => ({ ...f, serial_number: e.target.value }))} style={{ fontFamily: 'monospace' }} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Adaptor</label>
-                    <input className="form-input" placeholder="1 Pcs" value={pickupForm.adaptor} onChange={e => setPickupForm(f => ({ ...f, adaptor: e.target.value }))} />
+                  <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Material
+                  </p>
+                  <div className="grid-2">
+                    <div className="form-group">
+                      <label className="form-label">SN Modem</label>
+                      <input className="form-input" placeholder="ZTEGC895C2E1" value={pickupForm.serial_number} onChange={e => setPickupForm(f => ({ ...f, serial_number: e.target.value }))} style={{ fontFamily: 'monospace' }} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Adaptor</label>
+                      <input className="form-input" placeholder="1 Pcs" value={pickupForm.adaptor} onChange={e => setPickupForm(f => ({ ...f, adaptor: e.target.value }))} />
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <h4 className="mb-4 font-semibold text-accent">Preview Hasil Parsing ({parsedPickups.length} Data)</h4>
+                  <div className="table-container" style={{ maxHeight: '260px' }}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Tanggal</th>
+                          <th>Nama / ID Pelanggan</th>
+                          <th>Teknisi</th>
+                          <th>SN Modem</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {parsedPickups.map((t) => (
+                          <tr key={t._id}>
+                            <td className="font-bold">{t.pickup_date ? format(parseISO(t.pickup_date), 'dd/MM/yy') : '-'}</td>
+                            <td>
+                              <div>{t.full_name}</div>
+                              <div className="text-secondary" style={{ fontSize: '11px' }}>{t.customer_id}</div>
+                            </td>
+                            <td>{t.teknisi_text}</td>
+                            <td>{t.serial_number}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                     <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setParsedPickups([]); setShowWaInput(true); }}>Batal / Edit Teks WA</button>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setIsPickupModalOpen(false)}>Batal</button>
-              <button className="btn btn-primary" onClick={handleSavePickup} disabled={savingPickup}>
-                {savingPickup ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : (editPickup ? 'Simpan Perubahan' : 'Catat Pengambilan')}
-              </button>
+              <button className="btn btn-secondary" onClick={() => setIsPickupModalOpen(false)}>Tutup</button>
+              {parsedPickups.length > 0 && !editPickup ? (
+                <button className="btn btn-primary" onClick={handleSaveParsedPickups} disabled={savingPickup}>
+                  {savingPickup ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : `Simpan ${parsedPickups.length} Data`}
+                </button>
+              ) : (
+                <button className="btn btn-primary" onClick={handleSavePickup} disabled={savingPickup}>
+                  {savingPickup ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : (editPickup ? 'Simpan Perubahan' : 'Catat Pengambilan (Manual)')}
+                </button>
+              )}
             </div>
           </div>
         </div>
