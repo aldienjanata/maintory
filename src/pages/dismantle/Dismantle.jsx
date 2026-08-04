@@ -1112,12 +1112,12 @@ export default function Dismantle() {
       ════════════════════════════════════════════════════════════════════════ */}
       {isPickupModalOpen && createPortal(
         <div className="modal-overlay">
-          <div className="modal modal-lg">
-            <div className="modal-header">
+          <div className="modal modal-xl" style={{ display: 'flex', flexDirection: 'column', maxHeight: '92vh', width: '90%', maxWidth: '800px' }}>
+            <div className="modal-header" style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-card)', borderBottom: '1px solid var(--border)' }}>
               <h3>{editPickup ? 'Edit Data Pengambilan' : 'Catat Data Pengambilan'}</h3>
               <button className="btn-icon" onClick={() => setIsPickupModalOpen(false)}><X size={18} /></button>
             </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div className="modal-body" style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '14px', padding: '20px' }}>
 
               {/* WA Paste Area */}
               {!editPickup && (
@@ -1139,11 +1139,11 @@ export default function Dismantle() {
                     <>
                       <textarea
                         className="form-input"
-                        rows={7}
+                        rows={10}
                         placeholder={`Tempel pesan WA di sini, contoh:\n\nTanggal Pengambilan : Selasa,4 Agustus 2024\nNama Pelanggan : Yuyun Huri Indra\nAlamat : RT 03 RW 01 Desa Sawangan\nID Pelanggan : 816801440@bms.wifian.net.id\nStatus Pelanggan : Berhenti Berlangganan\nAlasan Berhenti : Pindah Ke MyRep\nKeterangan : Sudah Diambil Hari ini\nTeknisi : Dika,Aldo\n\nMaterial\nSN Modem : ZTEGC895C2E1\nAdaptor : 1 Pcs`}
                         value={waText}
                         onChange={e => setWaText(e.target.value)}
-                        style={{ fontFamily: 'monospace', fontSize: '12px', marginBottom: '8px' }}
+                        style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: '13px', padding: '12px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '8px' }}
                       />
                       <button className="btn btn-primary btn-sm" onClick={handleParseWa} style={{ width: '100%' }}>
                         <Wand2 size={14} /> Parse Pesan
