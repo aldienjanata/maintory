@@ -1153,8 +1153,8 @@ export default function Dismantle() {
                 </div>
               )}
 
-              {/* Manual Form Fields (Only if not using mass-parse or if editing) */}
-              {(parsedPickups.length === 0 || editPickup) ? (
+              {/* Edit Mode: Manual Form Fields */}
+              {editPickup ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     Data Pelanggan
@@ -1211,48 +1211,51 @@ export default function Dismantle() {
                   </div>
                 </div>
               ) : (
-                <div>
-                  <h4 className="mb-4 font-semibold text-accent">Preview Hasil Parsing ({parsedPickups.length} Data)</h4>
-                  <div className="table-container" style={{ maxHeight: '260px' }}>
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Tanggal</th>
-                          <th>Nama / ID Pelanggan</th>
-                          <th>Teknisi</th>
-                          <th>SN Modem</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {parsedPickups.map((t) => (
-                          <tr key={t._id}>
-                            <td className="font-bold">{t.pickup_date ? format(parseISO(t.pickup_date), 'dd/MM/yy') : '-'}</td>
-                            <td>
-                              <div>{t.full_name}</div>
-                              <div className="text-secondary" style={{ fontSize: '11px' }}>{t.customer_id}</div>
-                            </td>
-                            <td>{t.teknisi_text}</td>
-                            <td>{t.serial_number}</td>
+                // Add Mode: Preview Table
+                parsedPickups.length > 0 && (
+                  <div>
+                    <h4 className="mb-4 font-semibold text-accent">Preview Hasil Parsing ({parsedPickups.length} Data)</h4>
+                    <div className="table-container" style={{ maxHeight: '260px' }}>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Tanggal</th>
+                            <th>Nama / ID Pelanggan</th>
+                            <th>Teknisi</th>
+                            <th>SN Modem</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {parsedPickups.map((t) => (
+                            <tr key={t._id}>
+                              <td className="font-bold">{t.pickup_date ? format(parseISO(t.pickup_date), 'dd/MM/yy') : '-'}</td>
+                              <td>
+                                <div>{t.full_name}</div>
+                                <div className="text-secondary" style={{ fontSize: '11px' }}>{t.customer_id}</div>
+                              </td>
+                              <td>{t.teknisi_text}</td>
+                              <td>{t.serial_number}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                       <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setParsedPickups([]); setShowWaInput(true); }}>Batal / Edit Teks WA</button>
+                    </div>
                   </div>
-                  <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
-                     <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setParsedPickups([]); setShowWaInput(true); }}>Batal / Edit Teks WA</button>
-                  </div>
-                </div>
+                )
               )}
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setIsPickupModalOpen(false)}>Tutup</button>
-              {parsedPickups.length > 0 && !editPickup ? (
-                <button className="btn btn-primary" onClick={handleSaveParsedPickups} disabled={savingPickup}>
-                  {savingPickup ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : `Simpan ${parsedPickups.length} Data`}
+              {editPickup ? (
+                <button className="btn btn-primary" onClick={handleSavePickup} disabled={savingPickup}>
+                  {savingPickup ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : 'Simpan Perubahan'}
                 </button>
               ) : (
-                <button className="btn btn-primary" onClick={handleSavePickup} disabled={savingPickup}>
-                  {savingPickup ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : (editPickup ? 'Simpan Perubahan' : 'Catat Pengambilan (Manual)')}
+                <button className="btn btn-primary" onClick={handleSaveParsedPickups} disabled={savingPickup || parsedPickups.length === 0}>
+                  {savingPickup ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : `Simpan ${parsedPickups.length} Data`}
                 </button>
               )}
             </div>
