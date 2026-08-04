@@ -290,16 +290,11 @@ export default function Dismantle() {
     setIsPickupModalOpen(true)
   }
 
-  const handleParseWa = () => {
-    if (!waText.trim()) { toast.error('Tempel pesan WA terlebih dahulu'); return }
-    const parsed = parseWaPickups(waText)
-    if (parsed.length === 0) {
-      toast.error('Gagal parse pesan, pastikan ada baris "Nama Pelanggan"')
-      return
-    }
+  const handleWaTextChange = (e) => {
+    const text = e.target.value
+    setWaText(text)
+    const parsed = parseWaPickups(text)
     setParsedPickups(parsed)
-    setShowWaInput(false)
-    toast.success(`${parsed.length} pesan berhasil diparse! Silakan cek preview di bawah.`)
   }
 
   const handleSaveParsedPickups = async () => {
@@ -1121,37 +1116,30 @@ export default function Dismantle() {
 
               {/* WA Paste Area */}
               {!editPickup && (
-                <div style={{ background: 'var(--bg-hover)', borderRadius: '10px', padding: '14px', border: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, fontSize: '13px', color: 'var(--text-secondary)' }}>
-                      <Wand2 size={15} style={{ color: 'var(--accent)' }} />
-                      Paste Pesan WhatsApp — Parse Otomatis
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => setShowWaInput(v => !v)}
-                    >
-                      {showWaInput ? 'Sembunyikan' : 'Tampilkan'}
-                    </button>
+                <div className="form-group mb-4">
+                  <label className="form-label">Paste pesan WhatsApp di sini</label>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px', padding: '12px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', lineHeight: '1.6' }}>
+                    <strong style={{ color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>Contoh Format:</strong>
+                    Tanggal Pengambilan : Selasa,4 Agustus 2024<br/>
+                    Nama Pelanggan : Yuyun Huri Indra<br/>
+                    Alamat : RT 03 RW 01 Desa Sawangan<br/>
+                    ID Pelanggan : 816801440@bms.wifian.net.id<br/>
+                    Status Pelanggan : Berhenti Berlangganan<br/>
+                    Alasan Berhenti : Pindah Ke MyRep<br/>
+                    Keterangan : Sudah Diambil Hari ini<br/>
+                    Teknisi : Dika,Aldo<br/><br/>
+                    Material<br/>
+                    SN Modem : ZTEGC895C2E1<br/>
+                    Adaptor : 1 Pcs
                   </div>
-                  {showWaInput && (
-                    <>
-                      <textarea
-                        className="form-input"
-                        rows={10}
-                        placeholder={`Tempel pesan WA di sini, contoh:\n\nTanggal Pengambilan : Selasa,4 Agustus 2024\nNama Pelanggan : Yuyun Huri Indra\nAlamat : RT 03 RW 01 Desa Sawangan\nID Pelanggan : 816801440@bms.wifian.net.id\nStatus Pelanggan : Berhenti Berlangganan\nAlasan Berhenti : Pindah Ke MyRep\nKeterangan : Sudah Diambil Hari ini\nTeknisi : Dika,Aldo\n\nMaterial\nSN Modem : ZTEGC895C2E1\nAdaptor : 1 Pcs`}
-                        value={waText}
-                        onChange={e => setWaText(e.target.value)}
-                        style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: '13px', padding: '12px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '8px' }}
-                      />
-                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <button className="btn btn-primary" onClick={handleParseWa}>
-                          <Wand2 size={16} /> Parse Pesan
-                        </button>
-                      </div>
-                    </>
-                  )}
+                  <textarea
+                    className="form-input"
+                    rows={8}
+                    placeholder="Paste teks WA di sini..."
+                    value={waText}
+                    onChange={handleWaTextChange}
+                    style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: '13px', padding: '12px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px' }}
+                  />
                 </div>
               )}
 
@@ -1241,9 +1229,6 @@ export default function Dismantle() {
                           ))}
                         </tbody>
                       </table>
-                    </div>
-                    <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
-                       <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setParsedPickups([]); setShowWaInput(true); }}>Batal / Edit Teks WA</button>
                     </div>
                   </div>
                 )
