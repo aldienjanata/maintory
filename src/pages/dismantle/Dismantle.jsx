@@ -406,7 +406,7 @@ export default function Dismantle() {
       let dataToExport = pickups
       let fileLabel = 'Semua Data'
       if (exportMode === 'month') {
-        dataToExport = pickups.filter(p => p.pickup_date && p.pickup_date.startsWith(`${exportYear}-${exportMonth}`))
+        dataToExport = pickups.filter(p => p.pickup_date && p.pickup_date.startsWith(`${exportYear}-${String(exportMonth).padStart(2, '0')}`))
         const bln = BULAN_LABEL[parseInt(exportMonth, 10) - 1]
         fileLabel = `${bln} ${exportYear}`
       }
