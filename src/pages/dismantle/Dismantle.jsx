@@ -441,10 +441,10 @@ export default function Dismantle() {
 
       const headers = ['Tanggal Ambil', 'Nama Pelanggan', 'ID Pelanggan', 'Alamat', 'Status Pelanggan', 'Alasan Berhenti', 'Teknisi', 'SN Modem', 'Adaptor', 'Keterangan']
       setColumnWidths(ws, [16, 26, 26, 34, 22, 24, 22, 22, 12, 28])
-      applyHeaderStyle(ws, headers, '0F172A')
-
-      // Shift header to row 4
-      ws.spliceRows(4, 0, [])
+      
+      // Insert headers at row 4
+      ws.addRow(headers)
+      applyHeaderStyle(ws, headers, '0F172A', 4)
 
       for (let i = 0; i < dataToExport.length; i++) {
         const p = dataToExport[i]
@@ -477,7 +477,7 @@ export default function Dismantle() {
       summaryRow.font = { bold: true, italic: true, color: { argb: 'FF0F172A' } }
       summaryRow.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF9C3' } }
 
-      applyDataRowStyles(ws)
+      applyDataRowStyles(ws, 5)
 
       // Style title & gen rows - override border
       ws.getCell('A1').border = {}

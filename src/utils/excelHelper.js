@@ -6,8 +6,8 @@ import ExcelJS from 'exceljs'
  * @param {string[]} headers
  * @param {string} [accentColor='1E40AF'] - hex color without #
  */
-export function applyHeaderStyle(ws, headers, accentColor = '0369A1') {
-  const headerRow = ws.getRow(1)
+export function applyHeaderStyle(ws, headers, accentColor = '0369A1', rowIndex = 1) {
+  const headerRow = ws.getRow(rowIndex)
   headers.forEach((h, i) => {
     const cell = headerRow.getCell(i + 1)
     cell.value = h
