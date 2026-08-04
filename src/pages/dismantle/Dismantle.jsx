@@ -1112,7 +1112,7 @@ export default function Dismantle() {
       ════════════════════════════════════════════════════════════════════════ */}
       {isPickupModalOpen && createPortal(
         <div className="modal-overlay">
-          <div className="modal modal-xl" style={{ display: 'flex', flexDirection: 'column', maxHeight: '92vh', width: '90%', maxWidth: '800px' }}>
+          <div className="modal modal-xl" style={{ display: 'flex', flexDirection: 'column', maxHeight: '92vh', width: '90%', maxWidth: '1100px' }}>
             <div className="modal-header" style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-card)', borderBottom: '1px solid var(--border)' }}>
               <h3>{editPickup ? 'Edit Data Pengambilan' : 'Catat Data Pengambilan'}</h3>
               <button className="btn-icon" onClick={() => setIsPickupModalOpen(false)}><X size={18} /></button>
@@ -1145,9 +1145,11 @@ export default function Dismantle() {
                         onChange={e => setWaText(e.target.value)}
                         style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: '13px', padding: '12px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '8px' }}
                       />
-                      <button className="btn btn-primary btn-sm" onClick={handleParseWa} style={{ width: '100%' }}>
-                        <Wand2 size={14} /> Parse Pesan
-                      </button>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button className="btn btn-primary" onClick={handleParseWa}>
+                          <Wand2 size={16} /> Parse Pesan
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
