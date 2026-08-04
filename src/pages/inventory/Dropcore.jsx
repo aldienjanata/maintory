@@ -311,7 +311,6 @@ export default function Dropcore() {
 
       // Fetch all transactions
       const { data: allExpItems } = await supabase.from('expense_items').select('*, haspel:dropcore_haspels(haspel_code, type), expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type', 'dropcore').order('created_at', { ascending: true })
-      const { data: allLogs } = await supabase.from('inventory_log').select('*, user:users(full_name)').in('item_type', ['dropcore', 'Dropcore']).order('created_at', { ascending: true })
       const { data: usersData } = await supabase.from('users').select('id, full_name')
       
       const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
@@ -320,29 +319,23 @@ export default function Dropcore() {
 
       const transactionsByHaspelId = {}
 
-      ;(allLogs || []).forEach(l => {
-        const hId = l.item_id
-        if (!hId) return
-        if (!transactionsByHaspelId[hId]) transactionsByHaspelId[hId] = []
-        
-        const haspelCode = haspelMap[hId]?.haspel_code || '-'
-        const haspelType = haspelMap[hId]?.type === '1c' ? 'DROPCORE 1C' : 'DROPCORE 4C'
-
-        transactionsByHaspelId[hId].push({
-          date: l.log_date,
-          created_at: l.created_at,
-          code: haspelCode,
-          type: haspelType,
-          jenis: l.action === 'masuk' ? 'Masuk' : 'Koreksi',
-          sortPriority: 0, // Masuk/Koreksi dulu
+      // Inisialisasi setiap haspel dengan 1 transaksi 'Masuk' (Stok Awal) agar akurat sesuai database utama
+      haspels.forEach(h => {
+        transactionsByHaspelId[h.id] = [{
+          date: h.date_in,
+          created_at: h.created_at,
+          code: h.haspel_code,
+          type: h.type === '1c' ? 'DROPCORE 1C' : 'DROPCORE 4C',
+          jenis: 'Masuk',
+          sortPriority: 0,
           work: '-',
-          tech: l.user?.full_name || '-',
+          tech: '-',
           stok_awal: 0,
           keluar: 0,
-          masuk: Number(l.meters || l.quantity || 0),
+          masuk: Number(h.initial_meters),
           stok_akhir: 0,
-          note: l.note || ''
-        })
+          note: h.note || 'Stok Awal Haspel'
+        }]
       })
 
       ;(allExpItems || []).forEach(ei => {
@@ -377,21 +370,19 @@ export default function Dropcore() {
       // Calculate running balance per haspel
       Object.keys(transactionsByHaspelId).forEach(hId => {
         const txs = transactionsByHaspelId[hId]
-        // FIX: Sort by date, lalu Masuk/Koreksi sebelum Keluar jika tanggal sama
+        
+        // Sort by date, lalu Masuk sebelum Keluar
         txs.sort((a, b) => {
           if (a.date !== b.date) return a.date < b.date ? -1 : 1
           if (a.sortPriority !== b.sortPriority) return a.sortPriority - b.sortPriority
           return new Date(a.created_at) - new Date(b.created_at)
         })
 
-        // FIX: Jika tidak ada transaksi Masuk sama sekali (data lama tanpa inventory_log),
-        // mulai dari initial_meters haspel agar balance tidak negatif
-        const hasMasukTx = txs.some(tx => tx.jenis === 'Masuk' || tx.jenis === 'Koreksi')
-        let currentStock = hasMasukTx ? 0 : Number(haspelMap[hId]?.initial_meters || 0)
+        let currentStock = 0
 
         txs.forEach(tx => {
           tx.stok_awal = currentStock
-          if (tx.jenis === 'Masuk' || tx.jenis === 'Koreksi') {
+          if (tx.jenis === 'Masuk') {
             currentStock += tx.masuk
           } else if (tx.jenis === 'Keluar') {
             currentStock = Math.max(0, currentStock - tx.keluar)
