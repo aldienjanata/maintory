@@ -16,7 +16,8 @@ import {
   Settings,
   ClipboardList,
   FileText,
-  Image
+  Image,
+  Antenna
 } from 'lucide-react'
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -39,6 +40,8 @@ export default function Sidebar({ isOpen, onClose }) {
     { label: 'Pergantian ONT', path: '/ont', icon: <RefreshCcw />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     { label: 'Laporan Pemasangan', path: '/laporan-pemasangan', icon: <FileText />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     { label: 'Generate Banner', path: '/banner-maintenance', icon: <Image />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin'] },
+    
+    { label: 'Data Tiang', path: '/jaringan/tiang', icon: <Antenna />, section: 'JARINGAN', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     
     { label: 'Log Aktivitas', path: '/logs', icon: <History />, section: 'SYSTEM', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     { label: 'Pengaturan', path: '/settings', icon: <Settings />, section: 'SYSTEM', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
@@ -97,6 +100,7 @@ export default function Sidebar({ isOpen, onClose }) {
         {renderNavSection('MAIN MENU')}
         {renderNavSection('INVENTORY')}
         {renderNavSection('OPERATIONS')}
+        {renderNavSection('JARINGAN')}
         {renderNavSection('SYSTEM')}
       </nav>
 
