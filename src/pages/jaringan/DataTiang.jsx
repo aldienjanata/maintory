@@ -313,58 +313,83 @@ export default function DataTiang() {
   const openBulkDeleteModal = (mode) => {
     if (mode === 'selected') {
       if (selectedIds.size === 0) return toast.error('Tidak ada data yang dipilih!')
-      setBulkDeleteModal({ mode, label: `${selectedIds.size} tiang yang dipilih`, ids: [...selectedIds] })
+      setBulkDeleteModal({ mode, label: `${selectedIds.size} tiang yang dipilih`, filter: null })
     } else if (mode === 'desa') {
       if (!filterDesa) return toast.error('Pilih filter Desa terlebih dahulu!')
-      const ids = filtered.map(p => p.id)
-      setBulkDeleteModal({ mode, label: `semua tiang Desa "${filterDesa}" (${ids.length} data)`, ids })
+      setBulkDeleteModal({ mode, label: `semua tiang Desa "${filterDesa}"`, filter: { col: 'desa', val: filterDesa } })
     } else if (mode === 'kecamatan') {
       if (!filterKecamatan) return toast.error('Pilih filter Kecamatan terlebih dahulu!')
-      const ids = filtered.map(p => p.id)
-      setBulkDeleteModal({ mode, label: `semua tiang Kecamatan "${filterKecamatan}" (${ids.length} data)`, ids })
+      setBulkDeleteModal({ mode, label: `semua tiang Kecamatan "${filterKecamatan}"`, filter: { col: 'kecamatan', val: filterKecamatan } })
     } else if (mode === 'all') {
-      const ids = poles.map(p => p.id)
-      setBulkDeleteModal({ mode, label: `SELURUH DATA TIANG (${ids.length} data)`, ids })
+      setBulkDeleteModal({ mode, label: `SELURUH DATA TIANG`, filter: null })
     }
     setBulkDeleteConfirmText('')
   }
 
   const handleBulkDelete = async () => {
     if (!bulkDeleteModal) return
-    const { ids, mode, label } = bulkDeleteModal
+    const { mode, filter } = bulkDeleteModal
     const required = mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS'
     if (bulkDeleteConfirmText.trim().toUpperCase() !== required) {
       return toast.error(`Ketik "${required}" untuk konfirmasi!`)
     }
     setBulkDeleteModal(null)
-    showProgress('Menghapus Data', `Menghapus ${ids.length} tiang...`, 10)
+    
     try {
-      const chunkSize = 100
-      for (let i = 0; i < ids.length; i += chunkSize) {
-        const chunk = ids.slice(i, i + chunkSize)
-        const pct = 10 + ((i / ids.length) * 80)
-        showProgress('Menghapus Data', `Menghapus data ${i + 1} – ${Math.min(i + chunkSize, ids.length)} dari ${ids.length}...`, pct)
+      let targetIds = []
+      
+      if (mode === 'selected') {
+        targetIds = [...selectedIds]
+      } else {
+        // Fetch ALL matching IDs from server (bypassing the 1000 limit)
+        showProgress('Menyiapkan Data', `Mengambil daftar ID dari server...`, 10)
+        let from = 0
+        const step = 1000
+        while (true) {
+          let query = supabase.from('network_poles').select('id').range(from, from + step - 1)
+          if (filter) query = query.eq(filter.col, filter.val)
+          
+          const { data, error } = await query
+          if (error) throw error
+          if (!data || data.length === 0) break
+          
+          targetIds = [...targetIds, ...data.map(d => d.id)]
+          if (data.length < step) break
+          from += step
+        }
+      }
+
+      if (targetIds.length === 0) {
+        hideProgress()
+        return toast.error('Tidak ada data yang cocok untuk dihapus!')
+      }
+
+      const chunkSize = 200
+      for (let i = 0; i < targetIds.length; i += chunkSize) {
+        const chunk = targetIds.slice(i, i + chunkSize)
+        const pct = 20 + ((i / targetIds.length) * 70)
+        showProgress('Menghapus Data', `Menghapus data ${i + 1} – ${Math.min(i + chunkSize, targetIds.length)} dari total ${targetIds.length} di server...`, pct)
         const { error } = await supabase.from('network_poles').delete().in('id', chunk)
         if (error) throw error
       }
 
-      // Verifikasi: hitung sisa data di DB setelah penghapusan
-      showProgress('Memverifikasi', 'Memeriksa hasil penghapusan...', 92)
-      const { count: remaining } = await supabase
-        .from('network_poles')
-        .select('id', { count: 'exact', head: true })
-
-      showProgress('Selesai', 'Penghapusan selesai!', 100)
-      setTimeout(() => {
+      if (mode === 'all') {
+        showProgress('Memverifikasi', 'Memeriksa hasil penghapusan...', 92)
+        const { count: remaining } = await supabase.from('network_poles').select('id', { count: 'exact', head: true })
+        
         hideProgress()
         if (remaining && remaining > 0) {
-          toast.error(`⚠️ Penghapusan TIDAK LENGKAP! Masih ada ${remaining} tiang tersisa di database (kemungkinan karena RLS/hak akses). Hubungi admin database untuk menghapus manual dari Supabase.`, { duration: 8000 })
+          toast.error(`⚠️ Penghapusan TIDAK LENGKAP! Masih ada ${remaining} tiang tersisa di database. Ulangi Hapus Semua sekali lagi.`, { duration: 8000 })
         } else {
-          toast.success(`${ids.length} tiang berhasil dihapus! Database sekarang kosong (0 tiang).`)
+          toast.success(`Seluruh data tiang berhasil dikosongkan (0 tiang tersisa)!`)
         }
-        setSelectedIds(new Set())
-        fetchData()
-      }, 500)
+      } else {
+        hideProgress()
+        toast.success(`${targetIds.length} tiang berhasil dihapus!`)
+      }
+      
+      setSelectedIds(new Set())
+      fetchData()
     } catch (e) {
       hideProgress()
       toast.error('Gagal menghapus: ' + e.message)
