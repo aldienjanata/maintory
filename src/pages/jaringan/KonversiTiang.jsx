@@ -31,8 +31,6 @@ async function parseKMZ(file) {
   }).filter(Boolean)
 }
 
-/**
-
 /** Strip prefix "Kecamatan ", "Desa ", "Kelurahan ", "Kabupaten ", "Kota " */
 const cleanName = (s) => (s || '').replace(/^(Kecamatan|Desa|Kelurahan|Kabupaten|Kota)\s+/i, '').trim()
 
