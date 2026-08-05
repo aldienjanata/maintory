@@ -473,33 +473,33 @@ export default function DataTiang() {
 
       {/* ── FILTERS ── */}
       <div className="card" style={{ padding: '12px 14px', marginBottom: '14px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Search */}
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', flex: '1 1 auto', minWidth: '200px', maxWidth: '350px' }}>
             <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', pointerEvents: 'none' }} />
             <input
               className="form-input"
-              style={{ paddingLeft: '30px', height: '34px', fontSize: '13px' }}
+              style={{ paddingLeft: '30px', height: '34px', fontSize: '13px', width: '100%' }}
               placeholder="Cari ID, Desa, Kecamatan..."
               value={searchQuery}
               onChange={e => { setSearchQuery(e.target.value); setPage(1) }}
             />
           </div>
-          <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '110px' }} value={filterSite} onChange={e => { setFilterSite(e.target.value); setPage(1) }}>
+          <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '110px', width: 'auto' }} value={filterSite} onChange={e => { setFilterSite(e.target.value); setPage(1) }}>
             <option value="">Semua Site</option>
             {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
-          <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '140px' }} value={filterKecamatan} onChange={e => { setFilterKecamatan(e.target.value); setPage(1) }}>
+          <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '140px', width: 'auto' }} value={filterKecamatan} onChange={e => { setFilterKecamatan(e.target.value); setPage(1) }}>
             <option value="">Semua Kecamatan</option>
             {kecamatanList.map(k => <option key={k} value={k}>{k}</option>)}
           </select>
-          <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '100px' }} value={filterType} onChange={e => { setFilterType(e.target.value); setPage(1) }}>
+          <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '100px', width: 'auto' }} value={filterType} onChange={e => { setFilterType(e.target.value); setPage(1) }}>
             <option value="">Semua Jenis</option>
             {POLE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
           {(filterSite || filterKecamatan || filterType || searchQuery)
             ? <button className="btn btn-secondary btn-sm" style={{ height: '34px', whiteSpace: 'nowrap' }} onClick={() => { setFilterSite(''); setFilterKecamatan(''); setFilterType(''); setSearchQuery(''); setPage(1) }}>Reset</button>
-            : <div style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{filtered.length} data</div>
+            : <div style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', marginLeft: 'auto' }}>{filtered.length} data</div>
           }
         </div>
         {/* Mobile: stack filters */}
@@ -698,8 +698,8 @@ export default function DataTiang() {
       {/* ══════ MODAL TAMBAH/EDIT ══════ */}
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="modal" style={{ width: '680px', maxWidth: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
-            <div className="modal-header">
+          <div className="modal" style={{ width: '680px', maxWidth: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div className="modal-header" style={{ flexShrink: 0 }}>
               <div>
                 <h3 style={{ margin: 0 }}>{editingId ? 'Edit Data Tiang' : 'Tambah Tiang Baru'}</h3>
                 {!editingId && poleIdPreview && (
@@ -774,7 +774,7 @@ export default function DataTiang() {
                 <textarea className="form-input" rows={2} style={{ resize: 'vertical' }} value={form.keterangan} onChange={e => setForm(f => ({ ...f, keterangan: e.target.value }))} placeholder="Catatan tambahan..." />
               </div>
             </div>
-            <div className="modal-footer">
+            <div className="modal-footer" style={{ flexShrink: 0 }}>
               <button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
               <button className="btn btn-primary" disabled={saving} onClick={handleSave}>
                 {saving ? '...' : editingId ? '✓ Simpan Perubahan' : '✓ Tambah Tiang'}
