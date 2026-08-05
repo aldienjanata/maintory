@@ -222,6 +222,11 @@ export default function DataTiang() {
     }
     data.sort((a, b) => {
       let va = a[sortKey] ?? '', vb = b[sortKey] ?? ''
+      if (va === vb) {
+        // Fallback to ID Tiang for deterministic order
+        let ida = a.pole_id ?? '', idb = b.pole_id ?? ''
+        return ida > idb ? 1 : (ida < idb ? -1 : 0)
+      }
       return sortDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1)
     })
     return data
