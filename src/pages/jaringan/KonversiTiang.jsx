@@ -424,7 +424,7 @@ export default function KonversiTiang() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
                 <div>
                   <span style={{ fontWeight: 700, fontSize: '14px' }}>
-                    {geocoding ? (paused ? '⏸ Dijeda...' : `⚡ Geocoding (${BATCH_SIZE_LABEL} paralel)...`) : geocoded ? '✅ Selesai' : '🕒 Siap diproses'}
+                    {geocoding ? (paused ? '⏸ Dijeda...' : `⚡ Geocoding...`) : geocoded ? '✅ Selesai' : '🕒 Siap diproses'}
                   </span>
                   <span style={{ marginLeft: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
                     {progress.done}/{progress.total} titik
