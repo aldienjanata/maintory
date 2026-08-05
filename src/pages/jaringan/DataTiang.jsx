@@ -149,8 +149,10 @@ export default function DataTiang() {
 
   // Bulk Delete (superadmin only)
   const [selectedIds, setSelectedIds] = useState(new Set())
-  const [bulkDeleteModal, setBulkDeleteModal] = useState(null) // { mode: 'selected'|'desa'|'kecamatan'|'all', label, ids }
+  const [bulkDeleteModal, setBulkDeleteModal] = useState(null)
   const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('')
+  const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
+  const [confirmRetroactive, setConfirmRetroactive] = useState(false)
 
   // Pagination
   const [page, setPage] = useState(1)
@@ -515,9 +517,12 @@ export default function DataTiang() {
     }
   }
 
-  const handleRetroactiveUpdate = async () => {
-    if (!window.confirm('PERHATIAN: Ini akan mengubah SEMUA ID tiang yang sudah ada mengikuti format baru secara berurutan. Anda yakin?')) return;
-    
+  const handleRetroactiveUpdate = () => {
+    setConfirmRetroactive(true)
+  }
+
+  const doRetroactiveUpdate = async () => {
+    setConfirmRetroactive(false)
     setIsFormatModalOpen(false)
     showProgress('Update ID Massal', 'Menghitung ulang format baru...', 10)
     
@@ -555,12 +560,13 @@ export default function DataTiang() {
       
       for (let i = 0; i < toUpdate.length; i += chunkSize) {
         const percent = 15 + ((i / toUpdate.length) * 85)
-        showProgress('Update ID Massal', `Memperbarui ID baris ${i + 1} hingga ${Math.min(i + chunkSize, toUpdate.length)} dari total ${toUpdate.length}...`, percent)
-        
+        showProgress('Update ID Massal', `Memperbarui ID ${i + 1}–${Math.min(i + chunkSize, toUpdate.length)} dari ${toUpdate.length}...`, percent)
         const chunk = toUpdate.slice(i, i + chunkSize)
-        // Jalankan update secara paralel untuk chunk ini
-        await Promise.all(chunk.map(c => supabase.from('network_poles').update({ pole_id: c.pole_id }).eq('id', c.id)))
-        
+        // Update satu per satu agar error bisa tertangkap
+        for (const c of chunk) {
+          const { error } = await supabase.from('network_poles').update({ pole_id: c.pole_id }).eq('id', c.id)
+          if (error) throw error
+        }
         successCount += chunk.length
       }
 
@@ -653,32 +659,51 @@ export default function DataTiang() {
         </div>
       </div>
 
-      {/* ── BULK ACTION TOOLBAR (superadmin) ── */}
+      {/* ── BULK DELETE DROPDOWN (superadmin) ── */}
       {role === 'superadmin' && (
-        <div className="card" style={{ padding: '10px 14px', marginBottom: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', borderLeft: '3px solid var(--danger)' }}>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
-            <Eraser size={14} /> Hapus Massal
-          </div>
-          <div style={{ width: '1px', height: '20px', background: 'var(--border)' }} />
-          {selectedIds.size > 0 && (
+        <div style={{ position: 'relative', display: 'inline-block', marginBottom: '10px' }}>
+          <button
+            className="btn btn-sm"
+            style={{ background: 'rgba(239,68,68,0.12)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.3)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
+            onClick={() => setBulkMenuOpen(o => !o)}
+          >
+            <Trash2 size={13} /> Hapus Massal
+            {selectedIds.size > 0 && <span style={{ background: 'var(--danger)', color: '#fff', borderRadius: '20px', padding: '0 6px', fontSize: '10px', fontWeight: 700 }}>{selectedIds.size}</span>}
+            <ChevronDown size={13} style={{ transform: bulkMenuOpen ? 'rotate(180deg)' : 'none', transition: '0.15s' }} />
+          </button>
+          {bulkMenuOpen && (
             <>
-              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{selectedIds.size} tiang dipilih</span>
-              <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.3)', fontSize: '11px' }} onClick={() => openBulkDeleteModal('selected')}>
-                <Trash2 size={12} /> Hapus Yang Dipilih
-              </button>
-              <button className="btn btn-secondary btn-sm" style={{ fontSize: '11px' }} onClick={clearSelection}>Batal Pilih</button>
-              <div style={{ width: '1px', height: '20px', background: 'var(--border)' }} />
+              <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setBulkMenuOpen(false)} />
+              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 100, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '220px', overflow: 'hidden' }}>
+                {selectedIds.size > 0 && (
+                  <>
+                    <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '8px' }}
+                      onClick={() => { setBulkMenuOpen(false); openBulkDeleteModal('selected') }}>
+                      <CheckSquare size={14} /> Hapus Yang Dipilih ({selectedIds.size})
+                    </button>
+                    <button className="dropdown-item" style={{ width: '100%', padding: '8px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px' }}
+                      onClick={() => { clearSelection(); setBulkMenuOpen(false) }}>
+                      <Square size={14} /> Batal Pilih
+                    </button>
+                    <div style={{ height: '1px', background: 'var(--border)', margin: '2px 0' }} />
+                  </>
+                )}
+                <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}
+                  onClick={() => { setBulkMenuOpen(false); openBulkDeleteModal('desa') }}>
+                  <Eraser size={14} /> Hapus per Desa <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginLeft: 'auto' }}>(filter aktif)</span>
+                </button>
+                <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}
+                  onClick={() => { setBulkMenuOpen(false); openBulkDeleteModal('kecamatan') }}>
+                  <Eraser size={14} /> Hapus per Kecamatan <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginLeft: 'auto' }}>(filter aktif)</span>
+                </button>
+                <div style={{ height: '1px', background: 'var(--border)', margin: '2px 0' }} />
+                <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'rgba(239,68,68,0.08)', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--danger)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}
+                  onClick={() => { setBulkMenuOpen(false); openBulkDeleteModal('all') }}>
+                  <Trash2 size={14} /> Hapus SEMUA Data Tiang
+                </button>
+              </div>
             </>
           )}
-          <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.2)', fontSize: '11px' }} onClick={() => openBulkDeleteModal('desa')} title="Hapus semua tiang pada filter Desa aktif">
-            <Trash2 size={12} /> Hapus per Desa
-          </button>
-          <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.2)', fontSize: '11px' }} onClick={() => openBulkDeleteModal('kecamatan')} title="Hapus semua tiang pada filter Kecamatan aktif">
-            <Trash2 size={12} /> Hapus per Kecamatan
-          </button>
-          <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.2)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.4)', fontWeight: 700, fontSize: '11px', marginLeft: 'auto' }} onClick={() => openBulkDeleteModal('all')}>
-            <Trash2 size={12} /> Hapus Semua Data
-          </button>
         </div>
       )}
 
@@ -969,6 +994,30 @@ export default function DataTiang() {
                 onClick={handleBulkDelete}
               >
                 Ya, Hapus Sekarang
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ MODAL KONFIRMASI RETROACTIVE UPDATE ══════ */}
+      {confirmRetroactive && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ width: '460px', maxWidth: '96vw' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, color: 'var(--warning)' }}>⚠️ Update ID Massal</h3>
+              <button className="btn-close" onClick={() => setConfirmRetroactive(false)}><X size={20} /></button>
+            </div>
+            <div className="modal-body" style={{ padding: '20px 24px' }}>
+              <div style={{ padding: '12px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 'var(--radius-md)', marginBottom: '12px' }}>
+                <p style={{ margin: 0, fontSize: '13px', lineHeight: '1.5' }}>Ini akan mengubah <strong>SEMUA ID tiang yang sudah ada</strong> mengikuti format baru, dihitung ulang berurutan dari 001 per desa berdasarkan tanggal input terlama.</p>
+              </div>
+              <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)' }}>Contoh: tiang desa Bangsa akan menjadi BANGSA/001, BANGSA/002, BANGSA/003, dst.</p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setConfirmRetroactive(false)}>Batal</button>
+              <button style={{ background: 'var(--warning)', color: '#000', border: 'none', padding: '8px 18px', borderRadius: 'var(--radius-md)', fontWeight: 700, cursor: 'pointer' }} onClick={doRetroactiveUpdate}>
+                Ya, Update Semua ID
               </button>
             </div>
           </div>
