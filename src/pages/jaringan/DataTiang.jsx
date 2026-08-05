@@ -385,10 +385,24 @@ export default function DataTiang() {
     if (valid.length === 0) return toast.error('Tidak ada baris yang valid!')
     setImportSaving(true)
     try {
-      let successCount = 0
-      for (const row of valid) {
-        const poleId = generatePoleId(row.site, row.desa, [...poles])
-        const { error } = await supabase.from('network_poles').insert({
+      // 1. Caching perhitungan ID menggunakan Map (O(N) sangat cepat)
+      const counts = {}
+      for (const p of poles) {
+        if (!p.desa) continue
+        const key = `${p.site}_${p.desa.toUpperCase().trim()}`
+        counts[key] = (counts[key] || 0) + 1
+      }
+
+      // 2. Persiapkan semua payload sekaligus di memori
+      const payloads = valid.map(row => {
+        const key = `${row.site}_${row.desa.toUpperCase().trim()}`
+        counts[key] = (counts[key] || 0) + 1
+        
+        const siteCode = SITE_CODE[row.site] || 'BMS'
+        const desaSlug = row.desa.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '').substring(0, 15)
+        const poleId = `NAT/${siteCode}/POLE/${desaSlug}/${String(counts[key]).padStart(3, '0')}`
+
+        return {
           site: row.site, pole_type: row.pole_type,
           pole_id: poleId, provinsi: row.provinsi,
           kabupaten: row.kabupaten, kecamatan: row.kecamatan,
@@ -396,9 +410,20 @@ export default function DataTiang() {
           longitude: row.longitude, latitude: row.latitude,
           keterangan: row.keterangan,
           created_by: profile.id, updated_by: profile.id,
-        })
-        if (!error) successCount++
+        }
+      })
+
+      // 3. Simpan ke database dengan metode Bulk Insert (maks 500 baris per kiriman)
+      const chunkSize = 500
+      let successCount = 0
+
+      for (let i = 0; i < payloads.length; i += chunkSize) {
+        const chunk = payloads.slice(i, i + chunkSize)
+        const { error } = await supabase.from('network_poles').insert(chunk)
+        if (error) throw error
+        successCount += chunk.length
       }
+
       toast.success(`${successCount} tiang berhasil diimport!`)
       setIsImportModalOpen(false)
       setImportRows([])
