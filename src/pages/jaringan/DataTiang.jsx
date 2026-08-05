@@ -60,44 +60,60 @@ function extractCoordsFromUrl(url) {
 // ─── KMZ GENERATION ──────────────────────────────────────────────────────────
 async function generateKMZ(poles, users) {
   const getUserName = (uid) => users.find(u => u.id === uid)?.full_name || 'Unknown'
-  const placemarks = poles
-    .filter(p => p.latitude && p.longitude)
-    .map(p => {
-      let lat = Number(p.latitude)
-      let lon = Number(p.longitude)
-      // Deteksi jika user kebalik saat import (Lat diisi Lon, Lon diisi Lat)
-      if (Math.abs(lat) > 90 && Math.abs(lon) <= 90) {
-        const temp = lat
-        lat = lon
-        lon = temp
-      }
-      return `
-    <Placemark>
-      <name>${p.pole_id || 'Tiang'}</name>
-      <description><![CDATA[
-        <b>Site:</b> ${SITES.find(s => s.value === p.site)?.label || p.site}<br/>
-        <b>Jenis:</b> ${POLE_TYPES.find(t => t.value === p.pole_type)?.label || p.pole_type}<br/>
-        <b>Kecamatan:</b> ${p.kecamatan || '-'}<br/>
-        <b>Desa:</b> ${p.desa || '-'}<br/>
-        <b>Keterangan:</b> ${p.keterangan || '-'}<br/>
-        <b>Diinput Oleh:</b> ${getUserName(p.created_by)}<br/>
-        ${p.maps_url ? `<a href="${p.maps_url}">Lihat di Google Maps</a>` : ''}
-      ]]></description>
-      <styleUrl>#tiang_icon</styleUrl>
-      <Point><coordinates>${lon},${lat},0</coordinates></Point>
-    </Placemark>`
-    }).join('\n')
+
+  // Kelompokkan tiang per desa
+  const byDesa = {}
+  for (const p of poles) {
+    if (!p.latitude || !p.longitude) continue
+    const desaKey = p.desa || 'Tanpa Desa'
+    if (!byDesa[desaKey]) byDesa[desaKey] = []
+    byDesa[desaKey].push(p)
+  }
+
+  const makePlacemark = (p) => {
+    let lat = Number(p.latitude)
+    let lon = Number(p.longitude)
+    // Auto-swap jika koordinat terbalik
+    if (Math.abs(lat) > 90 && Math.abs(lon) <= 90) {
+      const temp = lat; lat = lon; lon = temp
+    }
+    return `
+      <Placemark>
+        <name>${p.pole_id || 'Tiang'}</name>
+        <description><![CDATA[
+          <b>Site:</b> ${SITES.find(s => s.value === p.site)?.label || p.site}<br/>
+          <b>Jenis:</b> ${POLE_TYPES.find(t => t.value === p.pole_type)?.label || p.pole_type}<br/>
+          <b>Kecamatan:</b> ${p.kecamatan || '-'}<br/>
+          <b>Desa:</b> ${p.desa || '-'}<br/>
+          <b>Keterangan:</b> ${p.keterangan || '-'}<br/>
+          <b>Diinput Oleh:</b> ${getUserName(p.created_by)}<br/>
+          ${p.maps_url ? `<a href="${p.maps_url}">Lihat di Google Maps</a>` : ''}
+        ]]></description>
+        <styleUrl>#tiang_icon</styleUrl>
+        <Point><coordinates>${lon},${lat},0</coordinates></Point>
+      </Placemark>`
+  }
+
+  // Buat folder per desa
+  const folders = Object.entries(byDesa)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([desa, tiangList]) => `
+    <Folder>
+      <name>Desa ${desa}</name>
+      <open>0</open>
+      ${tiangList.map(p => makePlacemark(p)).join('\n')}
+    </Folder>`).join('\n')
 
   const kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
     <name>Data Tiang Maintory - ${format(new Date(), 'dd MMM yyyy')}</name>
-    <description>Export Data Tiang Jaringan Fiber</description>
+    <description>Export Data Tiang Jaringan Fiber — ${poles.length} titik</description>
     <Style id="tiang_icon">
       <IconStyle><scale>1.2</scale><Icon><href>files/icon_tiang.png</href></Icon><hotSpot x="0.5" y="0" xunits="fraction" yunits="fraction"/></IconStyle>
       <LabelStyle><color>ffffffff</color><scale>0.8</scale></LabelStyle>
     </Style>
-    ${placemarks}
+    ${folders}
   </Document>
 </kml>`
 
@@ -117,6 +133,7 @@ async function generateKMZ(poles, users) {
   a.click()
   URL.revokeObjectURL(url)
 }
+
 
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 export default function DataTiang() {
