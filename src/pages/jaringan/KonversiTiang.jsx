@@ -64,59 +64,87 @@ async function fetchBDC(lat, lon) {
     const kecamatan = kec6 || (des8 ? kec7 : '')
     const desa      = des8 || (!kec6 ? kec7 : '') || cleanName(d.locality || '')
 
-    return { provinsi, kabupaten, kecamatan, desa }
+    return { provinsi, kabupaten, kecamatan, desa, locality: cleanName(d.locality || '') }
   } catch { return {} }
 }
 
-/** Nominatim OSM reverse geocode — lengkap, ada municipality untuk kecamatan */
-async function fetchNominatim(lat, lon, zoom = 18) {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=id&zoom=${zoom}&addressdetails=1`,
-      { headers: { 'User-Agent': 'MaintoryApp/1.0' }, signal: AbortSignal.timeout(8000) }
-    )
-    if (!res.ok) return {}
-    const d = await res.json()
-    const a = d.address || {}
-    return {
-      provinsi:  a.state || '',
-      // county = Kabupaten (contoh: "Kabupaten Cilacap") — strip prefixnya
-      kabupaten: cleanName(a.county || a.city || ''),
-      // Untuk Indonesia: kecamatan biasanya di "municipality", "district", "town"
-      // Jika fallback zoom=12, "village" bisa berisi nama kecamatan
-      kecamatan: cleanName(a.municipality || a.district || a.city_district || a.borough || a.town || (zoom < 18 ? a.village : '') || ''),
-      // Desa/Kelurahan biasanya di "village", "hamlet", atau "suburb"
-      desa:      cleanName(a.village || a.hamlet || a.quarter || a.neighbourhood || a.suburb || ''),
-    }
-  } catch { return {} }
+const nomCache = new Map()
+let nomLock = Promise.resolve()
+
+/** Nominatim OSM reverse geocode dengan antrean (mutex) dan cache koordinat 2 desimal (~1.1km) */
+async function fetchNominatimSafe(lat, lon, zoom = 18) {
+  const latR = Math.round(parseFloat(lat) * 100) / 100
+  const lonR = Math.round(parseFloat(lon) * 100) / 100
+  const key = `${zoom}_${latR}_${lonR}`
+  
+  if (nomCache.has(key)) {
+    return nomCache.get(key)
+  }
+
+  return new Promise(resolve => {
+    nomLock = nomLock.then(async () => {
+      // Jika selagi menunggu antrean ternyata sudah di-cache oleh request lain
+      if (nomCache.has(key)) {
+        resolve(nomCache.get(key))
+        return
+      }
+      
+      // Strict 1.1s delay to respect Nominatim policy
+      await new Promise(r => setTimeout(r, 1100))
+      
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=id&zoom=${zoom}&addressdetails=1`,
+          { headers: { 'User-Agent': 'MaintoryApp/1.0' }, signal: AbortSignal.timeout(8000) }
+        )
+        if (!res.ok) throw new Error('Failed')
+        const d = await res.json()
+        const a = d.address || {}
+        
+        const data = {
+          provinsi:  a.state || '',
+          kabupaten: cleanName(a.county || a.city || ''),
+          kecamatan: cleanName(a.municipality || a.district || a.city_district || a.borough || a.town || (zoom < 18 ? a.village : '') || ''),
+          desa:      cleanName(a.village || a.hamlet || a.quarter || a.neighbourhood || a.suburb || ''),
+        }
+        nomCache.set(key, data)
+        resolve(data)
+      } catch {
+        resolve({}) // Jangan simpan error ke cache agar bisa diulang
+      }
+    })
+  })
 }
 
 /**
- * Gabungkan hasil dari kedua API secara paralel.
- * BigDataCloud: cepat, bagus untuk Provinsi & Kabupaten.
- * Nominatim:    `municipality` = Kecamatan, `village` = Desa (lebih konsisten di Indonesia).
+ * Gabungkan hasil dari kedua API.
+ * Menggunakan cache & antrean untuk mencegah Nominatim 429 Rate Limit.
  */
 async function reverseGeocode(lat, lon) {
-  // Panggil kedua API secara bersamaan (paralel) — tidak tambah waktu
-  const [bdcR, nomR] = await Promise.allSettled([fetchBDC(lat, lon), fetchNominatim(lat, lon, 18)])
+  // Panggil BDC dan Nominatim. Nominatim sudah aman dengan antrean global
+  const [bdcR, nomR] = await Promise.allSettled([fetchBDC(lat, lon), fetchNominatimSafe(lat, lon, 18)])
   const b = bdcR.status === 'fulfilled' ? bdcR.value : {}
   const n = nomR.status === 'fulfilled' ? nomR.value : {}
 
   let kecamatan = n.kecamatan || b.kecamatan || ''
+  let desa = n.desa || b.desa || ''
   
   // OSM Indonesia sering bolong data Kecamatannya (polygon tidak sampai Desa).
-  // Jika kecamatan masih kosong, lakukan 1 kali fallback ke zoom 12 (level kecamatan/kota kecil)
   if (!kecamatan) {
-    const fallback = await fetchNominatim(lat, lon, 12)
-    if (fallback.kecamatan) kecamatan = fallback.kecamatan
+    const fallback = await fetchNominatimSafe(lat, lon, 12)
+    if (fallback.kecamatan) {
+      kecamatan = fallback.kecamatan
+    } else if (b.locality && b.locality !== desa) {
+      // Jika Nominatim fallback tetap kosong, gunakan locality dari BDC (sering berisi kecamatan)
+      kecamatan = b.locality
+    }
   }
 
-  // Prioritas: Nominatim lebih baik untuk kecamatan & desa; BDC lebih cepat untuk provinsi/kabupaten
   return {
     provinsi:  b.provinsi  || n.provinsi  || '',
     kabupaten: b.kabupaten || n.kabupaten || '',
     kecamatan: kecamatan,
-    desa:      n.desa      || b.desa      || '',   // Nominatim duluan untuk desa
+    desa:      desa,
   }
 }
 
@@ -216,20 +244,18 @@ export default function KonversiTiang() {
     const results = kmzRows.map(r => ({ ...r }))
     let fails = 0
 
-    // Proses secara paralel dalam batch (3 sekaligus untuk aman di Nominatim rate-limit 1req/s)
-    const BATCH = 3
-    const DELAY = 1100  // ms antara batch — hormati rate-limit Nominatim (1 req/s per IP)
-
-    for (let i = 0; i < results.length; i += BATCH) {
-      // Cek stop
+    // BDC cepat & Nominatim sudah diatur oleh antrean global (mutex), jadi batch size bisa dibesarkan agar UI responsif
+    const batchSize = 10 
+    
+    for (let i = 0; i < results.length; i += batchSize) {
       if (stopRef.current) break
 
       // Cek pause — tunggu sampai di-resume
       while (pauseRef.current && !stopRef.current) await delay(200)
       if (stopRef.current) break
 
-      const batch = results.slice(i, i + BATCH)
-      const geoResults = await Promise.all(batch.map(r => reverseGeocode(r.lat, r.lon)))
+      const chunk = results.slice(i, i + batchSize)
+      const geoResults = await Promise.all(chunk.map(r => reverseGeocode(r.lat, r.lon)))
 
       geoResults.forEach((geo, bi) => {
         const idx = i + bi
@@ -238,10 +264,8 @@ export default function KonversiTiang() {
       })
 
       setKmzRows([...results])
-      setProgress({ done: Math.min(i + BATCH, results.length), total: results.length })
+      setProgress({ done: Math.min(i + batchSize, results.length), total: results.length })
       setFailCount(fails)
-
-      if (i + BATCH < results.length) await delay(DELAY)
     }
 
     const stopped = stopRef.current
