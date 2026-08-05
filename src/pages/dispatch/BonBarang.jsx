@@ -450,12 +450,12 @@ export default function BonBarang() {
     setSelectedDispatch(dispatch)
     const initForm = {}
     dispatch.items.forEach(it => {
-      if (it.item_type === 'ont') initForm[it.id] = { used: false }
-      else if (it.item_type === 'dropcore') initForm[it.id] = { meters_used: '' }
-      else if (it.item_type === 'adss') initForm[it.id] = { meters_used: '', titik_awal: it.adss_titik_awal || '', titik_akhir: it.adss_titik_akhir || '' }
+      if (it.item_type === 'ont') initForm[it.id] = { used: false, rusak: false }
+      else if (it.item_type === 'dropcore') initForm[it.id] = { meters_used: '', rusak_meters: '' }
+      else if (it.item_type === 'adss') initForm[it.id] = { meters_used: '', titik_awal: it.adss_titik_awal || '', titik_akhir: it.adss_titik_akhir || '', rusak_meters: '' }
       else if (it.item_type === 'other') {
         const reqLoc = isItemRequiresLocation(it.warehouse_item?.item_name)
-        initForm[it.id] = { qty_used: '', ...(reqLoc ? { share_lokasi: it.tiang_lokasi_url || '' } : {}) }
+        initForm[it.id] = { qty_used: '', qty_rusak: '', ...(reqLoc ? { share_lokasi: it.tiang_lokasi_url || '' } : {}) }
       }
     })
     setLaporForm(initForm)
@@ -527,36 +527,44 @@ export default function BonBarang() {
       }
 
       const expItemsToInsert = [], dispatchUpdates = []
-      const ontReturns = [], ontUsed = [], dcUpdates = [], adssUpdates = [], whReturns = [], whUsed = []
+      const ontReturns = [], ontUsed = [], ontRusak = [], dcUpdates = [], adssUpdates = [], whReturns = [], whUsed = [], whRusak = []
 
       for (const it of selectedDispatch.items) {
         const lapor = laporForm[it.id]
         if (it.item_type === 'ont') {
           const used = lapor?.used || false
-          dispatchUpdates.push({ id: it.id, quantity_used: used ? 1 : 0, quantity_returned: used ? 0 : 1 })
+          const rusak = lapor?.rusak || false
+          // rusak = terpakai tapi statusnya rusak; used = terpakai normal
+          dispatchUpdates.push({ id: it.id, quantity_used: (used || rusak) ? 1 : 0, quantity_returned: (used || rusak) ? 0 : 1, ...(rusak ? { note_rusak: 'Barang dilaporkan rusak' } : {}) })
           if (used) { ontUsed.push(it.serial_number_id); expItemsToInsert.push({ item_type: 'ont', serial_number_id: it.serial_number_id, quantity: 1 }) }
+          else if (rusak) { ontRusak.push(it.serial_number_id); expItemsToInsert.push({ item_type: 'ont', serial_number_id: it.serial_number_id, quantity: 1, note: 'Rusak' }) }
           else ontReturns.push(it.serial_number_id)
         } else if (it.item_type === 'dropcore') {
           const meters = Number(lapor?.meters_used || 0)
-          // FIX #3: Track "returned" status explicitly — if 0 meters used, haspel is considered returned
-          const isReturned = meters === 0
-          dispatchUpdates.push({ id: it.id, meters_used: meters, quantity_returned: isReturned ? 1 : 0 })
+          const metersRusak = Number(lapor?.rusak_meters || 0)
+          const isReturned = meters === 0 && metersRusak === 0
+          dispatchUpdates.push({ id: it.id, meters_used: meters + metersRusak, quantity_returned: isReturned ? 1 : 0 })
           if (meters > 0) expItemsToInsert.push({ item_type: 'dropcore', haspel_id: it.haspel_id, meters_used: meters, quantity: 1 })
-          dcUpdates.push({ id: it.haspel_id, add_meters: meters })
+          if (metersRusak > 0) expItemsToInsert.push({ item_type: 'dropcore', haspel_id: it.haspel_id, meters_used: metersRusak, quantity: 1, note: 'Rusak' })
+          dcUpdates.push({ id: it.haspel_id, add_meters: meters + metersRusak })
         } else if (it.item_type === 'adss') {
           const meters = Number(lapor?.meters_used || 0)
-          const isReturned = meters === 0
-          const adssUpdate = { id: it.id, meters_used: meters, quantity_returned: isReturned ? 1 : 0 }
+          const metersRusak = Number(lapor?.rusak_meters || 0)
+          const isReturned = meters === 0 && metersRusak === 0
+          const adssUpdate = { id: it.id, meters_used: meters + metersRusak, quantity_returned: isReturned ? 1 : 0 }
           if (lapor?.titik_awal) adssUpdate.adss_titik_awal = lapor.titik_awal
           if (lapor?.titik_akhir) adssUpdate.adss_titik_akhir = lapor.titik_akhir
           dispatchUpdates.push(adssUpdate)
           if (meters > 0) expItemsToInsert.push({ item_type: 'adss', adss_id: it.adss_id, meters_used: meters, quantity: 1 })
-          adssUpdates.push({ id: it.adss_id, add_meters: meters })
+          if (metersRusak > 0) expItemsToInsert.push({ item_type: 'adss', adss_id: it.adss_id, meters_used: metersRusak, quantity: 1, note: 'Rusak' })
+          adssUpdates.push({ id: it.adss_id, add_meters: meters + metersRusak })
         } else if (it.item_type === 'other') {
           const qUsed = Number(lapor?.qty_used || 0)
-          const qRet = Number(it.quantity_dispatched) - qUsed
-          dispatchUpdates.push({ id: it.id, quantity_used: qUsed, quantity_returned: qRet, ...(lapor?.share_lokasi ? { tiang_lokasi_url: lapor.share_lokasi } : {}) })
+          const qRusak = Number(lapor?.qty_rusak || 0)
+          const qRet = Number(it.quantity_dispatched) - qUsed - qRusak
+          dispatchUpdates.push({ id: it.id, quantity_used: qUsed + qRusak, quantity_returned: Math.max(0, qRet), ...(lapor?.share_lokasi ? { tiang_lokasi_url: lapor.share_lokasi } : {}) })
           if (qUsed > 0) { expItemsToInsert.push({ item_type: 'other', warehouse_item_id: it.warehouse_item_id, quantity: qUsed }); whUsed.push({ id: it.warehouse_item_id, qty: qUsed }) }
+          if (qRusak > 0) { expItemsToInsert.push({ item_type: 'other', warehouse_item_id: it.warehouse_item_id, quantity: qRusak, note: 'Rusak' }); whRusak.push({ id: it.warehouse_item_id, qty: qRusak }) }
           if (qRet > 0) whReturns.push({ id: it.warehouse_item_id, qty: qRet })
         }
       }
@@ -596,6 +604,13 @@ export default function BonBarang() {
         const { data: wData } = await supabase.from('warehouses').select('stock_on_hold').eq('id', wh.id).single()
         if (wData) await supabase.from('warehouses').update({ stock_on_hold: Math.max(0, Number(wData.stock_on_hold || 0) - Number(wh.qty)) }).eq('id', wh.id)
       }
+      // Barang rusak: keluar dari stok (kurangi initial_stock & stock_on_hold)
+      for (const wh of whRusak) {
+        const { data: wData } = await supabase.from('warehouses').select('initial_stock, stock_on_hold').eq('id', wh.id).single()
+        if (wData) await supabase.from('warehouses').update({ stock_on_hold: Math.max(0, Number(wData.stock_on_hold || 0) - Number(wh.qty)) }).eq('id', wh.id)
+      }
+      // ONT rusak: set status 'rusak'
+      if (ontRusak.length > 0) await supabase.from('serial_numbers').update({ status: 'rusak' }).in('id', ontRusak)
 
       toast.success('Laporan berhasil disimpan & stok diperbarui!')
       setIsLaporModalOpen(false)
@@ -1727,7 +1742,7 @@ export default function BonBarang() {
       {/* ===== MODAL LAPOR PEMAKAIAN ===== */}
       {isLaporModalOpen && selectedDispatch && (
         <div className="modal-overlay">
-          <div className="modal" style={{ width: '540px', maxWidth: '96%', maxHeight: '93vh', display: 'flex', flexDirection: 'column' }}>
+          <div className="modal" style={{ width: '700px', maxWidth: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
             <div className="modal-header">
               <div><h3 style={{ margin: 0 }}>Lapor Pemakaian</h3><p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>{getTechNames(selectedDispatch.technicians && selectedDispatch.technicians.length > 0 ? selectedDispatch.technicians : [selectedDispatch.technician_id])} · {format(new Date(selectedDispatch.dispatch_date), 'dd MMM yyyy', { locale: id })}</p></div>
               <button className="btn-close" onClick={() => setIsLaporModalOpen(false)}><X size={20} /></button>
@@ -1744,10 +1759,16 @@ export default function BonBarang() {
                       {it.item_type === 'ont' && (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
                           <div><div style={{ fontWeight: 600 }}>{it.sn?.serial_number || '-'}</div><div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Centang jika terpasang</div></div>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '6px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: laporForm[it.id]?.used ? 'rgba(16,185,129,0.1)' : 'var(--bg-primary)' }}>
-                            <input type="checkbox" checked={laporForm[it.id]?.used || false} onChange={e => setLaporForm({ ...laporForm, [it.id]: { used: e.target.checked } })} style={{ width: '16px', height: '16px', accentColor: 'var(--success)' }} />
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: laporForm[it.id]?.used ? 'var(--success)' : 'var(--text-secondary)' }}>{laporForm[it.id]?.used ? 'Terpakai ✓' : 'Kembali'}</span>
-                          </label>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '6px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', background: laporForm[it.id]?.used ? 'rgba(16,185,129,0.1)' : 'var(--bg-primary)' }}>
+                              <input type="checkbox" checked={laporForm[it.id]?.used || false} onChange={e => setLaporForm({ ...laporForm, [it.id]: { used: e.target.checked, rusak: false } })} style={{ width: '16px', height: '16px', accentColor: 'var(--success)' }} />
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: laporForm[it.id]?.used ? 'var(--success)' : 'var(--text-secondary)' }}>{laporForm[it.id]?.used ? 'Terpakai ✓' : 'Terpakai'}</span>
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '6px 12px', border: `1px solid ${laporForm[it.id]?.rusak ? 'var(--danger)' : 'var(--border)'}`, borderRadius: 'var(--radius-md)', background: laporForm[it.id]?.rusak ? 'rgba(239,68,68,0.1)' : 'var(--bg-primary)' }}>
+                              <input type="checkbox" checked={laporForm[it.id]?.rusak || false} onChange={e => setLaporForm({ ...laporForm, [it.id]: { rusak: e.target.checked, used: false } })} style={{ width: '16px', height: '16px', accentColor: 'var(--danger)' }} />
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: laporForm[it.id]?.rusak ? 'var(--danger)' : 'var(--text-secondary)' }}>⚠ Rusak</span>
+                            </label>
+                          </div>
                         </div>
                       )}
                       {it.item_type === 'dropcore' && (() => {
@@ -1762,10 +1783,13 @@ export default function BonBarang() {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Meter terpakai:</span>
-                              <input type="number" className="form-input" style={{ width: '110px', height: '36px', textAlign: 'center', border: isOverLimit ? '1.5px solid var(--danger)' : undefined }} min="0" max={sisaMeter} placeholder="0" value={laporForm[it.id]?.meters_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { meters_used: e.target.value } })} />
-                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>meter</span>
-                              {inputMeter === 0 && <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: '4px' }}>↩ Dikembalikan</span>}
-                              {inputMeter > 0 && !isOverLimit && <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '4px' }}>Sisa setelah lapor: {sisaMeter - inputMeter}m</span>}
+                              <input type="number" className="form-input" style={{ width: '100px', height: '36px', textAlign: 'center', border: isOverLimit ? '1.5px solid var(--danger)' : undefined }} min="0" max={sisaMeter} placeholder="0" value={laporForm[it.id]?.meters_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], meters_used: e.target.value } })} />
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>m</span>
+                              <span style={{ fontSize: '13px', color: 'var(--danger)', marginLeft: '6px' }}>⚠ Rusak:</span>
+                              <input type="number" className="form-input" style={{ width: '100px', height: '36px', textAlign: 'center', border: '1px solid var(--danger)', accentColor: 'var(--danger)' }} min="0" max={sisaMeter} placeholder="0" value={laporForm[it.id]?.rusak_meters || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], rusak_meters: e.target.value } })} />
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>m</span>
+                              {inputMeter === 0 && Number(laporForm[it.id]?.rusak_meters || 0) === 0 && <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: '4px' }}>↩ Dikembalikan</span>}
+                              {(inputMeter > 0 || Number(laporForm[it.id]?.rusak_meters || 0) > 0) && !isOverLimit && <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '4px' }}>Sisa: {sisaMeter - inputMeter - Number(laporForm[it.id]?.rusak_meters || 0)}m</span>}
                               {isOverLimit && <span style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 600 }}>⚠ Melebihi sisa!</span>}
                             </div>
                           </div>
@@ -1784,10 +1808,13 @@ export default function BonBarang() {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Meter terpakai:</span>
-                              <input type="number" className="form-input" style={{ width: '110px', height: '36px', textAlign: 'center', border: isOverLimit ? '1.5px solid var(--danger)' : undefined }} min="0" max={sisaMeter} placeholder="0" value={laporForm[it.id]?.meters_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], meters_used: e.target.value } })} />
-                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>meter</span>
-                              {inputMeter === 0 && <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: '4px' }}>↩ Dikembalikan</span>}
-                              {inputMeter > 0 && !isOverLimit && <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '4px' }}>Sisa: {sisaMeter - inputMeter}m</span>}
+                              <input type="number" className="form-input" style={{ width: '100px', height: '36px', textAlign: 'center', border: isOverLimit ? '1.5px solid var(--danger)' : undefined }} min="0" max={sisaMeter} placeholder="0" value={laporForm[it.id]?.meters_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], meters_used: e.target.value } })} />
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>m</span>
+                              <span style={{ fontSize: '13px', color: 'var(--danger)', marginLeft: '6px' }}>⚠ Rusak:</span>
+                              <input type="number" className="form-input" style={{ width: '100px', height: '36px', textAlign: 'center', border: '1px solid var(--danger)' }} min="0" max={sisaMeter} placeholder="0" value={laporForm[it.id]?.rusak_meters || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], rusak_meters: e.target.value } })} />
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>m</span>
+                              {inputMeter === 0 && Number(laporForm[it.id]?.rusak_meters || 0) === 0 && <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: '4px' }}>↩ Dikembalikan</span>}
+                              {(inputMeter > 0 || Number(laporForm[it.id]?.rusak_meters || 0) > 0) && !isOverLimit && <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '4px' }}>Sisa: {sisaMeter - inputMeter - Number(laporForm[it.id]?.rusak_meters || 0)}m</span>}
                               {isOverLimit && <span style={{ fontSize: '12px', color: 'var(--danger)', fontWeight: 600 }}>⚠ Melebihi sisa!</span>}
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
@@ -1808,12 +1835,14 @@ export default function BonBarang() {
                         return (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             <div style={{ fontWeight: 600 }}>{it.warehouse_item?.item_name || 'Barang'}</div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Qty terpakai:</span>
-                              <input type="number" className="form-input" style={{ width: '75px', height: '36px', textAlign: 'center' }} min="0" max={it.quantity_dispatched} placeholder="0" value={laporForm[it.id]?.qty_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], qty_used: e.target.value } })} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Terpakai:</span>
+                              <input type="number" className="form-input" style={{ width: '70px', height: '36px', textAlign: 'center' }} min="0" max={it.quantity_dispatched} placeholder="0" value={laporForm[it.id]?.qty_used || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], qty_used: e.target.value } })} />
+                              <span style={{ fontSize: '13px', color: 'var(--danger)', marginLeft: '6px' }}>⚠ Rusak:</span>
+                              <input type="number" className="form-input" style={{ width: '70px', height: '36px', textAlign: 'center', border: '1px solid var(--danger)' }} min="0" max={it.quantity_dispatched} placeholder="0" value={laporForm[it.id]?.qty_rusak || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], qty_rusak: e.target.value } })} />
                               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>dari {it.quantity_dispatched}</span>
-                              {Number(laporForm[it.id]?.qty_used || 0) < Number(it.quantity_dispatched) && (
-                                <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: 'auto' }}>{Number(it.quantity_dispatched) - Number(laporForm[it.id]?.qty_used || 0)} kembali</span>
+                              {(Number(it.quantity_dispatched) - Number(laporForm[it.id]?.qty_used || 0) - Number(laporForm[it.id]?.qty_rusak || 0)) > 0 && (
+                                <span style={{ fontSize: '12px', color: 'var(--success)', marginLeft: 'auto' }}>{Number(it.quantity_dispatched) - Number(laporForm[it.id]?.qty_used || 0) - Number(laporForm[it.id]?.qty_rusak || 0)} kembali</span>
                               )}
                             </div>
                             {isItemRequiresLocation(it.warehouse_item?.item_name) && (
