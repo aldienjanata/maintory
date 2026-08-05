@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import JSZip from 'jszip'
 import * as XLSX from 'xlsx'
 import { format } from 'date-fns'
@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 
 // ── HELPERS ────────────────────────────────────────────────────────────────────
+
+/** Delay helper */
 function delay(ms) { return new Promise(r => setTimeout(r, ms)) }
 
 /** Parse KMZ -> array of { name, lat, lon } */
@@ -24,18 +26,16 @@ async function parseKMZ(file) {
     const parts = coordText.split(',')
     if (parts.length < 2) return null
     let lon = parseFloat(parts[0]), lat = parseFloat(parts[1])
-    // Auto-swap jika koordinat terbalik
     if (Math.abs(lat) > 90 && Math.abs(lon) <= 90) { const t = lat; lat = lon; lon = t }
     if (isNaN(lat) || isNaN(lon)) return null
     return { name, lat, lon }
   }).filter(Boolean)
 }
 
-/** Strip prefix "Kecamatan ", "Desa ", "Kelurahan ", "Kabupaten ", "Kota " */
+/** Strip prefix "Kecamatan ", "Desa ", dll */
 const cleanName = (s) => (s || '').replace(/^(Kecamatan|Desa|Kelurahan|Kabupaten|Kota)\s+/i, '').trim()
 
-
-/** BigDataCloud reverse geocode — cepat, tanpa API key */
+/** BigDataCloud reverse geocode */
 async function fetchBDC(lat, lon) {
   try {
     const res = await fetch(
@@ -45,95 +45,68 @@ async function fetchBDC(lat, lon) {
     if (!res.ok) return {}
     const d = await res.json()
     const admin = d.localityInfo?.administrative || []
-
-    // Helper: cari nama berdasarkan admin level OSM
-    // Indonesia: level 4=Provinsi, 5=Kabupaten, 6=Kecamatan (kadang tidak ada), 7/8=Desa
     const lvl = (n) => cleanName(admin.find(a => a.adminLevel === n)?.name || '')
-
     const provinsi  = lvl(4) || cleanName(d.principalSubdivision || '')
     const kabupaten = lvl(5) || cleanName(d.city || '')
-    // Kecamatan bisa di level 6 ATAU level 7 tergantung kelengkapan OSM
-    // Kalau level 6 kosong, coba level 7 sebagai kecamatan
     const kec6 = lvl(6)
     const kec7 = lvl(7)
     const des8 = lvl(8)
-    // Logika: jika ada level 8, maka level 7=Kecamatan & level 8=Desa
-    //         jika tidak ada level 8, maka level 7=Desa & level 6=Kecamatan (atau kosong)
     const kecamatan = kec6 || (des8 ? kec7 : '')
     const desa      = des8 || (!kec6 ? kec7 : '') || cleanName(d.locality || '')
-
     return { provinsi, kabupaten, kecamatan, desa, locality: cleanName(d.locality || '') }
   } catch { return {} }
 }
 
+/** Cache & mutex queue untuk Nominatim (maks 1 req/s) */
 const nomCache = new Map()
 let nomLock = Promise.resolve()
 
-/** Nominatim OSM reverse geocode dengan antrean (mutex) dan cache koordinat 2 desimal (~1.1km) */
-async function fetchNominatimSafe(lat, lon, zoom = 18) {
+async function fetchNominatimSafe(lat, lon, zoom) {
+  const z = zoom || 18
   const latR = Math.round(parseFloat(lat) * 100) / 100
   const lonR = Math.round(parseFloat(lon) * 100) / 100
-  const key = `${zoom}_${latR}_${lonR}`
-  
-  if (nomCache.has(key)) {
-    return nomCache.get(key)
-  }
+  const key = `${z}_${latR}_${lonR}`
+  if (nomCache.has(key)) return nomCache.get(key)
 
   return new Promise(resolve => {
     nomLock = nomLock.then(async () => {
-      // Jika selagi menunggu antrean ternyata sudah di-cache oleh request lain
-      if (nomCache.has(key)) {
-        resolve(nomCache.get(key))
-        return
-      }
-      
-      // Strict 1.1s delay to respect Nominatim policy
-      await new Promise(r => setTimeout(r, 1100))
-      
+      if (nomCache.has(key)) { resolve(nomCache.get(key)); return }
+      await delay(1100)
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=id&zoom=${zoom}&addressdetails=1`,
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=id&zoom=${z}&addressdetails=1`,
           { headers: { 'User-Agent': 'MaintoryApp/1.0' }, signal: AbortSignal.timeout(8000) }
         )
         if (!res.ok) throw new Error('Failed')
         const d = await res.json()
         const a = d.address || {}
-        
         const data = {
           provinsi:  a.state || '',
           kabupaten: cleanName(a.county || a.city || ''),
-          kecamatan: cleanName(a.municipality || a.district || a.city_district || a.borough || a.town || (zoom < 18 ? a.village : '') || ''),
+          kecamatan: cleanName(a.municipality || a.district || a.city_district || a.borough || a.town || (z < 18 ? a.village : '') || ''),
           desa:      cleanName(a.village || a.hamlet || a.quarter || a.neighbourhood || a.suburb || ''),
         }
         nomCache.set(key, data)
         resolve(data)
-      } catch {
-        resolve({}) // Jangan simpan error ke cache agar bisa diulang
-      }
+      } catch { resolve({}) }
     })
   })
 }
 
-/**
- * Gabungkan hasil dari kedua API.
- * Menggunakan cache & antrean untuk mencegah Nominatim 429 Rate Limit.
- */
+/** Gabungkan BDC + Nominatim, dengan fallback zoom 12 jika kecamatan kosong */
 async function reverseGeocode(lat, lon) {
-  // Panggil BDC dan Nominatim. Nominatim sudah aman dengan antrean global
   const [bdcR, nomR] = await Promise.allSettled([fetchBDC(lat, lon), fetchNominatimSafe(lat, lon, 18)])
   const b = bdcR.status === 'fulfilled' ? bdcR.value : {}
   const n = nomR.status === 'fulfilled' ? nomR.value : {}
 
   let kecamatan = n.kecamatan || b.kecamatan || ''
-  let desa = n.desa || b.desa || ''
-  
-  // OSM Indonesia sering bolong data Kecamatannya (polygon tidak sampai Desa).
+  const desa = n.desa || b.desa || ''
+
   if (!kecamatan) {
     const fallback = await fetchNominatimSafe(lat, lon, 12)
     if (fallback.kecamatan) {
       kecamatan = fallback.kecamatan
     } else if (b.locality && b.locality !== desa) {
-      // Jika Nominatim fallback tetap kosong, gunakan locality dari BDC (sering berisi kecamatan)
       kecamatan = b.locality
     }
   }
@@ -141,12 +114,10 @@ async function reverseGeocode(lat, lon) {
   return {
     provinsi:  b.provinsi  || n.provinsi  || '',
     kabupaten: b.kabupaten || n.kabupaten || '',
-    kecamatan: kecamatan,
-    desa:      desa,
+    kecamatan,
+    desa,
   }
 }
-
-
 
 /** Buat KMZ dari baris data Excel */
 async function buildKMZ(rows) {
@@ -190,7 +161,7 @@ export default function KonversiTiang() {
   // KMZ → Excel state
   const [kmzFile, setKmzFile] = useState(null)
   const [kmzRows, setKmzRows] = useState([])
-  const [geocoding, setGeocoding] = useState(false)   // sedang berjalan
+  const [geocoding, setGeocoding] = useState(false)
   const [paused, setPaused] = useState(false)
   const [geocoded, setGeocoded] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
@@ -202,10 +173,10 @@ export default function KonversiTiang() {
   const [excelParsed, setExcelParsed] = useState(false)
   const [exporting, setExporting] = useState(false)
 
-  const kmzRef = useRef()
+  const kmzRef   = useRef()
   const excelRef = useRef()
-  const pauseRef = useRef(false)   // true saat pause
-  const stopRef  = useRef(false)   // true saat stop
+  const pauseRef = useRef(false)
+  const stopRef  = useRef(false)
 
   // ── KMZ → EXCEL ──────────────────────────────────────────────────────────────
   const handleKmzUpload = async (e) => {
@@ -238,21 +209,16 @@ export default function KonversiTiang() {
     setGeocoded(false)
     setFailCount(0)
 
-    // Baca snapshot rows terbaru
     const results = kmzRows.map(r => ({ ...r }))
     let fails = 0
+    const BATCH = 10
 
-    // BDC cepat & Nominatim sudah diatur oleh antrean global (mutex), jadi batch size bisa dibesarkan agar UI responsif
-    const batchSize = 10 
-    
-    for (let i = 0; i < results.length; i += batchSize) {
+    for (let i = 0; i < results.length; i += BATCH) {
       if (stopRef.current) break
-
-      // Cek pause — tunggu sampai di-resume
       while (pauseRef.current && !stopRef.current) await delay(200)
       if (stopRef.current) break
 
-      const chunk = results.slice(i, i + batchSize)
+      const chunk = results.slice(i, i + BATCH)
       const geoResults = await Promise.all(chunk.map(r => reverseGeocode(r.lat, r.lon)))
 
       geoResults.forEach((geo, bi) => {
@@ -262,7 +228,7 @@ export default function KonversiTiang() {
       })
 
       setKmzRows([...results])
-      setProgress({ done: Math.min(i + batchSize, results.length), total: results.length })
+      setProgress({ done: Math.min(i + BATCH, results.length), total: results.length })
       setFailCount(fails)
     }
 
@@ -304,7 +270,6 @@ export default function KonversiTiang() {
       'Keterangan': r.name || '',
     }))
     const ws = XLSX.utils.json_to_sheet(data)
-    // Auto-width
     const cols = Object.keys(data[0] || {}).map(k => ({ wch: Math.max(k.length + 2, 12) }))
     ws['!cols'] = cols
     const wb = XLSX.utils.book_new()
@@ -354,7 +319,7 @@ export default function KonversiTiang() {
 
   // ── RENDER ────────────────────────────────────────────────────────────────────
   const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
-  const doneCount = kmzRows.filter(r => r.status === 'done').length
+  const doneCount  = kmzRows.filter(r => r.status === 'done').length
   const emptyCount = kmzRows.filter(r => r.status === 'done' && !r.provinsi && !r.kabupaten).length
 
   return (
@@ -394,20 +359,21 @@ export default function KonversiTiang() {
           <div style={{ display: 'flex', gap: '10px', padding: '14px 16px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 'var(--radius-md)' }}>
             <Info size={18} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '1px' }} />
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.7' }}>
-              Upload file <strong>.kmz</strong>. Sistem membaca koordinat setiap titik lalu mengisi otomatis 
-              <strong> Provinsi, Kabupaten, Kecamatan, Desa</strong> via reverse geocoding. 
-              Proses berjalan <strong>5 titik sekaligus</strong> untuk kecepatan optimal.
+              Upload file <strong>.kmz</strong>. Sistem membaca koordinat setiap titik lalu mengisi otomatis
+              <strong> Provinsi, Kabupaten, Kecamatan, Desa</strong> via reverse geocoding.
               Kolom <strong>ID Tiang dikosongkan</strong> — akan terisi otomatis saat diimport ke Data Tiang.
             </div>
           </div>
 
           {/* Upload zone */}
-          <div onClick={() => !geocoding && kmzRef.current?.click()} style={{
-            border: '2px dashed var(--border)', borderRadius: 'var(--radius-lg)',
-            padding: '36px', textAlign: 'center',
-            cursor: geocoding ? 'default' : 'pointer',
-            background: 'var(--bg-secondary)', transition: 'all 0.2s',
-          }}
+          <div
+            onClick={() => !geocoding && kmzRef.current?.click()}
+            style={{
+              border: '2px dashed var(--border)', borderRadius: 'var(--radius-lg)',
+              padding: '36px', textAlign: 'center',
+              cursor: geocoding ? 'default' : 'pointer',
+              background: 'var(--bg-secondary)', transition: 'all 0.2s',
+            }}
             onMouseEnter={e => { if (!geocoding) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'rgba(59,130,246,0.04)' } }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-secondary)' }}
           >
@@ -420,11 +386,10 @@ export default function KonversiTiang() {
           {/* Progress + Controls */}
           {kmzRows.length > 0 && (
             <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '16px 20px' }}>
-              {/* Status bar */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
                 <div>
                   <span style={{ fontWeight: 700, fontSize: '14px' }}>
-                    {geocoding ? (paused ? '⏸ Dijeda...' : `⚡ Geocoding...`) : geocoded ? '✅ Selesai' : '🕒 Siap diproses'}
+                    {geocoding ? (paused ? '⏸ Dijeda...' : '⚡ Geocoding...') : geocoded ? '✅ Selesai' : '🕒 Siap diproses'}
                   </span>
                   <span style={{ marginLeft: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
                     {progress.done}/{progress.total} titik
@@ -479,7 +444,7 @@ export default function KonversiTiang() {
                   {geocoding && !paused && progress.total > 0 && (() => {
                     const remaining = progress.total - progress.done
                     const batches = Math.ceil(remaining / 5)
-                    const secs = batches * 0.25
+                    const secs = batches * 1.5
                     return secs < 60 ? `~${Math.ceil(secs)} dtk tersisa` : `~${Math.ceil(secs / 60)} mnt tersisa`
                   })()}
                 </span>
@@ -548,11 +513,9 @@ export default function KonversiTiang() {
             </div>
           </div>
 
-          <div onClick={() => excelRef.current?.click()} style={{
-            border: '2px dashed var(--border)', borderRadius: 'var(--radius-lg)',
-            padding: '36px', textAlign: 'center', cursor: 'pointer',
-            background: 'var(--bg-secondary)', transition: 'all 0.2s',
-          }}
+          <div
+            onClick={() => excelRef.current?.click()}
+            style={{ border: '2px dashed var(--border)', borderRadius: 'var(--radius-lg)', padding: '36px', textAlign: 'center', cursor: 'pointer', background: 'var(--bg-secondary)', transition: 'all 0.2s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--success)'; e.currentTarget.style.background = 'rgba(34,197,94,0.04)' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-secondary)' }}
           >
@@ -611,5 +574,3 @@ export default function KonversiTiang() {
     </div>
   )
 }
-
-const BATCH_SIZE_LABEL = '5'
