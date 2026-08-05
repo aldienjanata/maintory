@@ -69,10 +69,10 @@ async function fetchBDC(lat, lon) {
 }
 
 /** Nominatim OSM reverse geocode — lengkap, ada municipality untuk kecamatan */
-async function fetchNominatim(lat, lon) {
+async function fetchNominatim(lat, lon, zoom = 18) {
   try {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=id&zoom=18&addressdetails=1`,
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=id&zoom=${zoom}&addressdetails=1`,
       { headers: { 'User-Agent': 'MaintoryApp/1.0' }, signal: AbortSignal.timeout(8000) }
     )
     if (!res.ok) return {}
@@ -82,9 +82,10 @@ async function fetchNominatim(lat, lon) {
       provinsi:  a.state || '',
       // county = Kabupaten (contoh: "Kabupaten Cilacap") — strip prefixnya
       kabupaten: cleanName(a.county || a.city || ''),
-      // Untuk Indonesia: kecamatan biasanya di "municipality" atau "district"
-      kecamatan: cleanName(a.municipality || a.district || a.city_district || a.borough || ''),
-      // Desa/Kelurahan biasanya di "village" atau "hamlet"
+      // Untuk Indonesia: kecamatan biasanya di "municipality", "district", "town"
+      // Jika fallback zoom=12, "village" bisa berisi nama kecamatan
+      kecamatan: cleanName(a.municipality || a.district || a.city_district || a.borough || a.town || (zoom < 18 ? a.village : '') || ''),
+      // Desa/Kelurahan biasanya di "village", "hamlet", atau "suburb"
       desa:      cleanName(a.village || a.hamlet || a.quarter || a.neighbourhood || a.suburb || ''),
     }
   } catch { return {} }
@@ -97,18 +98,28 @@ async function fetchNominatim(lat, lon) {
  */
 async function reverseGeocode(lat, lon) {
   // Panggil kedua API secara bersamaan (paralel) — tidak tambah waktu
-  const [bdcR, nomR] = await Promise.allSettled([fetchBDC(lat, lon), fetchNominatim(lat, lon)])
+  const [bdcR, nomR] = await Promise.allSettled([fetchBDC(lat, lon), fetchNominatim(lat, lon, 18)])
   const b = bdcR.status === 'fulfilled' ? bdcR.value : {}
   const n = nomR.status === 'fulfilled' ? nomR.value : {}
+
+  let kecamatan = n.kecamatan || b.kecamatan || ''
+  
+  // OSM Indonesia sering bolong data Kecamatannya (polygon tidak sampai Desa).
+  // Jika kecamatan masih kosong, lakukan 1 kali fallback ke zoom 12 (level kecamatan/kota kecil)
+  if (!kecamatan) {
+    const fallback = await fetchNominatim(lat, lon, 12)
+    if (fallback.kecamatan) kecamatan = fallback.kecamatan
+  }
 
   // Prioritas: Nominatim lebih baik untuk kecamatan & desa; BDC lebih cepat untuk provinsi/kabupaten
   return {
     provinsi:  b.provinsi  || n.provinsi  || '',
     kabupaten: b.kabupaten || n.kabupaten || '',
-    kecamatan: n.kecamatan || b.kecamatan || '',   // Nominatim duluan untuk kecamatan
+    kecamatan: kecamatan,
     desa:      n.desa      || b.desa      || '',   // Nominatim duluan untuk desa
   }
 }
+
 
 
 /** Buat KMZ dari baris data Excel */
