@@ -62,7 +62,16 @@ async function generateKMZ(poles, users) {
   const getUserName = (uid) => users.find(u => u.id === uid)?.full_name || 'Unknown'
   const placemarks = poles
     .filter(p => p.latitude && p.longitude)
-    .map(p => `
+    .map(p => {
+      let lat = Number(p.latitude)
+      let lon = Number(p.longitude)
+      // Deteksi jika user kebalik saat import (Lat diisi Lon, Lon diisi Lat)
+      if (Math.abs(lat) > 90 && Math.abs(lon) <= 90) {
+        const temp = lat
+        lat = lon
+        lon = temp
+      }
+      return `
     <Placemark>
       <name>${p.pole_id || 'Tiang'}</name>
       <description><![CDATA[
@@ -75,8 +84,9 @@ async function generateKMZ(poles, users) {
         ${p.maps_url ? `<a href="${p.maps_url}">Lihat di Google Maps</a>` : ''}
       ]]></description>
       <styleUrl>#tiang_icon</styleUrl>
-      <Point><coordinates>${p.longitude},${p.latitude},0</coordinates></Point>
-    </Placemark>`).join('\n')
+      <Point><coordinates>${lon},${lat},0</coordinates></Point>
+    </Placemark>`
+    }).join('\n')
 
   const kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
@@ -138,7 +148,11 @@ export default function DataTiang() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   
-  const [confirmDelete, setConfirmDelete] = useState(null)
+  const [isKmzModalOpen, setIsKmzModalOpen] = useState(false)
+  const [kmzFilterKecamatan, setKmzFilterKecamatan] = useState('')
+  const [kmzFilterDesa, setKmzFilterDesa] = useState('')
+
+  const [confirmRetroactive, setConfirmRetroactive] = useState(false)
   
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
   const [importRows, setImportRows] = useState([])
@@ -210,6 +224,12 @@ export default function DataTiang() {
     if (filterKecamatan) list = list.filter(p => p.kecamatan === filterKecamatan)
     return [...new Set(list.map(p => p.desa).filter(Boolean))].sort()
   }, [poles, filterKecamatan])
+
+  const kmzDesaList = useMemo(() => {
+    let list = poles
+    if (kmzFilterKecamatan) list = list.filter(p => p.kecamatan === kmzFilterKecamatan)
+    return [...new Set(list.map(p => p.desa).filter(Boolean))].sort()
+  }, [poles, kmzFilterKecamatan])
 
   const filtered = useMemo(() => {
     let data = [...poles]
@@ -434,9 +454,21 @@ export default function DataTiang() {
     }, 500)
   }
 
+  const openKmzModal = () => {
+    setKmzFilterKecamatan('')
+    setKmzFilterDesa('')
+    setIsKmzModalOpen(true)
+  }
+
   const handleExportKMZ = async () => {
-    const withCoords = filtered.filter(p => p.latitude && p.longitude)
-    if (withCoords.length === 0) return toast.error('Tidak ada data dengan koordinat GPS')
+    let targetData = [...poles]
+    if (kmzFilterKecamatan) targetData = targetData.filter(p => p.kecamatan === kmzFilterKecamatan)
+    if (kmzFilterDesa) targetData = targetData.filter(p => p.desa === kmzFilterDesa)
+
+    const withCoords = targetData.filter(p => p.latitude && p.longitude)
+    if (withCoords.length === 0) return toast.error('Tidak ada data dengan koordinat GPS pada filter tersebut')
+    
+    setIsKmzModalOpen(false)
     setKmzLoading(true)
     showProgress('Export KMZ', 'Membuat file Google Earth...', 50)
     try {
@@ -675,7 +707,7 @@ export default function DataTiang() {
           <button className="btn btn-secondary btn-sm" onClick={handleExportExcel} title="Export ke Excel">
             <Download size={14} /> Excel
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={handleExportKMZ} disabled={kmzLoading} title="Export ke KMZ (Google Earth)" style={{ color: 'var(--accent)', borderColor: 'rgba(var(--accent-rgb, 59,130,246),0.4)' }}>
+          <button className="btn btn-secondary btn-sm" onClick={openKmzModal} disabled={kmzLoading} title="Export ke KMZ (Google Earth)" style={{ color: 'var(--accent)', borderColor: 'rgba(var(--accent-rgb, 59,130,246),0.4)' }}>
             <Map size={14} /> {kmzLoading ? 'Memproses...' : 'KMZ'}
           </button>
           {['admin', 'superadmin', 'teknisi'].includes(role) && (
@@ -1084,6 +1116,43 @@ export default function DataTiang() {
           </div>
         </div>
       )}
+      {/* KMZ EXPORT MODAL */}
+      {isKmzModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <h2 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: '600' }}>Export KMZ</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '14px' }}>
+              Pilih cakupan data yang ingin diexport ke file Google Earth (KMZ).
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Kecamatan (Opsional)</label>
+                <select className="input" value={kmzFilterKecamatan} onChange={e => { setKmzFilterKecamatan(e.target.value); setKmzFilterDesa('') }}>
+                  <option value="">Semua Kecamatan</option>
+                  {kecamatanList.map(k => <option key={k} value={k}>{k}</option>)}
+                </select>
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Desa/Kelurahan (Opsional)</label>
+                <select className="input" value={kmzFilterDesa} onChange={e => setKmzFilterDesa(e.target.value)} disabled={!kmzFilterKecamatan}>
+                  <option value="">Semua Desa</option>
+                  {kmzDesaList.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button className="btn btn-secondary" onClick={() => setIsKmzModalOpen(false)}>Batal</button>
+              <button className="btn btn-primary" onClick={handleExportKMZ} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Map size={16} /> Export Sekarang
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
