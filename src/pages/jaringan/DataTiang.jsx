@@ -6,7 +6,8 @@ import toast from 'react-hot-toast'
 import {
   Plus, X, Edit2, Trash2, MapPin, Search, Download,
   ChevronDown, ChevronUp, ExternalLink, Antenna, Upload,
-  FileSpreadsheet, Map, Settings as SettingsIcon, AlertTriangle
+  FileSpreadsheet, Map, Settings as SettingsIcon, AlertTriangle,
+  CheckSquare, Square, Eraser
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { id as localeId } from 'date-fns/locale'
@@ -146,6 +147,11 @@ export default function DataTiang() {
   const [isFormatModalOpen, setIsFormatModalOpen] = useState(false)
   const [formatForm, setFormatForm] = useState(DEFAULT_FORMAT)
 
+  // Bulk Delete (superadmin only)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [bulkDeleteModal, setBulkDeleteModal] = useState(null) // { mode: 'selected'|'desa'|'kecamatan'|'all', label, ids }
+  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('')
+
   // Pagination
   const [page, setPage] = useState(1)
   const perPage = 15
@@ -273,7 +279,7 @@ export default function DataTiang() {
   }
 
   const handleDelete = async (pole) => {
-    showProgress('Menghapus Tiang', 'Mengahapus data...', 50)
+    showProgress('Menghapus Tiang', 'Menghapus data...', 50)
     try {
       const { error } = await supabase.from('network_poles').delete().eq('id', pole.id)
       if (error) throw error
@@ -282,6 +288,74 @@ export default function DataTiang() {
       fetchData()
     } catch { toast.error('Gagal menghapus data') }
     finally { hideProgress() }
+  }
+
+  // ── BULK DELETE (superadmin) ──
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const toggleSelectAll = () => {
+    if (selectedIds.size === paginated.length && paginated.every(p => selectedIds.has(p.id))) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(paginated.map(p => p.id)))
+    }
+  }
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const openBulkDeleteModal = (mode) => {
+    if (mode === 'selected') {
+      if (selectedIds.size === 0) return toast.error('Tidak ada data yang dipilih!')
+      setBulkDeleteModal({ mode, label: `${selectedIds.size} tiang yang dipilih`, ids: [...selectedIds] })
+    } else if (mode === 'desa') {
+      if (!filterDesa) return toast.error('Pilih filter Desa terlebih dahulu!')
+      const ids = filtered.map(p => p.id)
+      setBulkDeleteModal({ mode, label: `semua tiang Desa "${filterDesa}" (${ids.length} data)`, ids })
+    } else if (mode === 'kecamatan') {
+      if (!filterKecamatan) return toast.error('Pilih filter Kecamatan terlebih dahulu!')
+      const ids = filtered.map(p => p.id)
+      setBulkDeleteModal({ mode, label: `semua tiang Kecamatan "${filterKecamatan}" (${ids.length} data)`, ids })
+    } else if (mode === 'all') {
+      const ids = poles.map(p => p.id)
+      setBulkDeleteModal({ mode, label: `SELURUH DATA TIANG (${ids.length} data)`, ids })
+    }
+    setBulkDeleteConfirmText('')
+  }
+
+  const handleBulkDelete = async () => {
+    if (!bulkDeleteModal) return
+    const { ids, mode, label } = bulkDeleteModal
+    const required = mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS'
+    if (bulkDeleteConfirmText.trim().toUpperCase() !== required) {
+      return toast.error(`Ketik "${required}" untuk konfirmasi!`)
+    }
+    setBulkDeleteModal(null)
+    showProgress('Menghapus Data', `Menghapus ${ids.length} tiang...`, 10)
+    try {
+      const chunkSize = 100
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunk = ids.slice(i, i + chunkSize)
+        const pct = 10 + ((i / ids.length) * 88)
+        showProgress('Menghapus Data', `Menghapus data ${i + 1} – ${Math.min(i + chunkSize, ids.length)} dari ${ids.length}...`, pct)
+        const { error } = await supabase.from('network_poles').delete().in('id', chunk)
+        if (error) throw error
+      }
+      showProgress('Selesai', 'Penghapusan berhasil!', 100)
+      setTimeout(() => {
+        hideProgress()
+        toast.success(`${ids.length} tiang berhasil dihapus!`)
+        setSelectedIds(new Set())
+        fetchData()
+      }, 500)
+    } catch (e) {
+      hideProgress()
+      toast.error('Gagal menghapus: ' + e.message)
+    }
   }
 
   const handleExtractCoords = () => {
@@ -579,12 +653,48 @@ export default function DataTiang() {
         </div>
       </div>
 
+      {/* ── BULK ACTION TOOLBAR (superadmin) ── */}
+      {role === 'superadmin' && (
+        <div className="card" style={{ padding: '10px 14px', marginBottom: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', borderLeft: '3px solid var(--danger)' }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+            <Eraser size={14} /> Hapus Massal
+          </div>
+          <div style={{ width: '1px', height: '20px', background: 'var(--border)' }} />
+          {selectedIds.size > 0 && (
+            <>
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{selectedIds.size} tiang dipilih</span>
+              <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.3)', fontSize: '11px' }} onClick={() => openBulkDeleteModal('selected')}>
+                <Trash2 size={12} /> Hapus Yang Dipilih
+              </button>
+              <button className="btn btn-secondary btn-sm" style={{ fontSize: '11px' }} onClick={clearSelection}>Batal Pilih</button>
+              <div style={{ width: '1px', height: '20px', background: 'var(--border)' }} />
+            </>
+          )}
+          <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.2)', fontSize: '11px' }} onClick={() => openBulkDeleteModal('desa')} title="Hapus semua tiang pada filter Desa aktif">
+            <Trash2 size={12} /> Hapus per Desa
+          </button>
+          <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.2)', fontSize: '11px' }} onClick={() => openBulkDeleteModal('kecamatan')} title="Hapus semua tiang pada filter Kecamatan aktif">
+            <Trash2 size={12} /> Hapus per Kecamatan
+          </button>
+          <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.2)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.4)', fontWeight: 700, fontSize: '11px', marginLeft: 'auto' }} onClick={() => openBulkDeleteModal('all')}>
+            <Trash2 size={12} /> Hapus Semua Data
+          </button>
+        </div>
+      )}
+
       {/* ── TABLE ── */}
       <div className="card" style={{ overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }} className="desktop-table">
           <table className="table" style={{ minWidth: '960px', fontSize: '13px' }}>
             <thead>
               <tr>
+                {role === 'superadmin' && (
+                  <th style={{ width: '36px', textAlign: 'center', cursor: 'pointer' }} onClick={toggleSelectAll}>
+                    {paginated.length > 0 && paginated.every(p => selectedIds.has(p.id))
+                      ? <CheckSquare size={14} style={{ color: 'var(--accent)' }} />
+                      : <Square size={14} style={{ opacity: 0.4 }} />}
+                  </th>
+                )}
                 <th style={{ width: '40px', textAlign: 'center' }}>No</th>
                 <th style={{ cursor: 'pointer', width: '90px' }} onClick={() => handleSort('site')}><div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>Site <SortIcon col="site" /></div></th>
                 <th style={{ cursor: 'pointer', minWidth: '200px' }} onClick={() => handleSort('pole_id')}><div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>ID Tiang <SortIcon col="pole_id" /></div></th>
@@ -605,7 +715,14 @@ export default function DataTiang() {
               ) : paginated.length === 0 ? (
                 <tr><td colSpan={12} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}><Antenna size={28} style={{ opacity: 0.25, marginBottom: '8px', display: 'block', margin: '0 auto 8px' }} />Belum ada data tiang</td></tr>
               ) : paginated.map((pole, idx) => (
-                <tr key={pole.id}>
+                <tr key={pole.id} style={{ background: selectedIds.has(pole.id) ? 'rgba(239,68,68,0.06)' : undefined }}>
+                  {role === 'superadmin' && (
+                    <td style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => toggleSelect(pole.id)}>
+                      {selectedIds.has(pole.id)
+                        ? <CheckSquare size={14} style={{ color: 'var(--danger)' }} />
+                        : <Square size={14} style={{ opacity: 0.3 }} />}
+                    </td>
+                  )}
                   <td style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '11px' }}>{(page - 1) * perPage + idx + 1}</td>
                   <td><span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '20px', background: 'var(--bg-primary)', border: '1px solid var(--border)', fontWeight: 600 }}>{SITES.find(s => s.value === pole.site)?.label || pole.site}</span></td>
                   <td><span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent)', fontWeight: 600 }}>{pole.pole_id || '-'}</span></td>
@@ -795,7 +912,7 @@ export default function DataTiang() {
         </div>
       )}
 
-      {/* ══════ MODAL KONFIRMASI HAPUS ══════ */}
+      {/* ══════ MODAL KONFIRMASI HAPUS SATUAN ══════ */}
       {confirmDelete && (
         <div className="modal-overlay">
           <div className="modal" style={{ width: '400px', maxWidth: '96vw' }}>
@@ -810,6 +927,49 @@ export default function DataTiang() {
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setConfirmDelete(null)}>Batal</button>
               <button style={{ background: 'var(--danger)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer' }} onClick={() => handleDelete(confirmDelete)}>Ya, Hapus</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ MODAL BULK DELETE (superadmin) ══════ */}
+      {bulkDeleteModal && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ width: '480px', maxWidth: '96vw' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, color: 'var(--danger)' }}>🗑 Hapus Data Massal</h3>
+              <button className="btn-close" onClick={() => setBulkDeleteModal(null)}><X size={20} /></button>
+            </div>
+            <div className="modal-body" style={{ padding: '20px 24px' }}>
+              <div style={{ padding: '12px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 'var(--radius-md)', marginBottom: '16px' }}>
+                <p style={{ margin: 0, fontSize: '13px' }}>Anda akan menghapus <strong style={{ color: 'var(--danger)' }}>{bulkDeleteModal.label}</strong>.</p>
+                <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Tindakan ini <strong>tidak dapat dibatalkan</strong>. Semua data yang dihapus akan hilang permanen.</p>
+              </div>
+              <label className="form-label" style={{ color: 'var(--danger)' }}>
+                Ketik <strong>{bulkDeleteModal.mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS'}</strong> untuk konfirmasi:
+              </label>
+              <input
+                className="form-input"
+                style={{ fontFamily: 'monospace', fontWeight: 700, letterSpacing: '1px' }}
+                value={bulkDeleteConfirmText}
+                onChange={e => setBulkDeleteConfirmText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleBulkDelete()}
+                placeholder={bulkDeleteModal.mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS'}
+                autoFocus
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setBulkDeleteModal(null)}>Batal</button>
+              <button
+                style={{
+                  background: bulkDeleteConfirmText.trim().toUpperCase() === (bulkDeleteModal.mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS') ? 'var(--danger)' : 'rgba(239,68,68,0.3)',
+                  color: '#fff', border: 'none', padding: '8px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600,
+                  cursor: bulkDeleteConfirmText.trim().toUpperCase() === (bulkDeleteModal.mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS') ? 'pointer' : 'not-allowed'
+                }}
+                onClick={handleBulkDelete}
+              >
+                Ya, Hapus Sekarang
+              </button>
             </div>
           </div>
         </div>
