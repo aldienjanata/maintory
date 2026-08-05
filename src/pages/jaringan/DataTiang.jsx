@@ -154,12 +154,35 @@ export default function DataTiang() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [polesRes, usersRes, settingsRes] = await Promise.all([
-        supabase.from('network_poles').select('*').order('created_at', { ascending: false }),
+      // Supabase membatasi maksimal 1000 baris per request. 
+      // Karena data tiang bisa ribuan, kita harus fetch berulang (pagination) sampai habis.
+      let allPoles = []
+      let from = 0
+      const step = 1000
+      
+      while (true) {
+        const { data, error } = await supabase
+          .from('network_poles')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, from + step - 1)
+          
+        if (error) throw error
+        if (data && data.length > 0) {
+          allPoles = [...allPoles, ...data]
+          if (data.length < step) break
+          from += step
+        } else {
+          break
+        }
+      }
+
+      const [usersRes, settingsRes] = await Promise.all([
         supabase.from('users').select('id, full_name'),
         supabase.from('app_settings').select('pole_id_format').maybeSingle()
       ])
-      if (polesRes.data) setPoles(polesRes.data)
+      
+      setPoles(allPoles)
       if (usersRes.data) setUsers(usersRes.data)
       if (settingsRes.data?.pole_id_format) {
         setIdFormat(settingsRes.data.pole_id_format)
