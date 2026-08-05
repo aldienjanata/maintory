@@ -124,6 +124,7 @@ export default function DataTiang() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterSite, setFilterSite] = useState('')
   const [filterKecamatan, setFilterKecamatan] = useState('')
+  const [filterDesa, setFilterDesa] = useState('')
   const [filterType, setFilterType] = useState('')
 
   // Sorting
@@ -195,11 +196,17 @@ export default function DataTiang() {
   const getUserName = (uid) => users.find(u => u.id === uid)?.full_name || '-'
 
   const kecamatanList = useMemo(() => [...new Set(poles.map(p => p.kecamatan).filter(Boolean))].sort(), [poles])
+  const desaList = useMemo(() => {
+    let list = poles
+    if (filterKecamatan) list = list.filter(p => p.kecamatan === filterKecamatan)
+    return [...new Set(list.map(p => p.desa).filter(Boolean))].sort()
+  }, [poles, filterKecamatan])
 
   const filtered = useMemo(() => {
     let data = [...poles]
     if (filterSite) data = data.filter(p => p.site === filterSite)
     if (filterKecamatan) data = data.filter(p => p.kecamatan === filterKecamatan)
+    if (filterDesa) data = data.filter(p => p.desa === filterDesa)
     if (filterType) data = data.filter(p => p.pole_type === filterType)
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
@@ -210,7 +217,7 @@ export default function DataTiang() {
       return sortDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1)
     })
     return data
-  }, [poles, filterSite, filterKecamatan, filterType, searchQuery, sortKey, sortDir])
+  }, [poles, filterSite, filterKecamatan, filterDesa, filterType, searchQuery, sortKey, sortDir])
 
   const paginated = useMemo(() => filtered.slice((page - 1) * perPage, page * perPage), [filtered, page])
   const totalPages = Math.ceil(filtered.length / perPage)
@@ -562,10 +569,11 @@ export default function DataTiang() {
             <input className="form-input" style={{ paddingLeft: '30px', height: '34px', fontSize: '13px', width: '100%' }} placeholder="Cari ID, Desa, Kecamatan..." value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setPage(1) }} />
           </div>
           <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '110px', width: 'auto' }} value={filterSite} onChange={e => { setFilterSite(e.target.value); setPage(1) }}><option value="">Semua Site</option>{SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select>
-          <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '140px', width: 'auto' }} value={filterKecamatan} onChange={e => { setFilterKecamatan(e.target.value); setPage(1) }}><option value="">Semua Kecamatan</option>{kecamatanList.map(k => <option key={k} value={k}>{k}</option>)}</select>
+          <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '140px', width: 'auto' }} value={filterKecamatan} onChange={e => { setFilterKecamatan(e.target.value); setFilterDesa(''); setPage(1) }}><option value="">Semua Kecamatan</option>{kecamatanList.map(k => <option key={k} value={k}>{k}</option>)}</select>
+          <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '140px', width: 'auto' }} value={filterDesa} onChange={e => { setFilterDesa(e.target.value); setPage(1) }}><option value="">Semua Desa</option>{desaList.map(d => <option key={d} value={d}>{d}</option>)}</select>
           <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '100px', width: 'auto' }} value={filterType} onChange={e => { setFilterType(e.target.value); setPage(1) }}><option value="">Semua Jenis</option>{POLE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select>
-          {(filterSite || filterKecamatan || filterType || searchQuery)
-            ? <button className="btn btn-secondary btn-sm" style={{ height: '34px', whiteSpace: 'nowrap' }} onClick={() => { setFilterSite(''); setFilterKecamatan(''); setFilterType(''); setSearchQuery(''); setPage(1) }}>Reset</button>
+          {(filterSite || filterKecamatan || filterDesa || filterType || searchQuery)
+            ? <button className="btn btn-secondary btn-sm" style={{ height: '34px', whiteSpace: 'nowrap' }} onClick={() => { setFilterSite(''); setFilterKecamatan(''); setFilterDesa(''); setFilterType(''); setSearchQuery(''); setPage(1) }}>Reset</button>
             : <div style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', marginLeft: 'auto' }}>{filtered.length} data</div>
           }
         </div>
