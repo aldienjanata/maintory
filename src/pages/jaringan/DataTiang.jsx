@@ -39,10 +39,45 @@ function generatePoleId(site, desa, existingPoles, formatTemplate = DEFAULT_FORM
   if (!desa) return ''
   const siteCode = SITE_CODE[site] || 'BMS'
   const desaSlug = desa.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '').substring(0, 15)
-  const count = existingPoles.filter(
-    p => p.site === site && p.desa?.toUpperCase().trim() === desa.toUpperCase().trim()
-  ).length
-  const no = String(count + 1).padStart(3, '0')
+  
+  // Ambil semua tiang di desa dan site yang sama
+  const sameDesaPoles = existingPoles.filter(
+    p => p.site === site && p.desa?.toUpperCase().trim() === desa.toUpperCase().trim() && p.pole_id
+  )
+
+  // Buat regex dinamis berdasarkan formatTemplate untuk mengekstrak angka {NO}
+  const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  let regexPattern = escapeRegExp(formatTemplate)
+    .replace('\\{SITE_CODE\\}', escapeRegExp(siteCode))
+    .replace('\\{DESA\\}', escapeRegExp(desaSlug))
+    .replace('\\{NO\\}', '(\\d+)') // Tangkap angkanya
+
+  const idRegex = new RegExp(`^${regexPattern}$`, 'i')
+
+  let maxNo = 0
+  for (const p of sameDesaPoles) {
+    const match = p.pole_id.match(idRegex)
+    if (match && match[1]) {
+      const num = parseInt(match[1], 10)
+      if (num > maxNo) maxNo = num
+    }
+  }
+
+  // Fallback 1: Jika regex gagal (mungkin format terganti), cari angka di ujung ID
+  if (maxNo === 0 && sameDesaPoles.length > 0) {
+    for (const p of sameDesaPoles) {
+      const match = p.pole_id.match(/\d+$/)
+      if (match) {
+        const num = parseInt(match[0], 10)
+        if (num > maxNo) maxNo = num
+      }
+    }
+  }
+
+  // Fallback 2: Jika ID lama tidak punya angka sama sekali, hitung jumlah tiang
+  if (maxNo === 0) maxNo = sameDesaPoles.length
+
+  const no = String(maxNo + 1).padStart(3, '0')
   return formatTemplate
     .replace(/{SITE_CODE}/g, siteCode)
     .replace(/{DESA}/g, desaSlug)
