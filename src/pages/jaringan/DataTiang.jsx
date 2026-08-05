@@ -152,6 +152,7 @@ export default function DataTiang() {
   const [kmzFilterKecamatan, setKmzFilterKecamatan] = useState('')
   const [kmzFilterDesa, setKmzFilterDesa] = useState('')
 
+  const [confirmDelete, setConfirmDelete] = useState(null)
   const [confirmRetroactive, setConfirmRetroactive] = useState(false)
   
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
