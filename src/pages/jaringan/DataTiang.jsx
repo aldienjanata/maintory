@@ -698,7 +698,7 @@ export default function DataTiang() {
       {/* ══════ MODAL TAMBAH/EDIT ══════ */}
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="modal" style={{ width: '680px', maxWidth: '96vw', maxHeight: '93vh', display: 'flex', flexDirection: 'column' }}>
+          <div className="modal" style={{ width: '680px', maxWidth: '96vw', maxHeight: '93vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div className="modal-header">
               <div>
                 <h3 style={{ margin: 0 }}>{editingId ? 'Edit Data Tiang' : 'Tambah Tiang Baru'}</h3>
@@ -708,7 +708,8 @@ export default function DataTiang() {
               </div>
               <button className="btn-close" onClick={() => setIsModalOpen(false)}><X size={20} /></button>
             </div>
-            <div className="modal-body" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div>
                   <label className="form-label">Site <span style={{ color: 'var(--danger)' }}>*</span></label>
@@ -773,8 +774,9 @@ export default function DataTiang() {
                 <label className="form-label">Keterangan</label>
                 <textarea className="form-input" rows={2} style={{ resize: 'vertical' }} value={form.keterangan} onChange={e => setForm(f => ({ ...f, keterangan: e.target.value }))} placeholder="Catatan tambahan..." />
               </div>
+              </div>
             </div>
-            <div className="modal-footer" style={{ flexShrink: 0 }}>
+            <div className="modal-footer" style={{ flexShrink: 0, padding: '16px 24px', background: 'var(--bg-card)', borderTop: '1px solid var(--border)' }}>
               <button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
               <button className="btn btn-primary" disabled={saving} onClick={handleSave}>
                 {saving ? '...' : editingId ? '✓ Simpan Perubahan' : '✓ Tambah Tiang'}
@@ -787,7 +789,7 @@ export default function DataTiang() {
       {/* ══════ MODAL IMPORT ══════ */}
       {isImportModalOpen && (
         <div className="modal-overlay">
-          <div className="modal" style={{ width: '780px', maxWidth: '96vw', maxHeight: '93vh', display: 'flex', flexDirection: 'column' }}>
+          <div className="modal" style={{ width: '780px', maxWidth: '96vw', maxHeight: '93vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div className="modal-header">
               <div>
                 <h3 style={{ margin: 0 }}>Preview Import Data Tiang</h3>
@@ -797,7 +799,7 @@ export default function DataTiang() {
               </div>
               <button className="btn-close" onClick={() => setIsImportModalOpen(false)}><X size={20} /></button>
             </div>
-            <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
+            <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
               <div style={{ overflowX: 'auto' }}>
                 <table className="table" style={{ fontSize: '12px', minWidth: '600px' }}>
                   <thead>
@@ -833,7 +835,7 @@ export default function DataTiang() {
                 </table>
               </div>
             </div>
-            <div className="modal-footer">
+            <div className="modal-footer" style={{ flexShrink: 0, padding: '16px 24px', background: 'var(--bg-card)', borderTop: '1px solid var(--border)' }}>
               <button className="btn btn-secondary" onClick={() => { setIsImportModalOpen(false); setImportRows([]) }}>Batal</button>
               <button className="btn btn-primary" disabled={importSaving || importRows.filter(r => r._valid).length === 0} onClick={handleSaveImport}>
                 {importSaving ? 'Menyimpan...' : `✓ Import ${importRows.filter(r => r._valid).length} Tiang`}
