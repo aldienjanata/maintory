@@ -32,51 +32,84 @@ async function parseKMZ(file) {
 }
 
 /**
- * Reverse geocode menggunakan BigDataCloud API (cepat, gratis, tanpa key)
- * fallback ke Nominatim jika gagal.
- */
-async function reverseGeocode(lat, lon) {
-  // === PRIMARY: BigDataCloud (cepat, tanpa API key) ===
+
+/** Strip prefix "Kecamatan ", "Desa ", "Kelurahan ", "Kabupaten ", "Kota " */
+const cleanName = (s) => (s || '').replace(/^(Kecamatan|Desa|Kelurahan|Kabupaten|Kota)\s+/i, '').trim()
+
+
+/** BigDataCloud reverse geocode — cepat, tanpa API key */
+async function fetchBDC(lat, lon) {
   try {
     const res = await fetch(
       `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=id`,
-      { signal: AbortSignal.timeout(5000) }
+      { signal: AbortSignal.timeout(6000) }
     )
-    if (res.ok) {
-      const d = await res.json()
-      const admin = d.localityInfo?.administrative || []
-      // Admin level Indonesia di OpenStreetMap:
-      // 4 = Provinsi, 5 = Kabupaten/Kota, 6 = Kecamatan, 7/8 = Desa/Kelurahan
-      const byLevel = (lvl) => admin.find(a => a.adminLevel === lvl)?.name || ''
-      const provinsi  = byLevel(4) || d.principalSubdivision || ''
-      const kabupaten = byLevel(5) || d.city || ''
-      const kecamatan = byLevel(6) || ''
-      const desa      = byLevel(7) || byLevel(8) || d.locality || ''
-      if (provinsi || kabupaten || kecamatan) return { provinsi, kabupaten, kecamatan, desa }
-    }
-  } catch { /* lanjut ke fallback */ }
+    if (!res.ok) return {}
+    const d = await res.json()
+    const admin = d.localityInfo?.administrative || []
 
-  // === FALLBACK: Nominatim OSM ===
+    // Helper: cari nama berdasarkan admin level OSM
+    // Indonesia: level 4=Provinsi, 5=Kabupaten, 6=Kecamatan (kadang tidak ada), 7/8=Desa
+    const lvl = (n) => cleanName(admin.find(a => a.adminLevel === n)?.name || '')
+
+    const provinsi  = lvl(4) || cleanName(d.principalSubdivision || '')
+    const kabupaten = lvl(5) || cleanName(d.city || '')
+    // Kecamatan bisa di level 6 ATAU level 7 tergantung kelengkapan OSM
+    // Kalau level 6 kosong, coba level 7 sebagai kecamatan
+    const kec6 = lvl(6)
+    const kec7 = lvl(7)
+    const des8 = lvl(8)
+    // Logika: jika ada level 8, maka level 7=Kecamatan & level 8=Desa
+    //         jika tidak ada level 8, maka level 7=Desa & level 6=Kecamatan (atau kosong)
+    const kecamatan = kec6 || (des8 ? kec7 : '')
+    const desa      = des8 || (!kec6 ? kec7 : '') || cleanName(d.locality || '')
+
+    return { provinsi, kabupaten, kecamatan, desa }
+  } catch { return {} }
+}
+
+/** Nominatim OSM reverse geocode — lengkap, ada municipality untuk kecamatan */
+async function fetchNominatim(lat, lon) {
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=id&zoom=18&addressdetails=1`,
-      { headers: { 'User-Agent': 'MaintoryApp/1.0' }, signal: AbortSignal.timeout(6000) }
+      { headers: { 'User-Agent': 'MaintoryApp/1.0' }, signal: AbortSignal.timeout(8000) }
     )
-    if (res.ok) {
-      const d = await res.json()
-      const a = d.address || {}
-      return {
-        provinsi:  a.state || '',
-        // Di Indonesia Nominatim sering pakai "county" untuk kabupaten
-        kabupaten: a.county || a.city || a.municipality || '',
-        kecamatan: a.district || a.city_district || a.borough || '',
-        desa:      a.village || a.hamlet || a.neighbourhood || a.quarter || a.suburb || '',
-      }
+    if (!res.ok) return {}
+    const d = await res.json()
+    const a = d.address || {}
+    return {
+      provinsi:  a.state || '',
+      // county = Kabupaten (contoh: "Kabupaten Cilacap") — strip prefixnya
+      kabupaten: cleanName(a.county || a.city || ''),
+      // Untuk Indonesia: kecamatan biasanya di "municipality" atau "district"
+      kecamatan: cleanName(a.municipality || a.district || a.city_district || a.borough || ''),
+      // Desa/Kelurahan biasanya di "village" atau "hamlet"
+      desa:      cleanName(a.village || a.hamlet || a.quarter || a.neighbourhood || a.suburb || ''),
     }
-  } catch { /* */ }
-
-  return { provinsi: '', kabupaten: '', kecamatan: '', desa: '' }
+  } catch { return {} }
 }
+
+/**
+ * Gabungkan hasil dari kedua API secara paralel.
+ * BigDataCloud: cepat, bagus untuk Provinsi & Kabupaten.
+ * Nominatim:    `municipality` = Kecamatan, `village` = Desa (lebih konsisten di Indonesia).
+ */
+async function reverseGeocode(lat, lon) {
+  // Panggil kedua API secara bersamaan (paralel) — tidak tambah waktu
+  const [bdcR, nomR] = await Promise.allSettled([fetchBDC(lat, lon), fetchNominatim(lat, lon)])
+  const b = bdcR.status === 'fulfilled' ? bdcR.value : {}
+  const n = nomR.status === 'fulfilled' ? nomR.value : {}
+
+  // Prioritas: Nominatim lebih baik untuk kecamatan & desa; BDC lebih cepat untuk provinsi/kabupaten
+  return {
+    provinsi:  b.provinsi  || n.provinsi  || '',
+    kabupaten: b.kabupaten || n.kabupaten || '',
+    kecamatan: n.kecamatan || b.kecamatan || '',   // Nominatim duluan untuk kecamatan
+    desa:      n.desa      || b.desa      || '',   // Nominatim duluan untuk desa
+  }
+}
+
 
 /** Buat KMZ dari baris data Excel */
 async function buildKMZ(rows) {
@@ -172,9 +205,9 @@ export default function KonversiTiang() {
     const results = kmzRows.map(r => ({ ...r }))
     let fails = 0
 
-    // Proses secara paralel dalam batch (5 sekaligus)
-    const BATCH = 5
-    const DELAY = 250  // ms antara batch — BigDataCloud lebih longgar rate limit-nya
+    // Proses secara paralel dalam batch (3 sekaligus untuk aman di Nominatim rate-limit 1req/s)
+    const BATCH = 3
+    const DELAY = 1100  // ms antara batch — hormati rate-limit Nominatim (1 req/s per IP)
 
     for (let i = 0; i < results.length; i += BATCH) {
       // Cek stop
