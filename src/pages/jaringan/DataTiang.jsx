@@ -166,7 +166,6 @@ export default function DataTiang() {
   const [bulkDeleteModal, setBulkDeleteModal] = useState(null)
   const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('')
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
-  const [confirmRetroactive, setConfirmRetroactive] = useState(false)
 
   // Pagination
   const [page, setPage] = useState(1)
