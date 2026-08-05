@@ -17,7 +17,8 @@ import {
   ClipboardList,
   FileText,
   Image,
-  Antenna
+  Antenna,
+  RefreshCw
 } from 'lucide-react'
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -42,6 +43,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { label: 'Generate Banner', path: '/banner-maintenance', icon: <Image />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin'] },
     
     { label: 'Data Tiang', path: '/jaringan/tiang', icon: <Antenna />, section: 'JARINGAN', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
+    { label: 'Konversi KMZ/Excel', path: '/jaringan/konversi', icon: <RefreshCw />, section: 'JARINGAN', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     
     { label: 'Log Aktivitas', path: '/logs', icon: <History />, section: 'SYSTEM', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     { label: 'Pengaturan', path: '/settings', icon: <Settings />, section: 'SYSTEM', allowedRoles: ['superadmin', 'admin', 'teknisi'] },

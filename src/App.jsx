@@ -20,6 +20,7 @@ import Settings from './pages/settings/Settings'
 import LaporanPemasangan from './pages/laporan/LaporanPemasangan'
 import BannerMaintenance from './pages/banner/BannerMaintenance'
 import DataTiang from './pages/jaringan/DataTiang'
+import KonversiTiang from './pages/jaringan/KonversiTiang'
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth()
@@ -85,6 +86,7 @@ function App() {
           <Route path="laporan-pemasangan" element={<LaporanPemasangan />} />
           <Route path="banner-maintenance" element={<BannerMaintenance />} />
           <Route path="jaringan/tiang" element={<DataTiang />} />
+          <Route path="jaringan/konversi" element={<KonversiTiang />} />
         </Route>
       </Routes>
     </Router>
