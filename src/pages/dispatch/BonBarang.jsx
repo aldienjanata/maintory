@@ -117,11 +117,26 @@ export default function BonBarang() {
   useEffect(() => { fetchData() }, [])
   useEffect(() => { setPage(1) }, [activeTab])
 
-  // Auto-refresh stok setiap 30 detik saat modal buat bon terbuka
+  // Real-time listener untuk stok saat modal buat bon terbuka (tanpa perlu refresh manual/tunggu 30s)
   useEffect(() => {
     if (!isModalOpen) return
-    const interval = setInterval(() => refreshStok(false), 30000)
-    return () => clearInterval(interval)
+
+    const handleStockChange = (payload) => {
+      // Refresh stok secara silent saat ada perubahan di inventory
+      refreshStok(false)
+    }
+
+    const channel = supabase
+      .channel('inventory-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'serial_numbers' }, handleStockChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dropcore_haspels' }, handleStockChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'adss_haspels' }, handleStockChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'warehouses' }, handleStockChange)
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [isModalOpen])
 
   const fetchData = async () => {

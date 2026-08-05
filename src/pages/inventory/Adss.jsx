@@ -430,6 +430,39 @@ export default function Adss() {
       }
       applyDataRowStyles(ws2)
 
+      // Sheet 3: Rekapitulasi ADSS
+      const ws3 = workbook.addWorksheet('Rekapitulasi ADSS')
+      const headers3 = ['Tipe Kabel', 'Merk', 'Total Haspel', 'Total Meter Awal', 'Total Meter Terpakai', 'Sisa Stok Meter']
+      setColumnWidths(ws3, [16, 20, 14, 20, 20, 20])
+      applyHeaderStyle(ws3, headers3, '065F46')
+
+      // Group by type and brand
+      const rekap = {}
+      haspels.forEach(h => {
+        const typeLabel = h.type ? `ADSS ${h.type.toUpperCase()}` : 'Tidak Diketahui'
+        const brandLabel = h.brand || '-'
+        const key = `${typeLabel}_${brandLabel}`
+        if (!rekap[key]) {
+          rekap[key] = { type: typeLabel, brand: brandLabel, count: 0, initial: 0, used: 0 }
+        }
+        rekap[key].count += 1
+        rekap[key].initial += Number(h.initial_meters || 0)
+        rekap[key].used += Number(h.used_meters || 0)
+      })
+
+      const rekapArray = Object.values(rekap).sort((a, b) => a.type.localeCompare(b.type))
+      rekapArray.forEach(r => {
+        ws3.addRow([
+          r.type,
+          r.brand,
+          r.count,
+          r.initial,
+          r.used,
+          r.initial - r.used
+        ])
+      })
+      applyDataRowStyles(ws3)
+
       showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
       await downloadWorkbook(workbook, `Adss ${new Date().toISOString().slice(0, 10)}.xlsx`)
       toast.success('Export berhasil!')
