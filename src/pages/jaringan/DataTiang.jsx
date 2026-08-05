@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import SearchableSelect from '../../components/ui/SearchableSelect'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useProgress } from '../../contexts/ProgressContext'
@@ -247,6 +248,24 @@ export default function DataTiang() {
     if (kmzFilterKecamatan) list = list.filter(p => p.kecamatan === kmzFilterKecamatan)
     return [...new Set(list.map(p => p.desa).filter(Boolean))].sort()
   }, [poles, kmzFilterKecamatan])
+
+  // ── CASCADING OPTIONS UNTUK FORM TAMBAH/EDIT ──
+  const provinsiOpts = useMemo(() => [...new Set(poles.map(p => p.provinsi).filter(Boolean))].sort(), [poles])
+  const kabupatenOpts = useMemo(() => {
+    let list = poles
+    if (form.provinsi) list = list.filter(p => p.provinsi === form.provinsi)
+    return [...new Set(list.map(p => p.kabupaten).filter(Boolean))].sort()
+  }, [poles, form.provinsi])
+  const kecamatanOpts = useMemo(() => {
+    let list = poles
+    if (form.kabupaten) list = list.filter(p => p.kabupaten === form.kabupaten)
+    return [...new Set(list.map(p => p.kecamatan).filter(Boolean))].sort()
+  }, [poles, form.kabupaten])
+  const desaOpts = useMemo(() => {
+    let list = poles
+    if (form.kecamatan) list = list.filter(p => p.kecamatan === form.kecamatan)
+    return [...new Set(list.map(p => p.desa).filter(Boolean))].sort()
+  }, [poles, form.kecamatan])
 
   const filtered = useMemo(() => {
     let data = [...poles]
@@ -933,12 +952,38 @@ export default function DataTiang() {
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2px' }}><span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>📍 Lokasi Administratif</span></div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                  <div><label className="form-label">Provinsi</label><input className="form-input" value={form.provinsi} onChange={e => setForm(f => ({ ...f, provinsi: e.target.value }))} placeholder="Jawa Tengah" /></div>
-                  <div><label className="form-label">Kabupaten/Kota</label><input className="form-input" value={form.kabupaten} onChange={e => setForm(f => ({ ...f, kabupaten: e.target.value }))} placeholder="Banyumas" /></div>
+                  <SearchableSelect
+                    label="Provinsi"
+                    value={form.provinsi}
+                    onChange={v => setForm(f => ({ ...f, provinsi: v, kabupaten: '', kecamatan: '', desa: '' }))}
+                    options={provinsiOpts}
+                    placeholder="Cari/ketik provinsi..."
+                  />
+                  <SearchableSelect
+                    label="Kabupaten/Kota"
+                    value={form.kabupaten}
+                    onChange={v => setForm(f => ({ ...f, kabupaten: v, kecamatan: '', desa: '' }))}
+                    options={kabupatenOpts}
+                    placeholder="Cari/ketik kabupaten..."
+                  />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                  <div><label className="form-label">Kecamatan <span style={{ color: 'var(--danger)' }}>*</span></label><input className="form-input" value={form.kecamatan} onChange={e => setForm(f => ({ ...f, kecamatan: e.target.value }))} placeholder="Purwokerto Selatan" /></div>
-                  <div><label className="form-label">Desa/Kelurahan <span style={{ color: 'var(--danger)' }}>*</span></label><input className="form-input" value={form.desa} onChange={e => setForm(f => ({ ...f, desa: e.target.value }))} placeholder="Tanjung" /></div>
+                  <SearchableSelect
+                    label="Kecamatan"
+                    required
+                    value={form.kecamatan}
+                    onChange={v => setForm(f => ({ ...f, kecamatan: v, desa: '' }))}
+                    options={kecamatanOpts}
+                    placeholder="Cari/ketik kecamatan..."
+                  />
+                  <SearchableSelect
+                    label="Desa/Kelurahan"
+                    required
+                    value={form.desa}
+                    onChange={v => setForm(f => ({ ...f, desa: v }))}
+                    options={desaOpts}
+                    placeholder="Cari/ketik desa..."
+                  />
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2px' }}><span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>🗺️ Koordinat GPS</span></div>
                 <div>
