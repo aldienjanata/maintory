@@ -342,15 +342,26 @@ export default function DataTiang() {
       const chunkSize = 100
       for (let i = 0; i < ids.length; i += chunkSize) {
         const chunk = ids.slice(i, i + chunkSize)
-        const pct = 10 + ((i / ids.length) * 88)
+        const pct = 10 + ((i / ids.length) * 80)
         showProgress('Menghapus Data', `Menghapus data ${i + 1} – ${Math.min(i + chunkSize, ids.length)} dari ${ids.length}...`, pct)
         const { error } = await supabase.from('network_poles').delete().in('id', chunk)
         if (error) throw error
       }
-      showProgress('Selesai', 'Penghapusan berhasil!', 100)
+
+      // Verifikasi: hitung sisa data di DB setelah penghapusan
+      showProgress('Memverifikasi', 'Memeriksa hasil penghapusan...', 92)
+      const { count: remaining } = await supabase
+        .from('network_poles')
+        .select('id', { count: 'exact', head: true })
+
+      showProgress('Selesai', 'Penghapusan selesai!', 100)
       setTimeout(() => {
         hideProgress()
-        toast.success(`${ids.length} tiang berhasil dihapus!`)
+        if (remaining && remaining > 0) {
+          toast.error(`⚠️ Penghapusan TIDAK LENGKAP! Masih ada ${remaining} tiang tersisa di database (kemungkinan karena RLS/hak akses). Hubungi admin database untuk menghapus manual dari Supabase.`, { duration: 8000 })
+        } else {
+          toast.success(`${ids.length} tiang berhasil dihapus! Database sekarang kosong (0 tiang).`)
+        }
         setSelectedIds(new Set())
         fetchData()
       }, 500)
@@ -359,6 +370,7 @@ export default function DataTiang() {
       toast.error('Gagal menghapus: ' + e.message)
     }
   }
+
 
   const handleExtractCoords = () => {
     const coords = extractCoordsFromUrl(form.maps_url)
@@ -449,17 +461,35 @@ export default function DataTiang() {
     if (valid.length === 0) return toast.error('Tidak ada baris yang valid!')
     
     setIsImportModalOpen(false)
-    showProgress('Memulai Import', 'Mempersiapkan data...', 5)
+    showProgress('Memulai Import', 'Memvalidasi data di server...', 5)
     
     try {
+      // ⚠️ PENTING: Selalu query fresh dari Supabase, JANGAN pakai poles state
+      // karena poles state bisa saja masih stale (belum diupdate setelah delete)
+      showProgress('Memulai Import', 'Menghitung tiang existing dari database...', 8)
+      let freshPoles = []
+      let from = 0
+      const step = 1000
+      while (true) {
+        const { data, error } = await supabase
+          .from('network_poles')
+          .select('site, desa')
+          .range(from, from + step - 1)
+        if (error) throw error
+        if (!data || data.length === 0) break
+        freshPoles = [...freshPoles, ...data]
+        if (data.length < step) break
+        from += step
+      }
+
       const counts = {}
-      for (const p of poles) {
+      for (const p of freshPoles) {
         if (!p.desa) continue
         const key = `${p.site}_${p.desa.toUpperCase().trim()}`
         counts[key] = (counts[key] || 0) + 1
       }
 
-      showProgress('Menyiapkan ID', 'Membuat pole ID untuk seluruh baris...', 15)
+      showProgress('Menyiapkan ID', `Database punya ${freshPoles.length} tiang. Membuat pole ID...`, 15)
       const payloads = valid.map(row => {
         const key = `${row.site}_${row.desa.toUpperCase().trim()}`
         counts[key] = (counts[key] || 0) + 1
@@ -481,7 +511,6 @@ export default function DataTiang() {
       for (let i = 0; i < payloads.length; i += chunkSize) {
         const percent = 20 + ((i / payloads.length) * 80)
         showProgress('Menyimpan Data', `Mengirim baris ${i + 1} hingga ${Math.min(i + chunkSize, payloads.length)} ke server...`, percent)
-        
         const chunk = payloads.slice(i, i + chunkSize)
         const { error } = await supabase.from('network_poles').insert(chunk)
         if (error) throw error
@@ -491,7 +520,7 @@ export default function DataTiang() {
       showProgress('Selesai', 'Penyimpanan berhasil!', 100)
       setTimeout(() => {
         hideProgress()
-        toast.success(`${successCount} tiang berhasil diimport!`)
+        toast.success(`${successCount} tiang berhasil diimport! (DB awal: ${freshPoles.length} tiang)`)
         setImportRows([])
         fetchData()
       }, 500)
