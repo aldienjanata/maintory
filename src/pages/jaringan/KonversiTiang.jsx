@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import {
-  FileSpreadsheet, Map, Upload, RefreshCw,
+  FileSpreadsheet, Map as MapIcon, Upload, RefreshCw,
   CheckCircle, Loader, Info, Pause, Play, Square, AlertCircle
 } from 'lucide-react'
 
@@ -339,7 +339,7 @@ export default function KonversiTiang() {
       <div style={{ display: 'flex', gap: '6px', marginBottom: '28px', padding: '4px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-lg)', width: 'fit-content' }}>
         {[
           { key: 'kmz2excel', label: 'KMZ → Excel', icon: <FileSpreadsheet size={15} /> },
-          { key: 'excel2kmz', label: 'Excel → KMZ', icon: <Map size={15} /> },
+          { key: 'excel2kmz', label: 'Excel → KMZ', icon: <MapIcon size={15} /> },
         ].map(m => (
           <button key={m.key} onClick={() => setMode(m.key)} style={{
             display: 'flex', alignItems: 'center', gap: '7px',
@@ -399,7 +399,7 @@ export default function KonversiTiang() {
                 <div style={{ display: 'flex', gap: '8px' }}>
                   {!geocoding && !geocoded && (
                     <button className="btn btn-primary btn-sm" onClick={handleGeocode} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Map size={14} /> Mulai Geocode
+                      <MapIcon size={14} /> Mulai Geocode
                     </button>
                   )}
                   {geocoding && (
@@ -535,7 +535,7 @@ export default function KonversiTiang() {
                   </span>
                 </div>
                 <button className="btn btn-primary btn-sm" onClick={handleExportKMZ} disabled={exporting} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {exporting ? <Loader size={14} /> : <Map size={14} />}
+                  {exporting ? <Loader size={14} /> : <MapIcon size={14} />}
                   {exporting ? 'Membuat KMZ...' : 'Download KMZ'}
                 </button>
               </div>
