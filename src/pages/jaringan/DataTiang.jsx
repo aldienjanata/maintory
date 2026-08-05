@@ -697,8 +697,8 @@ export default function DataTiang() {
 
       {/* ══════ MODAL TAMBAH/EDIT ══════ */}
       {isModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal" style={{ width: '680px', maxWidth: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="modal-overlay" style={{ alignItems: 'center', padding: '16px' }}>
+          <div className="modal" style={{ width: '680px', maxWidth: '96vw', maxHeight: '90vh', margin: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div className="modal-header" style={{ flexShrink: 0 }}>
               <div>
                 <h3 style={{ margin: 0 }}>{editingId ? 'Edit Data Tiang' : 'Tambah Tiang Baru'}</h3>
@@ -786,8 +786,8 @@ export default function DataTiang() {
 
       {/* ══════ MODAL IMPORT ══════ */}
       {isImportModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal" style={{ width: '780px', maxWidth: '96vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="modal-overlay" style={{ alignItems: 'center', padding: '16px' }}>
+          <div className="modal" style={{ width: '780px', maxWidth: '96vw', maxHeight: '90vh', margin: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div className="modal-header">
               <div>
                 <h3 style={{ margin: 0 }}>Preview Import Data Tiang</h3>
