@@ -174,6 +174,7 @@ export default function DataTiang() {
           .from('network_poles')
           .select('*')
           .order('created_at', { ascending: false })
+          .order('id', { ascending: true }) // Mencegah bug pagination skip data jika created_at kembar
           .range(from, from + step - 1)
           
         if (error) throw error
@@ -504,6 +505,7 @@ export default function DataTiang() {
         const { data, error } = await supabase
           .from('network_poles')
           .select('site, desa')
+          .order('id', { ascending: true }) // Deterministik
           .range(from, from + step - 1)
         if (error) throw error
         if (!data || data.length === 0) break
