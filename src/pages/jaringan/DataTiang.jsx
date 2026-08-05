@@ -697,8 +697,8 @@ export default function DataTiang() {
 
       {/* ══════ MODAL TAMBAH/EDIT ══════ */}
       {isModalOpen && (
-        <div className="modal-overlay" style={{ alignItems: 'center', padding: '16px' }}>
-          <div className="modal" style={{ width: '680px', maxWidth: '96vw', maxHeight: '90vh', margin: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="modal" style={{ width: '680px', maxWidth: '100%', maxHeight: 'calc(100vh - 40px)', margin: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: 'var(--bg-card)' }}>
             <div className="modal-header" style={{ flexShrink: 0 }}>
               <div>
                 <h3 style={{ margin: 0 }}>{editingId ? 'Edit Data Tiang' : 'Tambah Tiang Baru'}</h3>
@@ -708,7 +708,7 @@ export default function DataTiang() {
               </div>
               <button className="btn-close" onClick={() => setIsModalOpen(false)}><X size={20} /></button>
             </div>
-            <div className="modal-body" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div className="modal-body" style={{ flex: '1 1 auto', overflowY: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '14px', padding: '20px 24px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div>
                   <label className="form-label">Site <span style={{ color: 'var(--danger)' }}>*</span></label>
@@ -786,9 +786,9 @@ export default function DataTiang() {
 
       {/* ══════ MODAL IMPORT ══════ */}
       {isImportModalOpen && (
-        <div className="modal-overlay" style={{ alignItems: 'center', padding: '16px' }}>
-          <div className="modal" style={{ width: '780px', maxWidth: '96vw', maxHeight: '90vh', margin: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div className="modal-header">
+        <div className="modal-overlay" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div className="modal" style={{ width: '780px', maxWidth: '100%', maxHeight: 'calc(100vh - 40px)', margin: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: 'var(--bg-card)' }}>
+            <div className="modal-header" style={{ flexShrink: 0 }}>
               <div>
                 <h3 style={{ margin: 0 }}>Preview Import Data Tiang</h3>
                 <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
@@ -797,7 +797,7 @@ export default function DataTiang() {
               </div>
               <button className="btn-close" onClick={() => setIsImportModalOpen(false)}><X size={20} /></button>
             </div>
-            <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
+            <div className="modal-body" style={{ flex: '1 1 auto', overflowY: 'auto', minHeight: 0, padding: '20px 24px' }}>
               <div style={{ overflowX: 'auto' }}>
                 <table className="table" style={{ fontSize: '12px', minWidth: '600px' }}>
                   <thead>
