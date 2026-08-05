@@ -6,6 +6,7 @@ import { AuthProvider } from './contexts/AuthContext.jsx'
 import { ThemeProvider } from './contexts/ThemeContext.jsx'
 import { ProgressProvider } from './contexts/ProgressContext.jsx'
 import UpdatePrompt from './components/UpdatePrompt.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import './index.css'
 
 // Animasi slide-up untuk banner update
@@ -15,13 +16,14 @@ document.head.appendChild(style)
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <AuthProvider>
-        <ProgressProvider>
-          <App />
-          <UpdatePrompt />
-          <Toaster 
-            position="top-right"
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <ProgressProvider>
+            <App />
+            <UpdatePrompt />
+            <Toaster 
+              position="top-right"
             toastOptions={{
               style: {
                 background: 'var(--bg-card)',
@@ -42,8 +44,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             },
           }}
         />
-        </ProgressProvider>
-      </AuthProvider>
-    </ThemeProvider>
+          </ProgressProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 )
