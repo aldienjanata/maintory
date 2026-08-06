@@ -756,7 +756,7 @@ export default function DataTiang() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' }}>
         <div>
           <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px', fontSize: '20px', fontWeight: 700 }}>
-            <Antenna size={22} style={{ color: 'var(--accent)' }} /> Data Tiang
+            <img src="/icon_tiang.png" alt="tiang" style={{ width: '24px', height: '24px', objectFit: 'contain' }} /> Data Tiang
           </h2>
           <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>Jaringan Fiber — Pencatatan & Manajemen Tiang</p>
         </div>

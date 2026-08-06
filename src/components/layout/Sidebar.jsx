@@ -42,7 +42,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { label: 'Laporan Pemasangan', path: '/laporan-pemasangan', icon: <FileText />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     { label: 'Generate Banner', path: '/banner-maintenance', icon: <Image />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin'] },
     
-    { label: 'Data Tiang', path: '/jaringan/tiang', icon: <Antenna />, section: 'JARINGAN', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
+    { label: 'Data Tiang', path: '/jaringan/tiang', icon: <img src="/icon_tiang.png" alt="tiang" style={{ width: '18px', height: '18px', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.8 }} />, section: 'JARINGAN', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     { label: 'Konversi KMZ/Excel', path: '/jaringan/konversi', icon: <RefreshCw />, section: 'JARINGAN', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     
     { label: 'Log Aktivitas', path: '/logs', icon: <History />, section: 'SYSTEM', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
