@@ -173,18 +173,41 @@ async function buildKMZ(rows) {
   return await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
 }
 
-// ── URL PARSER ──────────────────────────────────────────────────────────────────
-function extractCoordsFromMapsUrl(url) {
-  if (!url) return null
-  // Format: @lat,lon
-  const m1 = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
+// ── INPUT PARSER (URL / DECIMAL / DMS) ─────────────────────────────────────────
+function dmsToDecimal(degrees, minutes, seconds, direction) {
+  let dd = Number(degrees) + Number(minutes) / 60 + Number(seconds) / 3600
+  if (direction === 'S' || direction === 'W') dd = dd * -1
+  return dd
+}
+
+function parseInputToCoords(input) {
+  if (!input) return null
+  const str = input.trim()
+  
+  // 1. Format: @lat,lon (URL)
+  const m1 = str.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
   if (m1) return { lat: parseFloat(m1[1]), lon: parseFloat(m1[2]) }
-  // Format: ?q=lat,lon
-  const m2 = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/)
+  
+  // 2. Format: ?q=lat,lon (URL)
+  const m2 = str.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/)
   if (m2) return { lat: parseFloat(m2[1]), lon: parseFloat(m2[2]) }
-  // Format: /maps/place/.../lat,lon
-  const m3 = url.match(/(-?\d+\.\d{5,}),(-?\d+\.\d{5,})/)
-  if (m3) return { lat: parseFloat(m3[1]), lon: parseFloat(m3[2]) }
+  
+  // 3. Format: /maps/place/.../lat,lon
+  const m3 = str.match(/(-?\d+\.\d{5,}),(-?\d+\.\d{5,})/)
+  if (m3 && str.includes('maps')) return { lat: parseFloat(m3[1]), lon: parseFloat(m3[2]) }
+  
+  // 4. Format: DMS (7°37'27.0"S 109°15'17.1"E atau 7 37 27 S 109 15 17 E)
+  const dmsMatch = str.match(/(\d+)[°\s]+(\d+)['\s]+(\d+(?:\.\d+)?)["\s]*([NS])[,;\s]*(\d+)[°\s]+(\d+)['\s]+(\d+(?:\.\d+)?)["\s]*([EW])/i)
+  if (dmsMatch) {
+    const lat = dmsToDecimal(dmsMatch[1], dmsMatch[2], dmsMatch[3], dmsMatch[4].toUpperCase())
+    const lon = dmsToDecimal(dmsMatch[5], dmsMatch[6], dmsMatch[7], dmsMatch[8].toUpperCase())
+    return { lat, lon }
+  }
+
+  // 5. Format: Decimal murni (-7.624160, 109.254736)
+  const decMatch = str.match(/(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)/)
+  if (decMatch) return { lat: parseFloat(decMatch[1]), lon: parseFloat(decMatch[2]) }
+
   return null
 }
 
@@ -337,7 +360,7 @@ export default function KonversiTiang() {
 
     // Parse all URLs first
     const parsed = lines.map((url, i) => {
-      const coords = extractCoordsFromMapsUrl(url)
+      const coords = parseInputToCoords(url)
       return {
         _idx: i,
         url,
@@ -720,9 +743,9 @@ export default function KonversiTiang() {
           <div style={{ display: 'flex', gap: '10px', padding: '14px 16px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 'var(--radius-md)' }}>
             <Info size={18} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '1px' }} />
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.8' }}>
-              Tempelkan URL Google Maps satu per baris. Sistem akan mengekstrak koordinat dan mengisi otomatis
+              Tempelkan URL Google Maps atau Titik Koordinat (1 per baris). Sistem akan mengekstrak koordinat dan mengisi otomatis
               <strong> Provinsi, Kabupaten, Kecamatan, Desa</strong> via reverse geocoding.<br/>
-              <strong>Format URL yang didukung:</strong> <code style={{ background: 'rgba(255,255,255,0.08)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>https://maps.google.com/?q=-7.62,109.25</code> atau <code style={{ background: 'rgba(255,255,255,0.08)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>https://www.google.com/maps/@-7.62,109.25,...</code><br/>
+              <strong>Format yang didukung:</strong> URL Maps (<code style={{ background: 'rgba(255,255,255,0.08)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>?q=-7.62,109.25</code>), Koordinat Desimal (<code style={{ background: 'rgba(255,255,255,0.08)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>-7.6241, 109.2547</code>), atau DMS (<code style={{ background: 'rgba(255,255,255,0.08)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>7°37'27.0"S 109°15'17.1"E</code>).<br/>
               <span style={{ color: 'var(--warning)' }}>⚠️ URL pendek (goo.gl) tidak didukung.</span> Buka URL pendeknya di browser, salin URL panjang dari address bar, lalu tempel di sini.
             </div>
           </div>
@@ -730,12 +753,12 @@ export default function KonversiTiang() {
           {/* URL Input */}
           <div className="card" style={{ padding: '20px' }}>
             <label style={{ fontWeight: 600, fontSize: '13px', display: 'block', marginBottom: '10px' }}>
-              Daftar URL Google Maps (1 URL per baris)
+              Daftar URL Maps atau Koordinat (1 baris = 1 titik)
             </label>
             <textarea
               value={urlInput}
               onChange={e => setUrlInput(e.target.value)}
-              placeholder={'https://maps.google.com/?q=-7.624160346131124,109.25473663955927\nhttps://www.google.com/maps/@-7.581199,109.251490,17z'}
+              placeholder={"https://maps.google.com/?q=-7.624160,109.254736\n-7.581199, 109.251490\n7°37'27.0\"S 109°15'17.1\"E"}
               style={{
                 width: '100%', minHeight: '160px', padding: '12px', resize: 'vertical',
                 fontFamily: 'monospace', fontSize: '12px', lineHeight: '1.8',
