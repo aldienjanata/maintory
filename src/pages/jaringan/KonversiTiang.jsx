@@ -9,7 +9,7 @@ import {
   Link, AlertTriangle, Download
 } from 'lucide-react'
 
-import localDesaDB from '../../assets/desa_banyumas_cilacap.json'
+import localDesaDB from '../../assets/desa_jateng.json'
 
 // ── HELPERS ────────────────────────────────────────────────────────────────────
 
@@ -181,7 +181,7 @@ async function reverseGeocode(lat, lon) {
   if (!desa && b.locality) desa = b.locality
   if (!kecamatan || !desa) confident = false
 
-  // 4. Fallback Database Lokal (Akurasi Tinggi untuk Banyumas/Cilacap)
+  // 4. Fallback Database Lokal (Akurasi Tinggi se-Jawa Tengah)
   // Berdasarkan saran: Jika nama desa sudah dapat, cek kamus data shapefile/BPS
   if (desa && kabupaten) {
     const normKab = normalize(kabupaten).replace(/^(kabupaten|kota)\s+/i, '')
