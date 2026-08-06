@@ -736,24 +736,6 @@ export default function KonversiTiang() {
       {/* ═══════════ MODE: URL → EXCEL ═══════════ */}
       {mode === 'url2excel' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {apiKey
-                  ? 'Kecamatan & Desa diambil langsung dari Google Maps (administrative_area_level_3).'
-                  : <>
-                      Gratis ~40.000 req/bln •
-                      Kecamatan ditentukan pakai <code>administrative_area_level_3</code> • {' '}
-                      <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>Buat API Key gratis →</a>
-                    </>}
-              </div>
-            </div>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={e => handleApiKeyChange(e.target.value)}
-              placeholder="AIzaSy..."
-              style={{ width: '240px', padding: '7px 12px', borderRadius: 'var(--radius-sm)', border: `1px solid ${apiKey ? 'rgba(34,197,94,0.5)' : 'var(--border)'}`, background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '12px', fontFamily: 'monospace' }}
-            />
-            {apiKey && <button className="btn btn-sm" onClick={() => handleApiKeyChange('')} style={{ color: 'var(--danger)', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>Hapus</button>}
-          </div>
 
           {/* Info Box */}
           <div style={{ display: 'flex', gap: '10px', padding: '14px 16px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 'var(--radius-md)' }}>
