@@ -59,9 +59,37 @@ async function fetchBDC(lat, lon) {
   } catch { return {} }
 }
 
+/** Google Maps Geocoding API — paling akurat untuk Indonesia */
+let _googleApiKey = ''
+async function fetchGoogleMaps(lat, lon) {
+  if (!_googleApiKey) return null
+  try {
+    const res = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${_googleApiKey}&language=id`,
+      { signal: AbortSignal.timeout(10000) }
+    )
+    if (!res.ok) return null
+    const d = await res.json()
+    if (d.status !== 'OK' || !d.results?.length) {
+      if (d.status === 'REQUEST_DENIED') { _googleApiKey = ''; toast.error('Google API Key tidak valid!') }
+      return null
+    }
+    const comps = d.results[0].address_components || []
+    const get = (type) => comps.find(c => c.types.includes(type))?.long_name || ''
+    // Indonesia: level_1=Provinsi, level_2=Kabupaten, level_3=Kecamatan, level_4/sublocality=Desa
+    return {
+      provinsi:  get('administrative_area_level_1'),
+      kabupaten: cleanName(get('administrative_area_level_2')),
+      kecamatan: cleanName(get('administrative_area_level_3')),
+      desa:      cleanName(get('administrative_area_level_4') || get('sublocality_level_1') || get('neighborhood') || get('sublocality') || ''),
+    }
+  } catch { return null }
+}
+
 /** Cache & mutex queue untuk Nominatim (maks 1 req/s) */
 const nomCache = new Map()
 let nomLock = Promise.resolve()
+
 
 async function fetchNominatimSafe(lat, lon, zoom) {
   const z = zoom || 18
@@ -102,7 +130,7 @@ async function fetchNominatimSafe(lat, lon, zoom) {
 // Global spatial cache (Grid ~11m = 4 desimal) agar titik yg sama tidak di-fetch ulang
 const spatialCache = new Map()
 
-/** Gabungkan BDC + Nominatim — selalu cross-check untuk confidence scoring */
+/** Gabungkan sumber geocode — Google Maps (akurasi tinggi) atau BDC + Nominatim (fallback) */
 async function reverseGeocode(lat, lon) {
   // 1. Spatial Cache ~11m precision
   const latR = Math.round(parseFloat(lat) * 10000) / 10000
@@ -110,7 +138,17 @@ async function reverseGeocode(lat, lon) {
   const cacheKey = `${latR}_${lonR}`
   if (spatialCache.has(cacheKey)) return spatialCache.get(cacheKey)
 
-  // 2. Selalu jalankan BDC + Nominatim zoom-18 bersamaan untuk cross-check
+  // 2. Google Maps API (jika API key tersedia) → akurasi tertinggi untuk Indonesia
+  if (_googleApiKey) {
+    const gm = await fetchGoogleMaps(lat, lon)
+    if (gm?.kecamatan) {
+      const result = { ...gm, confident: true, kecBDC: '', kecNom: 'Google Maps' }
+      spatialCache.set(cacheKey, result)
+      return result
+    }
+  }
+
+  // 3. Fallback: BDC + Nominatim cross-check
   const [bdcR, nomR] = await Promise.allSettled([
     fetchBDC(lat, lon),
     fetchNominatimSafe(lat, lon, 18)
@@ -120,23 +158,16 @@ async function reverseGeocode(lat, lon) {
 
   const provinsi  = b.provinsi  || n.provinsi  || ''
   const kabupaten = b.kabupaten || n.kabupaten || ''
-
-  // Simpan kecamatan dari masing-masing API untuk ditampilkan ke user
   const kecBDC = b.kecamatan || ''
   const kecNom = n.kecamatan || ''
-  const desBDC = b.desa || ''
-  const desNom = n.desa || ''
 
-  // Nominatim prioritas untuk kecamatan & desa (district lebih akurat)
   let kecamatan = kecNom || kecBDC || ''
-  let desa = desNom || desBDC || ''
+  let desa = n.desa || b.desa || ''
 
-  // 3. Confidence: cek apakah kedua API sepakat soal kecamatan
   const normalize = (s) => (s || '').toLowerCase().trim()
   const kecAgree = !kecBDC || !kecNom || normalize(kecBDC) === normalize(kecNom)
   let confident = kecAgree && !!kecamatan && !!desa
 
-  // 4. Fallback jika kecamatan masih kosong
   if (!kecamatan) {
     const n13 = await fetchNominatimSafe(lat, lon, 13)
     kecamatan = n13.kecamatan || ''
@@ -252,6 +283,19 @@ export default function KonversiTiang() {
   const [urlProgress, setUrlProgress] = useState({ done: 0, total: 0 })
   const [urlDone, setUrlDone] = useState(false)
   const urlStopRef = useRef(false)
+
+  // Google Maps API Key (tersimpan di localStorage)
+  const [apiKey, setApiKey] = useState(() => {
+    const saved = typeof localStorage !== 'undefined' ? (localStorage.getItem('gmaps_key') || '') : ''
+    _googleApiKey = saved
+    return saved
+  })
+  const handleApiKeyChange = (key) => {
+    setApiKey(key)
+    _googleApiKey = key
+    spatialCache.clear() // Wajib clear cache saat key berubah
+    try { localStorage.setItem('gmaps_key', key) } catch {}
+  }
 
   const SITES = [
     { value: 'banyumas', label: 'Banyumas' },
@@ -754,6 +798,33 @@ export default function KonversiTiang() {
       {/* ═══════════ MODE: URL → EXCEL ═══════════ */}
       {mode === 'url2excel' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* ── API Key Box ────────────────────────────────── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: apiKey ? 'rgba(34,197,94,0.07)' : 'rgba(139,92,246,0.08)', border: `1px solid ${apiKey ? 'rgba(34,197,94,0.3)' : 'rgba(139,92,246,0.25)'}`, borderRadius: 'var(--radius-md)', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '20px' }}>🔑</div>
+            <div style={{ flex: 1, minWidth: '180px' }}>
+              <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)' }}>
+                {apiKey ? '✅ Google Maps API aktif — akurasi kecamatan & desa sangat tinggi' : 'Google Maps API Key (Opsional, Akurasi Sangat Tinggi)'}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                {apiKey
+                  ? 'Kecamatan & Desa diambil langsung dari Google Maps (administrative_area_level_3).'
+                  : <>
+                      Gratis ~40.000 req/bln •
+                      Kecamatan ditentukan pakai <code>administrative_area_level_3</code> • {' '}
+                      <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>Buat API Key gratis →</a>
+                    </>}
+              </div>
+            </div>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={e => handleApiKeyChange(e.target.value)}
+              placeholder="AIzaSy..."
+              style={{ width: '240px', padding: '7px 12px', borderRadius: 'var(--radius-sm)', border: `1px solid ${apiKey ? 'rgba(34,197,94,0.5)' : 'var(--border)'}`, background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '12px', fontFamily: 'monospace' }}
+            />
+            {apiKey && <button className="btn btn-sm" onClick={() => handleApiKeyChange('')} style={{ color: 'var(--danger)', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>Hapus</button>}
+          </div>
+
           {/* Info Box */}
           <div style={{ display: 'flex', gap: '10px', padding: '14px 16px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 'var(--radius-md)' }}>
             <Info size={18} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '1px' }} />
