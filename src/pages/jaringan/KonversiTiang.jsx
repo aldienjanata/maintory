@@ -99,58 +99,57 @@ async function fetchNominatimSafe(lat, lon, zoom) {
   })
 }
 
-// Global spatial cache (Grid ~111m) untuk titik yg berdekatan (mempercepat proses 20x lipat)
+// Global spatial cache (Grid ~11m = 4 desimal) agar titik yg sama tidak di-fetch ulang
 const spatialCache = new Map()
 
-/** Gabungkan BDC + Nominatim multi-zoom untuk akurasi maksimal Indonesia */
+/** Gabungkan BDC + Nominatim — selalu cross-check untuk confidence scoring */
 async function reverseGeocode(lat, lon) {
-  // 1. Cek Spatial Cache (Pembulatan 3 desimal = Grid ~111 meter)
-  const latR = Math.round(parseFloat(lat) * 1000) / 1000
-  const lonR = Math.round(parseFloat(lon) * 1000) / 1000
+  // 1. Spatial Cache ~11m precision
+  const latR = Math.round(parseFloat(lat) * 10000) / 10000
+  const lonR = Math.round(parseFloat(lon) * 10000) / 10000
   const cacheKey = `${latR}_${lonR}`
-  
-  if (spatialCache.has(cacheKey)) {
-    return spatialCache.get(cacheKey)
+  if (spatialCache.has(cacheKey)) return spatialCache.get(cacheKey)
+
+  // 2. Selalu jalankan BDC + Nominatim zoom-18 bersamaan untuk cross-check
+  const [bdcR, nomR] = await Promise.allSettled([
+    fetchBDC(lat, lon),
+    fetchNominatimSafe(lat, lon, 18)
+  ])
+  const b = bdcR.status === 'fulfilled' ? bdcR.value : {}
+  const n = nomR.status === 'fulfilled' ? nomR.value : {}
+
+  const provinsi  = b.provinsi  || n.provinsi  || ''
+  const kabupaten = b.kabupaten || n.kabupaten || ''
+
+  // Simpan kecamatan dari masing-masing API untuk ditampilkan ke user
+  const kecBDC = b.kecamatan || ''
+  const kecNom = n.kecamatan || ''
+  const desBDC = b.desa || ''
+  const desNom = n.desa || ''
+
+  // Nominatim prioritas untuk kecamatan & desa (district lebih akurat)
+  let kecamatan = kecNom || kecBDC || ''
+  let desa = desNom || desBDC || ''
+
+  // 3. Confidence: cek apakah kedua API sepakat soal kecamatan
+  const normalize = (s) => (s || '').toLowerCase().trim()
+  const kecAgree = !kecBDC || !kecNom || normalize(kecBDC) === normalize(kecNom)
+  let confident = kecAgree && !!kecamatan && !!desa
+
+  // 4. Fallback jika kecamatan masih kosong
+  if (!kecamatan) {
+    const n13 = await fetchNominatimSafe(lat, lon, 13)
+    kecamatan = n13.kecamatan || ''
+    if (!desa) desa = n13.desa || ''
+    if (!kecamatan && b.locality && b.locality !== desa) kecamatan = b.locality
+    confident = false
   }
 
-  // 2. Tarik data dari BDC (super cepat, tanpa delay Nominatim)
-  const b = await fetchBDC(latR, lonR)
-  
-  let provinsi = b.provinsi || ''
-  let kabupaten = b.kabupaten || ''
-  let kecamatan = b.kecamatan || ''
-  let desa = b.desa || ''
-
-  // 3. Validasi Akurasi BDC: 
-  // Jika desa kosong, atau desa == kecamatan (sangat sering terjadi di BDC), 
-  // maka data BDC kurang akurat untuk tingkat desa. Kita butuh Nominatim!
-  const isBadDesa = !desa || desa.toLowerCase() === kecamatan.toLowerCase() || desa.toLowerCase() === kabupaten.toLowerCase()
-  
-  if (!kecamatan || isBadDesa) {
-    // Jalankan Nominatim HANYA JIKA BDC gagal memberikan desa yang akurat
-    const n18 = await fetchNominatimSafe(latR, lonR, 18)
-    
-    if (n18.provinsi) provinsi = n18.provinsi
-    if (n18.kabupaten) kabupaten = n18.kabupaten
-    if (n18.kecamatan) kecamatan = n18.kecamatan
-    
-    // Desa dari Nominatim jauh lebih akurat
-    if (n18.desa) {
-      desa = n18.desa
-    } else if (!kecamatan) {
-      // Fallback zoom 13 jika kecamatan juga kosong
-      const n13 = await fetchNominatimSafe(latR, lonR, 13)
-      if (n13.kecamatan) kecamatan = n13.kecamatan
-      if (n13.desa && !desa) desa = n13.desa
-    }
-  }
-
-  // Fallback terakhir: locality BDC
   if (!desa && b.locality) desa = b.locality
-  if (!kecamatan && b.locality && b.locality !== desa) kecamatan = b.locality
+  if (!kecamatan || !desa) confident = false
 
-  const result = { provinsi, kabupaten, kecamatan, desa }
-  spatialCache.set(cacheKey, result) // Simpan ke grid cache
+  const result = { provinsi, kabupaten, kecamatan, desa, confident, kecBDC, kecNom }
+  spatialCache.set(cacheKey, result)
   return result
 }
 
@@ -431,7 +430,7 @@ export default function KonversiTiang() {
   }
 
   const handleUrlCellEdit = (idx, field, value) => {
-    setUrlRows(rows => rows.map((r, i) => i === idx ? { ...r, [field]: value } : r))
+    setUrlRows(rows => rows.map((r, i) => i === idx ? { ...r, [field]: value, confident: true } : r))
   }
 
   const handleExportUrlExcel = () => {
@@ -880,11 +879,23 @@ export default function KonversiTiang() {
                             placeholder="opsional..."
                             style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '11px', padding: '2px 6px', width: '100%', minWidth: '80px' }} />
                         </td>
-                        <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>
-                          {!r.valid ? <span style={{ color: 'var(--danger)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={12}/> Gagal ekstrak</span>
-                            : r.status === 'pending' ? <span style={{ color: 'var(--warning)', fontSize: '11px' }}>⏳ Pending</span>
-                              : (!r.kecamatan && !r.desa) ? <span style={{ color: 'var(--warning)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertCircle size={12}/> Lokasi kosong</span>
-                                : <span style={{ color: 'var(--success)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={12}/> OK</span>}
+                        <td style={{ padding: '6px 10px', whiteSpace: 'nowrap', minWidth: '140px' }}>
+                          {!r.valid
+                            ? <span style={{ color: 'var(--danger)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={12}/> Gagal ekstrak</span>
+                            : r.status === 'pending'
+                              ? <span style={{ color: 'var(--warning)', fontSize: '11px' }}>⏳ Pending</span>
+                              : (!r.kecamatan && !r.desa)
+                                ? <span style={{ color: 'var(--danger)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertCircle size={12}/> Lokasi kosong</span>
+                                : !r.confident
+                                  ? <div>
+                                      <span style={{ color: '#f59e0b', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={12}/> Perlu Cek</span>
+                                      {r.kecBDC && r.kecNom && r.kecBDC.toLowerCase() !== r.kecNom.toLowerCase() && (
+                                        <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginTop: '2px' }}>
+                                          BDC: {r.kecBDC}<br/>OSM: {r.kecNom}
+                                        </span>
+                                      )}
+                                    </div>
+                                  : <span style={{ color: 'var(--success)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={12}/> OK</span>}
                         </td>
                       </tr>
                     ))}
