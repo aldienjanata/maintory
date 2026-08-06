@@ -9,7 +9,10 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['logo.png', 'favicon.ico'],
       workbox: {
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024 // 4 MiB
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024 // 6 MiB
       },
       manifest: {
         name: 'Maintory',
@@ -22,11 +25,6 @@ export default defineConfig({
           { src: '/logo.png', sizes: '192x192', type: 'image/png' },
           { src: '/logo.png', sizes: '512x512', type: 'image/png' },
         ],
-      },
-      workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
-        cleanupOutdatedCaches: true,
       },
     }),
   ],
