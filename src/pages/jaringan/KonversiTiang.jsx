@@ -34,26 +34,27 @@ async function parseKMZ(file) {
 }
 
 /** Strip prefix "Kecamatan ", "Desa ", dll */
-const cleanName = (s) => (s || '').replace(/^(Kecamatan|Desa|Kelurahan|Kabupaten|Kota)\s+/i, '').trim()
+const cleanName = (s) => (s || '').replace(/^(Kecamatan|Kelurahan|Desa|Kabupaten|Kota|Kab\.)\s+/i, '').trim()
 
-/** BigDataCloud reverse geocode */
+/** BigDataCloud reverse geocode — lebih teliti dengan semua admin levels */
 async function fetchBDC(lat, lon) {
   try {
     const res = await fetch(
       `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=id`,
-      { signal: AbortSignal.timeout(6000) }
+      { signal: AbortSignal.timeout(8000) }
     )
     if (!res.ok) return {}
     const d = await res.json()
     const admin = d.localityInfo?.administrative || []
     const lvl = (n) => cleanName(admin.find(a => a.adminLevel === n)?.name || '')
+    
+    // Indonesia: adminLevel 4=Provinsi, 5=Kabupaten, 6=Kecamatan, 7=Desa
     const provinsi  = lvl(4) || cleanName(d.principalSubdivision || '')
-    const kabupaten = lvl(5) || cleanName(d.city || '')
-    const kec6 = lvl(6)
-    const kec7 = lvl(7)
-    const des8 = lvl(8)
-    const kecamatan = kec6 || (des8 ? kec7 : '')
-    const desa      = des8 || (!kec6 ? kec7 : '') || cleanName(d.locality || '')
+    const kabupaten = lvl(5) || cleanName(d.city || d.county || '')
+    const kecamatan = lvl(6) || ''
+    // Desa: coba level 7, jika kosong coba level 8, lalu locality
+    const desa      = lvl(7) || lvl(8) || cleanName(d.locality || '')
+
     return { provinsi, kabupaten, kecamatan, desa, locality: cleanName(d.locality || '') }
   } catch { return {} }
 }
@@ -64,9 +65,8 @@ let nomLock = Promise.resolve()
 
 async function fetchNominatimSafe(lat, lon, zoom) {
   const z = zoom || 18
-  const latR = Math.round(parseFloat(lat) * 100) / 100
-  const lonR = Math.round(parseFloat(lon) * 100) / 100
-  const key = `${z}_${latR}_${lonR}`
+  // Cache key pakai koordinat penuh agar tidak ada pembulatan yang mengacaukan
+  const key = `${z}_${lat}_${lon}`
   if (nomCache.has(key)) return nomCache.get(key)
 
   return new Promise(resolve => {
@@ -76,16 +76,21 @@ async function fetchNominatimSafe(lat, lon, zoom) {
       try {
         const res = await fetch(
           `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=id&zoom=${z}&addressdetails=1`,
-          { headers: { 'User-Agent': 'MaintoryApp/1.0' }, signal: AbortSignal.timeout(8000) }
+          { headers: { 'User-Agent': 'MaintoryApp/1.0' }, signal: AbortSignal.timeout(10000) }
         )
         if (!res.ok) throw new Error('Failed')
         const d = await res.json()
         const a = d.address || {}
+        
+        // Untuk Indonesia, Nominatim field mapping:
+        // county/regency → Kabupaten
+        // district → Kecamatan (paling akurat)
+        // village/hamlet → Desa (paling akurat)
         const data = {
           provinsi:  a.state || '',
-          kabupaten: cleanName(a.county || a.city || ''),
-          kecamatan: cleanName(a.municipality || a.district || a.city_district || a.borough || a.town || (z < 18 ? a.village : '') || ''),
-          desa:      cleanName(a.village || a.hamlet || a.quarter || a.neighbourhood || a.suburb || ''),
+          kabupaten: cleanName(a.county || a.regency || a.city || ''),
+          kecamatan: cleanName(a.district || a.municipality || a.city_district || ''),
+          desa:      cleanName(a.village || a.hamlet || a.quarter || a.neighbourhood || ''),
         }
         nomCache.set(key, data)
         resolve(data)
@@ -94,30 +99,43 @@ async function fetchNominatimSafe(lat, lon, zoom) {
   })
 }
 
-/** Gabungkan BDC + Nominatim, dengan fallback zoom 12 jika kecamatan kosong */
+/** Gabungkan BDC + Nominatim multi-zoom untuk akurasi maksimal Indonesia */
 async function reverseGeocode(lat, lon) {
-  const [bdcR, nomR] = await Promise.allSettled([fetchBDC(lat, lon), fetchNominatimSafe(lat, lon, 18)])
-  const b = bdcR.status === 'fulfilled' ? bdcR.value : {}
-  const n = nomR.status === 'fulfilled' ? nomR.value : {}
+  // Jalankan BDC dan Nominatim zoom-18 bersamaan
+  const [bdcR, nom18R] = await Promise.allSettled([
+    fetchBDC(lat, lon),
+    fetchNominatimSafe(lat, lon, 18)
+  ])
+  const b   = bdcR.status === 'fulfilled'  ? bdcR.value  : {}
+  const n18 = nom18R.status === 'fulfilled' ? nom18R.value : {}
 
-  let kecamatan = n.kecamatan || b.kecamatan || ''
-  const desa = n.desa || b.desa || ''
+  // Prioritas field:
+  // Provinsi & Kabupaten → BDC lebih andal untuk Indonesia
+  const provinsi  = b.provinsi  || n18.provinsi  || ''
+  const kabupaten = b.kabupaten || n18.kabupaten || ''
 
+  // Kecamatan → Nominatim `district` lebih akurat, BDC level 6 sebagai fallback
+  let kecamatan = n18.kecamatan || b.kecamatan || ''
+
+  // Desa → Nominatim zoom-18 `village` paling akurat
+  let desa = n18.desa || b.desa || ''
+
+  // Fallback kecamatan: jika belum ada, coba zoom-13 (level kecamatan)
   if (!kecamatan) {
-    const fallback = await fetchNominatimSafe(lat, lon, 12)
-    if (fallback.kecamatan) {
-      kecamatan = fallback.kecamatan
-    } else if (b.locality && b.locality !== desa) {
+    const nom13 = await fetchNominatimSafe(lat, lon, 13)
+    kecamatan = nom13.kecamatan || ''
+    // Jika desa juga kosong, coba ambil village dari zoom-13
+    if (!desa) desa = nom13.desa || ''
+    // Terakhir: gunakan locality BDC jika berbeda dari desa
+    if (!kecamatan && b.locality && b.locality !== desa) {
       kecamatan = b.locality
     }
   }
 
-  return {
-    provinsi:  b.provinsi  || n.provinsi  || '',
-    kabupaten: b.kabupaten || n.kabupaten || '',
-    kecamatan,
-    desa,
-  }
+  // Fallback desa: jika desa masih kosong, coba locality BDC
+  if (!desa && b.locality) desa = b.locality
+
+  return { provinsi, kabupaten, kecamatan, desa }
 }
 
 /** Buat KMZ dari baris data Excel */
