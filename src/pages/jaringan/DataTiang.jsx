@@ -1165,14 +1165,14 @@ export default function DataTiang() {
       {/* ══════ MODAL IMPORT ══════ */}
       {isImportModalOpen && (
         <div className="modal-overlay">
-          <div className="modal" style={{ width: '780px', maxWidth: '96vw', maxHeight: '93vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div className="modal" style={{ width: '1200px', maxWidth: '98vw', maxHeight: '93vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div className="modal-header">
               <div>
                 <h3 style={{ margin: 0 }}>Preview Import Data Tiang</h3>
                 <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
                   {importRows.filter(r => r._valid).length} baris valid · {importRows.filter(r => !r._valid).length} baris tidak valid
                   {importRows.filter(r => r._proximityWarning && !r._selected).length > 0 && (
-                    <span style={{ color: 'var(--warning)', fontWeight: 600, marginLeft: '8px' }}>
+                    <span style={{ color: 'var(--warning)', fontWeight: 600, marginLeft: '8px', fontSize: '13px' }}>
                       · ⚠️ {importRows.filter(r => r._proximityWarning && !r._selected).length} baris berdekatan
                     </span>
                   )}
@@ -1182,7 +1182,7 @@ export default function DataTiang() {
             </div>
             <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
               <div style={{ overflowX: 'auto' }}>
-                <table className="table" style={{ fontSize: '12px', minWidth: '800px' }}>
+                <table className="table" style={{ fontSize: '12px', minWidth: '1000px' }}>
                   <thead>
                     <tr>
                       <th style={{ width: '40px', textAlign: 'center' }}>
@@ -1200,7 +1200,7 @@ export default function DataTiang() {
                   <tbody>
                     {importRows.map(row => (
                       <Fragment key={row._rowNo}>
-                        <tr style={{ opacity: row._valid ? 1 : 0.45, background: row._proximityWarning && !row._selected ? 'rgba(245,158,11,0.05)' : 'transparent' }}>
+                        <tr style={{ opacity: row._valid ? 1 : 0.45, background: row._proximityWarning && !row._selected ? 'rgba(239, 68, 68, 0.1)' : 'transparent', borderLeft: row._proximityWarning && !row._selected ? '4px solid var(--danger)' : '4px solid transparent' }}>
                           <td style={{ textAlign: 'center' }}>
                             <input type="checkbox" disabled={!row._valid} checked={row._selected || false}
                               onChange={(e) => {
@@ -1209,13 +1209,13 @@ export default function DataTiang() {
                               }}
                             />
                           </td>
-                          <td style={{ color: 'var(--text-secondary)' }}>{row._rowNo}</td><td>{SITES.find(s => s.value === row.site)?.label || row.site}</td><td>{POLE_TYPES.find(t => t.value === row.pole_type)?.label || row.pole_type}</td>
+                          <td style={{ color: 'var(--text-secondary)', fontWeight: row._proximityWarning && !row._selected ? 'bold' : 'normal' }}>{row._rowNo}</td><td>{SITES.find(s => s.value === row.site)?.label || row.site}</td><td>{POLE_TYPES.find(t => t.value === row.pole_type)?.label || row.pole_type}</td>
                           <td>{row.kecamatan || <span style={{ color: 'var(--danger)' }}>Kosong!</span>}</td><td>{row.desa || <span style={{ color: 'var(--danger)' }}>Kosong!</span>}</td>
                           <td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{row.latitude || '-'}</td><td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{row.longitude || '-'}</td>
                           <td>
                             {row._valid ? (
                               row._proximityWarning ? (
-                                <span style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠️ Warning</span>
+                                <span style={{ color: 'var(--danger)', fontWeight: 600 }}>⚠️ Cek Jarak!</span>
                               ) : (
                                 <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓ Valid</span>
                               )
@@ -1223,12 +1223,15 @@ export default function DataTiang() {
                           </td>
                         </tr>
                         {row._proximityWarning && !row._selected && (
-                          <tr style={{ background: 'rgba(245,158,11,0.1)' }}>
-                            <td></td>
-                            <td colSpan="8" style={{ padding: '8px 12px', fontSize: '11px', color: '#b45309' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <AlertTriangle size={14} />
-                                <strong>Peringatan Jarak:</strong> {row._proximityWarning}. Centang baris ini secara manual jika data ini memang valid (dua tiang yang berdekatan).
+                          <tr style={{ background: 'rgba(245, 158, 11, 0.15)' }}>
+                            <td style={{ borderLeft: '4px solid var(--warning)' }}></td>
+                            <td colSpan="8" style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--warning)', borderBottom: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                                <div>
+                                  <strong style={{ fontSize: '13px' }}>DUPLIKAT / BERDEKATAN:</strong> {row._proximityWarning}.<br/>
+                                  <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Jika ini memang 2 tiang fisik yang berbeda tapi berdekatan posisinya, silakan <strong>Centang</strong> kotak di sebelah kiri untuk tetap mengimportnya.</span>
+                                </div>
                               </div>
                             </td>
                           </tr>
