@@ -90,7 +90,7 @@ async function fetchNominatimSafe(lat, lon, zoom) {
           provinsi:  a.state || '',
           kabupaten: cleanName(a.county || a.regency || a.city || ''),
           kecamatan: cleanName(a.district || a.municipality || a.city_district || ''),
-          desa:      cleanName(a.village || a.hamlet || a.quarter || a.neighbourhood || ''),
+          desa:      cleanName(a.village || a.suburb || a.hamlet || a.quarter || a.neighbourhood || ''),
         }
         nomCache.set(key, data)
         resolve(data)
@@ -99,43 +99,59 @@ async function fetchNominatimSafe(lat, lon, zoom) {
   })
 }
 
+// Global spatial cache (Grid ~111m) untuk titik yg berdekatan (mempercepat proses 20x lipat)
+const spatialCache = new Map()
+
 /** Gabungkan BDC + Nominatim multi-zoom untuk akurasi maksimal Indonesia */
 async function reverseGeocode(lat, lon) {
-  // Jalankan BDC dan Nominatim zoom-18 bersamaan
-  const [bdcR, nom18R] = await Promise.allSettled([
-    fetchBDC(lat, lon),
-    fetchNominatimSafe(lat, lon, 18)
-  ])
-  const b   = bdcR.status === 'fulfilled'  ? bdcR.value  : {}
-  const n18 = nom18R.status === 'fulfilled' ? nom18R.value : {}
+  // 1. Cek Spatial Cache (Pembulatan 3 desimal = Grid ~111 meter)
+  const latR = Math.round(parseFloat(lat) * 1000) / 1000
+  const lonR = Math.round(parseFloat(lon) * 1000) / 1000
+  const cacheKey = `${latR}_${lonR}`
+  
+  if (spatialCache.has(cacheKey)) {
+    return spatialCache.get(cacheKey)
+  }
 
-  // Prioritas field:
-  // Provinsi & Kabupaten → BDC lebih andal untuk Indonesia
-  const provinsi  = b.provinsi  || n18.provinsi  || ''
-  const kabupaten = b.kabupaten || n18.kabupaten || ''
+  // 2. Tarik data dari BDC (super cepat, tanpa delay Nominatim)
+  const b = await fetchBDC(latR, lonR)
+  
+  let provinsi = b.provinsi || ''
+  let kabupaten = b.kabupaten || ''
+  let kecamatan = b.kecamatan || ''
+  let desa = b.desa || ''
 
-  // Kecamatan → Nominatim `district` lebih akurat, BDC level 6 sebagai fallback
-  let kecamatan = n18.kecamatan || b.kecamatan || ''
-
-  // Desa → Nominatim zoom-18 `village` paling akurat
-  let desa = n18.desa || b.desa || ''
-
-  // Fallback kecamatan: jika belum ada, coba zoom-13 (level kecamatan)
-  if (!kecamatan) {
-    const nom13 = await fetchNominatimSafe(lat, lon, 13)
-    kecamatan = nom13.kecamatan || ''
-    // Jika desa juga kosong, coba ambil village dari zoom-13
-    if (!desa) desa = nom13.desa || ''
-    // Terakhir: gunakan locality BDC jika berbeda dari desa
-    if (!kecamatan && b.locality && b.locality !== desa) {
-      kecamatan = b.locality
+  // 3. Validasi Akurasi BDC: 
+  // Jika desa kosong, atau desa == kecamatan (sangat sering terjadi di BDC), 
+  // maka data BDC kurang akurat untuk tingkat desa. Kita butuh Nominatim!
+  const isBadDesa = !desa || desa.toLowerCase() === kecamatan.toLowerCase() || desa.toLowerCase() === kabupaten.toLowerCase()
+  
+  if (!kecamatan || isBadDesa) {
+    // Jalankan Nominatim HANYA JIKA BDC gagal memberikan desa yang akurat
+    const n18 = await fetchNominatimSafe(latR, lonR, 18)
+    
+    if (n18.provinsi) provinsi = n18.provinsi
+    if (n18.kabupaten) kabupaten = n18.kabupaten
+    if (n18.kecamatan) kecamatan = n18.kecamatan
+    
+    // Desa dari Nominatim jauh lebih akurat
+    if (n18.desa) {
+      desa = n18.desa
+    } else if (!kecamatan) {
+      // Fallback zoom 13 jika kecamatan juga kosong
+      const n13 = await fetchNominatimSafe(latR, lonR, 13)
+      if (n13.kecamatan) kecamatan = n13.kecamatan
+      if (n13.desa && !desa) desa = n13.desa
     }
   }
 
-  // Fallback desa: jika desa masih kosong, coba locality BDC
+  // Fallback terakhir: locality BDC
   if (!desa && b.locality) desa = b.locality
+  if (!kecamatan && b.locality && b.locality !== desa) kecamatan = b.locality
 
-  return { provinsi, kabupaten, kecamatan, desa }
+  const result = { provinsi, kabupaten, kecamatan, desa }
+  spatialCache.set(cacheKey, result) // Simpan ke grid cache
+  return result
 }
 
 /** Buat KMZ dari baris data Excel */
