@@ -9,8 +9,6 @@ import {
   Link, AlertTriangle, Download
 } from 'lucide-react'
 
-import localDesaDB from '../../assets/desa_jateng.json'
-
 // ── HELPERS ────────────────────────────────────────────────────────────────────
 
 /** Delay helper */
@@ -184,6 +182,9 @@ async function reverseGeocode(lat, lon) {
   // 4. Fallback Database Lokal (Akurasi Tinggi se-Jawa Tengah)
   // Berdasarkan saran: Jika nama desa sudah dapat, cek kamus data shapefile/BPS
   if (desa && kabupaten) {
+    // Dynamic import kamus BPS agar tidak memberatkan bundle awal PWA
+    const localDesaDB = (await import('../../assets/desa_jateng.json')).default;
+    
     const normKab = normalize(kabupaten).replace(/^(kabupaten|kota)\s+/i, '')
     // Kadang Nominatim menyertakan kata "Desa" atau "Kelurahan" di namanya
     const normDesa = normalize(desa).replace(/^(desa|kelurahan)\s+/i, '')
