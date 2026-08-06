@@ -1,5 +1,5 @@
 const fs = require('fs');
-const raw = JSON.parse(fs.readFileSync('src/assets/desa_pip.geojson', 'utf8'));
+const raw = JSON.parse(fs.readFileSync('temp_raw.geojson', 'utf8'));
 
 function getAllCoords(geometry) {
   if (!geometry) return [];
@@ -26,7 +26,6 @@ function computeFeatureBbox(feature) {
     if (x > maxX) maxX = x;
     if (y > maxY) maxY = y;
   }
-  // Store bbox with 5 decimal precision to save space
   return [
     Number(minX.toFixed(5)), 
     Number(minY.toFixed(5)), 
@@ -38,10 +37,9 @@ function computeFeatureBbox(feature) {
 const slim = {
   type: 'FeatureCollection',
   features: raw.features.map(f => {
-    const bbox = computeFeatureBbox(f);
     return {
       type: 'Feature',
-      bbox: bbox,
+      bbox: computeFeatureBbox(f),
       geometry: f.geometry,
       properties: {
         prov: f.properties.ADM1_EN || '',
@@ -54,5 +52,5 @@ const slim = {
 };
 
 fs.writeFileSync('src/assets/desa_jateng_pip.json', JSON.stringify(slim));
-const size = fs.statSync('src/assets/desa_jateng_pip.json').size;
-console.log('Done. Size:', Math.round(size/1024), 'KB');
+console.log('Done. Features:', slim.features.length);
+console.log('Sample:', slim.features[0].properties);
