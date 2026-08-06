@@ -876,6 +876,7 @@ export default function DataTiang() {
           </button>
           <button className="btn btn-secondary btn-sm" onClick={openKmzModal} disabled={kmzLoading} title="Export ke KMZ (Google Earth)" style={{ color: 'var(--accent)', borderColor: 'rgba(var(--accent-rgb, 59,130,246),0.4)' }}>
             <Map size={14} /> {kmzLoading ? 'Memproses...' : 'KMZ'}
+          </button>
         </div>
       </div>
 
