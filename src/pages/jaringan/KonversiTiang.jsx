@@ -9,6 +9,8 @@ import {
   Link, AlertTriangle, Download
 } from 'lucide-react'
 
+import localDesaDB from '../../assets/desa_banyumas_cilacap.json'
+
 // ── HELPERS ────────────────────────────────────────────────────────────────────
 
 /** Delay helper */
@@ -179,7 +181,50 @@ async function reverseGeocode(lat, lon) {
   if (!desa && b.locality) desa = b.locality
   if (!kecamatan || !desa) confident = false
 
-  const result = { provinsi, kabupaten, kecamatan, desa, confident, kecBDC, kecNom }
+  // 4. Fallback Database Lokal (Akurasi Tinggi untuk Banyumas/Cilacap)
+  // Berdasarkan saran: Jika nama desa sudah dapat, cek kamus data shapefile/BPS
+  if (desa && kabupaten) {
+    const normKab = normalize(kabupaten).replace(/^(kabupaten|kota)\s+/i, '')
+    // Kadang Nominatim menyertakan kata "Desa" atau "Kelurahan" di namanya
+    const normDesa = normalize(desa).replace(/^(desa|kelurahan)\s+/i, '')
+    
+    if (localDesaDB[normKab]) {
+      // Coba exact match dulu
+      if (localDesaDB[normKab][normDesa]) {
+        kecamatan = localDesaDB[normKab][normDesa]
+        confident = true // Data valid dari BPS
+      } else {
+        // Jika tidak exact match, coba cari nama desa yang mengandung string
+        const matchedDesaKey = Object.keys(localDesaDB[normKab]).find(k => 
+          k === normDesa || k.includes(normDesa) || normDesa.includes(k)
+        )
+        if (matchedDesaKey) {
+          kecamatan = localDesaDB[normKab][matchedDesaKey]
+          desa = matchedDesaKey // perbaiki nama desa sesuai data resmi BPS
+          confident = true
+        }
+      }
+    }
+  }
+
+  // Jika setelah pakai kamus masih ada perbedaan antara BDC & Nominatim DAN tidak di-override kamus
+  // Biarkan confident = false, biar user mengecek
+
+  // Kapitalisasi standar (Title Case)
+  const toTitleCase = (str) => str.replace(
+    /\w\S*/g,
+    (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase()
+  )
+
+  const result = { 
+    provinsi: toTitleCase(provinsi), 
+    kabupaten: toTitleCase(kabupaten), 
+    kecamatan: toTitleCase(kecamatan), 
+    desa: toTitleCase(desa), 
+    confident, 
+    kecBDC, 
+    kecNom 
+  }
   spatialCache.set(cacheKey, result)
   return result
 }
