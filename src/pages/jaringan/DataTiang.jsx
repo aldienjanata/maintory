@@ -406,7 +406,7 @@ export default function DataTiang() {
         if (!p.latitude || !p.longitude) continue
         
         const dist = getDistanceFromLatLonInm(lat, lon, Number(p.latitude), Number(p.longitude))
-        if (dist <= 20) {
+        if (dist <= 10) {
           conflictCount++
           if (dist < nearestDist) {
             nearestDist = dist
@@ -641,7 +641,7 @@ export default function DataTiang() {
             for (const prev of mapped) {
               if (!prev.latitude || !prev.longitude) continue
               const dist = getDistanceFromLatLonInm(lat, lon, prev.latitude, prev.longitude)
-              if (dist <= 20) {
+              if (dist <= 10) {
                 proxWarning = `Jarak ${dist}m dengan Baris ${prev._rowNo}`
                 selected = false
                 break
@@ -655,12 +655,12 @@ export default function DataTiang() {
               for (const p of poles) {
                 if (!p.latitude || !p.longitude) continue
                 const dist = getDistanceFromLatLonInm(lat, lon, Number(p.latitude), Number(p.longitude))
-                if (dist <= 20 && dist < nearestDist) {
+                if (dist <= 10 && dist < nearestDist) {
                   nearestDist = dist
                   nearestDbId = p.pole_id
                 }
               }
-              if (nearestDist <= 20) {
+              if (nearestDist <= 10) {
                 proxWarning = `Jarak ${nearestDist}m dengan ID Tiang ${nearestDbId || '?'}`
                 selected = false
               }
@@ -1138,7 +1138,7 @@ export default function DataTiang() {
                   <AlertTriangle size={24} style={{ flexShrink: 0 }} />
                   <div style={{ fontSize: '13px', lineHeight: '1.5' }}>
                     <strong style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>Peringatan Jarak Berdekatan!</strong>
-                    Ditemukan <strong>{proximityWarning.count} tiang</strong> dalam radius 20 meter.<br/>
+                    Ditemukan <strong>{proximityWarning.count} tiang</strong> dalam radius 10 meter.<br/>
                     Tiang terdekat berjarak <strong>{proximityWarning.dist} meter</strong> (ID: <span style={{ fontFamily: 'monospace' }}>{proximityWarning.poleId}</span>).<br/>
                     <span style={{ color: 'var(--text-secondary)' }}>Apakah Anda yakin ingin tetap menyimpan tiang ini?</span>
                   </div>
