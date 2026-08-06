@@ -562,8 +562,8 @@ export default function DataTiang() {
         'No': i + 1, 'Site': SITES.find(s => s.value === p.site)?.label || p.site,
         'ID Tiang': p.pole_id || '', 'Jenis Tiang': POLE_TYPES.find(t => t.value === p.pole_type)?.label || p.pole_type,
         'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
-        'Desa/Kelurahan': p.desa || '', 'Maps URL': p.maps_url || '', 'Longitude': p.longitude || '',
-        'Latitude': p.latitude || '', 'Keterangan': p.keterangan || '', 'Diinput Oleh': getUserName(p.created_by),
+        'Desa/Kelurahan': p.desa || '', 'Maps URL': p.maps_url || '', 'Latitude': p.latitude || '',
+        'Longitude': p.longitude || '', 'Keterangan': p.keterangan || '', 'Diinput Oleh': getUserName(p.created_by),
         'Edit Oleh': getUserName(p.updated_by), 'Tanggal Input': p.created_at ? format(new Date(p.created_at), 'dd/MM/yyyy HH:mm') : '',
         'Tanggal Update': p.updated_at ? format(new Date(p.updated_at), 'dd/MM/yyyy HH:mm') : '',
       }))
@@ -607,7 +607,7 @@ export default function DataTiang() {
     const template = [{
       'Site': 'banyumas', 'Jenis Tiang': 'tiang_7m', 'Provinsi': 'Jawa Tengah', 'Kabupaten/Kota': 'Banyumas',
       'Kecamatan': 'Purwokerto Selatan', 'Desa/Kelurahan': 'Tanjung', 'Maps URL': 'https://maps.app.goo.gl/contoh',
-      'Longitude': '109.2345678', 'Latitude': '-7.4321234', 'Keterangan': 'Contoh keterangan',
+      'Latitude': '-7.4321234', 'Longitude': '109.2345678', 'Keterangan': 'Contoh keterangan',
     }]
     const ws = XLSX.utils.json_to_sheet(template)
     ws['!cols'] = [{ wch: 15 }, { wch: 12 }, { wch: 16 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 40 }, { wch: 14 }, { wch: 14 }, { wch: 30 }]
