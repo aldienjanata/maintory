@@ -5,7 +5,8 @@ import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import {
   FileSpreadsheet, Map as MapIcon, Upload, RefreshCw,
-  CheckCircle, Loader, Info, Pause, Play, Square, AlertCircle
+  CheckCircle, Loader, Info, Pause, Play, Square, AlertCircle,
+  Link, AlertTriangle, Download
 } from 'lucide-react'
 
 // ── HELPERS ────────────────────────────────────────────────────────────────────
@@ -154,6 +155,21 @@ async function buildKMZ(rows) {
   return await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
 }
 
+// ── URL PARSER ──────────────────────────────────────────────────────────────────
+function extractCoordsFromMapsUrl(url) {
+  if (!url) return null
+  // Format: @lat,lon
+  const m1 = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
+  if (m1) return { lat: parseFloat(m1[1]), lon: parseFloat(m1[2]) }
+  // Format: ?q=lat,lon
+  const m2 = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/)
+  if (m2) return { lat: parseFloat(m2[1]), lon: parseFloat(m2[2]) }
+  // Format: /maps/place/.../lat,lon
+  const m3 = url.match(/(-?\d+\.\d{5,}),(-?\d+\.\d{5,})/)
+  if (m3) return { lat: parseFloat(m3[1]), lon: parseFloat(m3[2]) }
+  return null
+}
+
 // ── COMPONENT ──────────────────────────────────────────────────────────────────
 export default function KonversiTiang() {
   const [mode, setMode] = useState('kmz2excel')
@@ -172,6 +188,24 @@ export default function KonversiTiang() {
   const [excelRows, setExcelRows] = useState([])
   const [excelParsed, setExcelParsed] = useState(false)
   const [exporting, setExporting] = useState(false)
+
+  // URL → Excel state
+  const [urlInput, setUrlInput] = useState('')
+  const [urlRows, setUrlRows] = useState([])
+  const [urlProcessing, setUrlProcessing] = useState(false)
+  const [urlProgress, setUrlProgress] = useState({ done: 0, total: 0 })
+  const [urlDone, setUrlDone] = useState(false)
+  const urlStopRef = useRef(false)
+
+  const SITES = [
+    { value: 'banyumas', label: 'Banyumas' },
+    { value: 'cilacap', label: 'Cilacap' },
+    { value: 'cilacap_herman', label: 'Cilacap (Herman)' },
+  ]
+  const POLE_TYPES = [
+    { value: 'tiang_7m', label: 'Tiang 7 m' },
+    { value: 'tiang_9m', label: 'Tiang 9 m' },
+  ]
 
   const kmzRef   = useRef()
   const excelRef = useRef()
@@ -278,6 +312,94 @@ export default function KonversiTiang() {
     toast.success('File Excel berhasil didownload!')
   }
 
+  // ── URL → EXCEL ───────────────────────────────────────────────────────────────
+  const handleProcessUrls = async () => {
+    const lines = urlInput.split('\n').map(l => l.trim()).filter(Boolean)
+    if (lines.length === 0) return toast.error('Tidak ada URL yang dimasukkan!')
+
+    // Parse all URLs first
+    const parsed = lines.map((url, i) => {
+      const coords = extractCoordsFromMapsUrl(url)
+      return {
+        _idx: i,
+        url,
+        lat: coords?.lat ?? null,
+        lon: coords?.lon ?? null,
+        valid: !!coords,
+        site: 'banyumas',
+        pole_type: 'tiang_7m',
+        keterangan: '',
+        provinsi: '', kabupaten: '', kecamatan: '', desa: '',
+        status: coords ? 'pending' : 'invalid',
+      }
+    })
+
+    const invalidCount = parsed.filter(r => !r.valid).length
+    if (invalidCount > 0) toast(`⚠️ ${invalidCount} URL tidak bisa diekstrak koordinatnya.`, { duration: 5000 })
+
+    setUrlRows([...parsed])
+    setUrlDone(false)
+    setUrlProcessing(true)
+    urlStopRef.current = false
+    setUrlProgress({ done: 0, total: parsed.filter(r => r.valid).length })
+
+    const results = [...parsed]
+    const validItems = results.filter(r => r.valid)
+    const BATCH = 8
+    let done = 0
+
+    for (let i = 0; i < validItems.length; i += BATCH) {
+      if (urlStopRef.current) break
+      const chunk = validItems.slice(i, i + BATCH)
+      const geoResults = await Promise.all(chunk.map(r => reverseGeocode(r.lat, r.lon)))
+      geoResults.forEach((geo, bi) => {
+        const item = chunk[bi]
+        const idx = results.findIndex(r => r._idx === item._idx)
+        if (idx !== -1) {
+          results[idx] = { ...results[idx], ...geo, status: 'done' }
+        }
+        done++
+      })
+      setUrlRows([...results])
+      setUrlProgress({ done, total: validItems.length })
+    }
+
+    setUrlProcessing(false)
+    if (!urlStopRef.current) {
+      setUrlDone(true)
+      toast.success('Geocoding selesai! Periksa hasilnya lalu Download Excel.')
+    } else {
+      toast('Proses dihentikan.')
+    }
+  }
+
+  const handleUrlCellEdit = (idx, field, value) => {
+    setUrlRows(rows => rows.map((r, i) => i === idx ? { ...r, [field]: value } : r))
+  }
+
+  const handleExportUrlExcel = () => {
+    const validRows = urlRows.filter(r => r.valid)
+    if (validRows.length === 0) return toast.error('Tidak ada data untuk diexport!')
+    const data = validRows.map(r => ({
+      'Site': r.site,
+      'Jenis Tiang': r.pole_type,
+      'Provinsi': r.provinsi || '',
+      'Kabupaten/Kota': r.kabupaten || '',
+      'Kecamatan': r.kecamatan || '',
+      'Desa/Kelurahan': r.desa || '',
+      'Maps URL': r.url,
+      'Latitude': r.lat ?? '',
+      'Longitude': r.lon ?? '',
+      'Keterangan': r.keterangan || '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(data)
+    ws['!cols'] = [15, 12, 16, 18, 22, 22, 40, 14, 14, 30].map(w => ({ wch: w }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Template Import')
+    XLSX.writeFile(wb, `Template_Import_dari_URL_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`)
+    toast.success('File Excel berhasil didownload!')
+  }
+
   // ── EXCEL → KMZ ──────────────────────────────────────────────────────────────
   const handleExcelUpload = (e) => {
     const file = e.target.files?.[0]
@@ -340,6 +462,7 @@ export default function KonversiTiang() {
         {[
           { key: 'kmz2excel', label: 'KMZ → Excel', icon: <FileSpreadsheet size={15} /> },
           { key: 'excel2kmz', label: 'Excel → KMZ', icon: <MapIcon size={15} /> },
+          { key: 'url2excel', label: 'URL Maps → Excel', icon: <Link size={15} /> },
         ].map(m => (
           <button key={m.key} onClick={() => setMode(m.key)} style={{
             display: 'flex', alignItems: 'center', gap: '7px',
@@ -564,6 +687,150 @@ export default function KonversiTiang() {
                     {excelRows.length > 50 && (
                       <tr><td colSpan={8} style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>... dan {excelRows.length - 50} baris lainnya</td></tr>
                     )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════ MODE: URL → EXCEL ═══════════ */}
+      {mode === 'url2excel' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Info Box */}
+          <div style={{ display: 'flex', gap: '10px', padding: '14px 16px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 'var(--radius-md)' }}>
+            <Info size={18} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '1px' }} />
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.8' }}>
+              Tempelkan URL Google Maps satu per baris. Sistem akan mengekstrak koordinat dan mengisi otomatis
+              <strong> Provinsi, Kabupaten, Kecamatan, Desa</strong> via reverse geocoding.<br/>
+              <strong>Format URL yang didukung:</strong> <code style={{ background: 'rgba(255,255,255,0.08)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>https://maps.google.com/?q=-7.62,109.25</code> atau <code style={{ background: 'rgba(255,255,255,0.08)', padding: '1px 6px', borderRadius: '4px', fontSize: '11px' }}>https://www.google.com/maps/@-7.62,109.25,...</code><br/>
+              <span style={{ color: 'var(--warning)' }}>⚠️ URL pendek (goo.gl) tidak didukung.</span> Buka URL pendeknya di browser, salin URL panjang dari address bar, lalu tempel di sini.
+            </div>
+          </div>
+
+          {/* URL Input */}
+          <div className="card" style={{ padding: '20px' }}>
+            <label style={{ fontWeight: 600, fontSize: '13px', display: 'block', marginBottom: '10px' }}>
+              Daftar URL Google Maps (1 URL per baris)
+            </label>
+            <textarea
+              value={urlInput}
+              onChange={e => setUrlInput(e.target.value)}
+              placeholder={'https://maps.google.com/?q=-7.624160346131124,109.25473663955927\nhttps://www.google.com/maps/@-7.581199,109.251490,17z'}
+              style={{
+                width: '100%', minHeight: '160px', padding: '12px', resize: 'vertical',
+                fontFamily: 'monospace', fontSize: '12px', lineHeight: '1.8',
+                background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-md)', color: 'var(--text-primary)',
+                boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', flexWrap: 'wrap', gap: '10px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {urlInput.split('\n').filter(l => l.trim()).length} URL terdeteksi
+              </span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => { setUrlInput(''); setUrlRows([]); setUrlDone(false); setUrlProgress({ done: 0, total: 0 }) }}>Reset</button>
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={urlProcessing || !urlInput.trim()}
+                  onClick={handleProcessUrls}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  {urlProcessing ? <><Loader size={14} /> Memproses...</> : <><MapIcon size={14} /> Proses & Geocode</>}
+                </button>
+                {urlProcessing && (
+                  <button className="btn btn-sm" onClick={() => { urlStopRef.current = true }} style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                    <Square size={13} /> Hentikan
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Progress */}
+          {urlRows.length > 0 && (
+            <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '14px 18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontWeight: 700, fontSize: '13px' }}>
+                  {urlProcessing ? '⚡ Sedang geocoding...' : urlDone ? '✅ Selesai' : '⏸ Dihentikan'}
+                  <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: '10px', fontSize: '12px' }}>
+                    {urlProgress.done}/{urlProgress.total} titik diproses
+                  </span>
+                </span>
+                {(urlDone || urlProgress.done > 0) && (
+                  <button className="btn btn-primary btn-sm" onClick={handleExportUrlExcel} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--success, #22c55e)' }}>
+                    <Download size={13} /> Download Excel
+                  </button>
+                )}
+              </div>
+              <div style={{ background: 'var(--border)', borderRadius: '999px', height: '6px', overflow: 'hidden' }}>
+                <div style={{
+                  width: `${urlProgress.total > 0 ? Math.round((urlProgress.done / urlProgress.total) * 100) : 0}%`,
+                  height: '100%', background: urlDone ? 'var(--success, #22c55e)' : 'var(--accent)',
+                  borderRadius: '999px', transition: 'width 0.4s ease',
+                }} />
+              </div>
+            </div>
+          )}
+
+          {/* Preview Table */}
+          {urlRows.length > 0 && (
+            <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+              <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 700, fontSize: '14px' }}>Preview — {urlRows.length} URL</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  {urlRows.filter(r => !r.valid).length > 0 && <span style={{ color: 'var(--danger)', marginRight: '12px' }}>✗ {urlRows.filter(r => !r.valid).length} gagal ekstrak</span>}
+                  <span style={{ color: 'var(--warning)' }}>{urlRows.filter(r => r.valid && r.status === 'pending').length > 0 ? `⏳ ${urlRows.filter(r => r.valid && r.status === 'pending').length} pending` : ''}</span>
+                </span>
+              </div>
+              <div style={{ overflowX: 'auto', maxHeight: '500px', overflowY: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0, zIndex: 1 }}>
+                      {['No', 'Site', 'Jenis', 'Provinsi', 'Kabupaten', 'Kecamatan', 'Desa', 'Lat', 'Lon', 'Keterangan', 'Status'].map(h => (
+                        <th key={h} style={{ padding: '10px 10px', textAlign: 'left', fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border)', fontSize: '11px' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {urlRows.map((r, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: !r.valid ? 'rgba(239,68,68,0.06)' : r.status === 'pending' ? 'rgba(245,158,11,0.04)' : 'transparent' }}>
+                        <td style={{ padding: '6px 10px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{i + 1}</td>
+                        <td style={{ padding: '4px 6px' }}>
+                          <select value={r.site} onChange={e => handleUrlCellEdit(i, 'site', e.target.value)}
+                            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '11px', padding: '2px 4px', width: '100%' }}>
+                            {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ padding: '4px 6px' }}>
+                          <select value={r.pole_type} onChange={e => handleUrlCellEdit(i, 'pole_type', e.target.value)}
+                            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '11px', padding: '2px 4px', width: '100%' }}>
+                            {POLE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                          </select>
+                        </td>
+                        {['provinsi', 'kabupaten', 'kecamatan', 'desa'].map(field => (
+                          <td key={field} style={{ padding: '4px 6px' }}>
+                            <input value={r[field] || ''} onChange={e => handleUrlCellEdit(i, field, e.target.value)}
+                              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '11px', padding: '2px 6px', width: '100%', minWidth: '80px' }} />
+                          </td>
+                        ))}
+                        <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontSize: '10px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.lat?.toFixed(6) ?? '—'}</td>
+                        <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontSize: '10px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.lon?.toFixed(6) ?? '—'}</td>
+                        <td style={{ padding: '4px 6px' }}>
+                          <input value={r.keterangan || ''} onChange={e => handleUrlCellEdit(i, 'keterangan', e.target.value)}
+                            placeholder="opsional..."
+                            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '11px', padding: '2px 6px', width: '100%', minWidth: '80px' }} />
+                        </td>
+                        <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>
+                          {!r.valid ? <span style={{ color: 'var(--danger)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertTriangle size={12}/> Gagal ekstrak</span>
+                            : r.status === 'pending' ? <span style={{ color: 'var(--warning)', fontSize: '11px' }}>⏳ Pending</span>
+                              : (!r.kecamatan && !r.desa) ? <span style={{ color: 'var(--warning)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}><AlertCircle size={12}/> Lokasi kosong</span>
+                                : <span style={{ color: 'var(--success)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}><CheckCircle size={12}/> OK</span>}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
