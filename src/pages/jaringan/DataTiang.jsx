@@ -1167,7 +1167,17 @@ export default function DataTiang() {
         <div className="modal-overlay">
           <div className="modal" style={{ width: '780px', maxWidth: '96vw', maxHeight: '93vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div className="modal-header">
-              <div><h3 style={{ margin: 0 }}>Preview Import Data Tiang</h3><p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>{importRows.filter(r => r._valid).length} baris valid · {importRows.filter(r => !r._valid).length} baris tidak valid</p></div>
+              <div>
+                <h3 style={{ margin: 0 }}>Preview Import Data Tiang</h3>
+                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  {importRows.filter(r => r._valid).length} baris valid · {importRows.filter(r => !r._valid).length} baris tidak valid
+                  {importRows.filter(r => r._proximityWarning).length > 0 && (
+                    <span style={{ color: 'var(--warning)', fontWeight: 600, marginLeft: '8px' }}>
+                      · ⚠️ {importRows.filter(r => r._proximityWarning).length} baris berdekatan
+                    </span>
+                  )}
+                </p>
+              </div>
               <button className="btn-close" onClick={() => setIsImportModalOpen(false)}><X size={20} /></button>
             </div>
             <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
@@ -1189,34 +1199,41 @@ export default function DataTiang() {
                   </thead>
                   <tbody>
                     {importRows.map(row => (
-                      <tr key={row._rowNo} style={{ opacity: row._valid ? 1 : 0.45, background: row._proximityWarning && !row._selected ? 'rgba(245,158,11,0.05)' : 'transparent' }}>
-                        <td style={{ textAlign: 'center' }}>
-                          <input type="checkbox" disabled={!row._valid} checked={row._selected || false}
-                            onChange={(e) => {
-                              const val = e.target.checked
-                              setImportRows(rows => rows.map(r => r._rowNo === row._rowNo ? { ...r, _selected: val } : r))
-                            }}
-                          />
-                        </td>
-                        <td style={{ color: 'var(--text-secondary)' }}>{row._rowNo}</td><td>{SITES.find(s => s.value === row.site)?.label || row.site}</td><td>{POLE_TYPES.find(t => t.value === row.pole_type)?.label || row.pole_type}</td>
-                        <td>{row.kecamatan || <span style={{ color: 'var(--danger)' }}>Kosong!</span>}</td><td>{row.desa || <span style={{ color: 'var(--danger)' }}>Kosong!</span>}</td>
-                        <td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{row.latitude || '-'}</td><td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{row.longitude || '-'}</td>
-                        <td>
-                          {row._valid ? (
-                            row._proximityWarning ? (
-                              <div style={{ color: 'var(--warning)', display: 'flex', alignItems: 'flex-start', gap: '4px', fontSize: '11px', lineHeight: 1.2 }}>
-                                <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: '1px' }} />
-                                <div>
-                                  <strong style={{ display: 'block' }}>Peringatan Jarak</strong>
-                                  {row._proximityWarning}
-                                </div>
+                      <React.Fragment key={row._rowNo}>
+                        <tr style={{ opacity: row._valid ? 1 : 0.45, background: row._proximityWarning && !row._selected ? 'rgba(245,158,11,0.05)' : 'transparent' }}>
+                          <td style={{ textAlign: 'center' }}>
+                            <input type="checkbox" disabled={!row._valid} checked={row._selected || false}
+                              onChange={(e) => {
+                                const val = e.target.checked
+                                setImportRows(rows => rows.map(r => r._rowNo === row._rowNo ? { ...r, _selected: val } : r))
+                              }}
+                            />
+                          </td>
+                          <td style={{ color: 'var(--text-secondary)' }}>{row._rowNo}</td><td>{SITES.find(s => s.value === row.site)?.label || row.site}</td><td>{POLE_TYPES.find(t => t.value === row.pole_type)?.label || row.pole_type}</td>
+                          <td>{row.kecamatan || <span style={{ color: 'var(--danger)' }}>Kosong!</span>}</td><td>{row.desa || <span style={{ color: 'var(--danger)' }}>Kosong!</span>}</td>
+                          <td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{row.latitude || '-'}</td><td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{row.longitude || '-'}</td>
+                          <td>
+                            {row._valid ? (
+                              row._proximityWarning ? (
+                                <span style={{ color: 'var(--warning)', fontWeight: 600 }}>⚠️ Warning</span>
+                              ) : (
+                                <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓ Valid</span>
+                              )
+                            ) : <span style={{ color: 'var(--danger)', fontWeight: 600 }}>✗ Dilewati</span>}
+                          </td>
+                        </tr>
+                        {row._proximityWarning && (
+                          <tr style={{ background: 'rgba(245,158,11,0.1)' }}>
+                            <td></td>
+                            <td colSpan="8" style={{ padding: '8px 12px', fontSize: '11px', color: '#b45309' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <AlertTriangle size={14} />
+                                <strong>Peringatan Jarak:</strong> {row._proximityWarning}. Centang baris ini secara manual jika data ini memang valid (dua tiang yang berdekatan).
                               </div>
-                            ) : (
-                              <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓ Valid</span>
-                            )
-                          ) : <span style={{ color: 'var(--danger)', fontWeight: 600 }}>✗ Dilewati</span>}
-                        </td>
-                      </tr>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
