@@ -1171,9 +1171,9 @@ export default function DataTiang() {
                 <h3 style={{ margin: 0 }}>Preview Import Data Tiang</h3>
                 <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
                   {importRows.filter(r => r._valid).length} baris valid · {importRows.filter(r => !r._valid).length} baris tidak valid
-                  {importRows.filter(r => r._proximityWarning).length > 0 && (
+                  {importRows.filter(r => r._proximityWarning && !r._selected).length > 0 && (
                     <span style={{ color: 'var(--warning)', fontWeight: 600, marginLeft: '8px' }}>
-                      · ⚠️ {importRows.filter(r => r._proximityWarning).length} baris berdekatan
+                      · ⚠️ {importRows.filter(r => r._proximityWarning && !r._selected).length} baris berdekatan
                     </span>
                   )}
                 </p>
@@ -1222,7 +1222,7 @@ export default function DataTiang() {
                             ) : <span style={{ color: 'var(--danger)', fontWeight: 600 }}>✗ Dilewati</span>}
                           </td>
                         </tr>
-                        {row._proximityWarning && (
+                        {row._proximityWarning && !row._selected && (
                           <tr style={{ background: 'rgba(245,158,11,0.1)' }}>
                             <td></td>
                             <td colSpan="8" style={{ padding: '8px 12px', fontSize: '11px', color: '#b45309' }}>
