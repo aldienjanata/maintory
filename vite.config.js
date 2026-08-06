@@ -8,6 +8,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['logo.png', 'favicon.ico'],
+      workbox: {
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024 // 4 MiB
+      },
       manifest: {
         name: 'Maintory',
         short_name: 'Maintory',
