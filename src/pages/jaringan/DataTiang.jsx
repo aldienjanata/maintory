@@ -93,6 +93,18 @@ function extractCoordsFromUrl(url) {
   return null
 }
 
+function getDistanceFromLatLonInm(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return Infinity
+  const R = 6371e3 // Radius bumi dalam meter
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return Math.round(R * c)
+}
+
 // ─── KMZ GENERATION ──────────────────────────────────────────────────────────
 async function generateKMZ(poles, users) {
   const getUserName = (uid) => users.find(u => u.id === uid)?.full_name || 'Unknown'
@@ -200,6 +212,7 @@ export default function DataTiang() {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [proximityWarning, setProximityWarning] = useState(null)
   
   const [isKmzModalOpen, setIsKmzModalOpen] = useState(false)
   const [kmzFilterKecamatan, setKmzFilterKecamatan] = useState('')
@@ -346,10 +359,9 @@ export default function DataTiang() {
     setIsModalOpen(true)
   }
 
-  const handleSave = async () => {
-    if (!form.kecamatan.trim()) return toast.error('Kecamatan wajib diisi!')
-    if (!form.desa.trim()) return toast.error('Desa/Kelurahan wajib diisi!')
+  const executeSave = async () => {
     setSaving(true)
+    setProximityWarning(null)
     showProgress('Menyimpan Tiang', 'Mengirim data ke server...', 50)
     try {
       const payload = {
@@ -375,6 +387,45 @@ export default function DataTiang() {
       setSaving(false)
       hideProgress()
     }
+  }
+
+  const handleSave = async (bypassProximity = false) => {
+    if (!form.kecamatan.trim()) return toast.error('Kecamatan wajib diisi!')
+    if (!form.desa.trim()) return toast.error('Desa/Kelurahan wajib diisi!')
+    
+    // Cek Proximity (Jarak Tiang) jika ada koordinat
+    if (!bypassProximity && form.latitude && form.longitude) {
+      const lat = Number(form.latitude)
+      const lon = Number(form.longitude)
+      let nearestDist = Infinity
+      let nearestPole = null
+      let conflictCount = 0
+
+      for (const p of poles) {
+        if (editingId && p.id === editingId) continue // Jangan cek diri sendiri saat edit
+        if (!p.latitude || !p.longitude) continue
+        
+        const dist = getDistanceFromLatLonInm(lat, lon, Number(p.latitude), Number(p.longitude))
+        if (dist <= 20) {
+          conflictCount++
+          if (dist < nearestDist) {
+            nearestDist = dist
+            nearestPole = p
+          }
+        }
+      }
+
+      if (conflictCount > 0) {
+        setProximityWarning({
+          count: conflictCount,
+          dist: nearestDist,
+          poleId: nearestPole?.pole_id || 'Unknown',
+        })
+        return // Hentikan proses simpan dan tampilkan modal warning
+      }
+    }
+
+    await executeSave()
   }
 
   const handleDelete = async (pole) => {
@@ -575,13 +626,58 @@ export default function DataTiang() {
         const wb = XLSX.read(ev.target.result, { type: 'array' })
         const ws = wb.Sheets[wb.SheetNames[0]]
         const rows = XLSX.utils.sheet_to_json(ws)
-        const mapped = rows.map((r, i) => ({
-          _rowNo: i + 2, site: r['Site']?.toLowerCase() || 'banyumas', pole_type: r['Jenis Tiang']?.toLowerCase() || 'tiang_7m',
-          provinsi: r['Provinsi'] || '', kabupaten: r['Kabupaten/Kota'] || '', kecamatan: r['Kecamatan'] || '',
-          desa: r['Desa/Kelurahan'] || '', maps_url: r['Maps URL'] || '', longitude: r['Longitude'] ? Number(r['Longitude']) : null,
-          latitude: r['Latitude'] ? Number(r['Latitude']) : null, keterangan: r['Keterangan'] || '',
-          _valid: !!r['Kecamatan'] && !!r['Desa/Kelurahan'],
-        }))
+        
+        const mapped = []
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i]
+          const lat = r['Latitude'] ? Number(r['Latitude']) : null
+          const lon = r['Longitude'] ? Number(r['Longitude']) : null
+          
+          let proxWarning = null
+          let selected = !!r['Kecamatan'] && !!r['Desa/Kelurahan'] // default selected if valid
+          
+          if (lat && lon) {
+            // Cek ke file yang sama (baris sebelumnya)
+            for (const prev of mapped) {
+              if (!prev.latitude || !prev.longitude) continue
+              const dist = getDistanceFromLatLonInm(lat, lon, prev.latitude, prev.longitude)
+              if (dist <= 20) {
+                proxWarning = `Jarak ${dist}m dengan Baris ${prev._rowNo}`
+                selected = false
+                break
+              }
+            }
+            
+            // Cek ke DB jika belum kena warning file
+            if (!proxWarning) {
+              let nearestDist = Infinity
+              let nearestDbId = null
+              for (const p of poles) {
+                if (!p.latitude || !p.longitude) continue
+                const dist = getDistanceFromLatLonInm(lat, lon, Number(p.latitude), Number(p.longitude))
+                if (dist <= 20 && dist < nearestDist) {
+                  nearestDist = dist
+                  nearestDbId = p.pole_id
+                }
+              }
+              if (nearestDist <= 20) {
+                proxWarning = `Jarak ${nearestDist}m dengan ID Tiang ${nearestDbId || '?'}`
+                selected = false
+              }
+            }
+          }
+          
+          mapped.push({
+            _rowNo: i + 2, site: r['Site']?.toLowerCase() || 'banyumas', pole_type: r['Jenis Tiang']?.toLowerCase() || 'tiang_7m',
+            provinsi: r['Provinsi'] || '', kabupaten: r['Kabupaten/Kota'] || '', kecamatan: r['Kecamatan'] || '',
+            desa: r['Desa/Kelurahan'] || '', maps_url: r['Maps URL'] || '', longitude: lon,
+            latitude: lat, keterangan: r['Keterangan'] || '',
+            _valid: !!r['Kecamatan'] && !!r['Desa/Kelurahan'],
+            _selected: selected,
+            _proximityWarning: proxWarning
+          })
+        }
+        
         setImportRows(mapped)
         setIsImportModalOpen(true)
       } catch { toast.error('File tidak valid. Gunakan template yang disediakan.') }
@@ -591,8 +687,8 @@ export default function DataTiang() {
   }
 
   const handleSaveImport = async () => {
-    const valid = importRows.filter(r => r._valid)
-    if (valid.length === 0) return toast.error('Tidak ada baris yang valid!')
+    const valid = importRows.filter(r => r._selected)
+    if (valid.length === 0) return toast.error('Tidak ada baris yang dipilih untuk diimport!')
     
     setIsImportModalOpen(false)
     showProgress('Memulai Import', 'Memvalidasi data di server...', 5)
@@ -1035,7 +1131,33 @@ export default function DataTiang() {
                 <div><label className="form-label">Keterangan</label><textarea className="form-input" rows={2} style={{ resize: 'vertical' }} value={form.keterangan} onChange={e => setForm(f => ({ ...f, keterangan: e.target.value }))} placeholder="Catatan tambahan..." /></div>
               </div>
             </div>
-            <div className="modal-footer" style={{ flexShrink: 0 }}><button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button><button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving ? '...' : editingId ? '✓ Simpan Perubahan' : '✓ Tambah Tiang'}</button></div>
+            
+            {proximityWarning && (
+              <div style={{ padding: '0 24px' }}>
+                <div className="alert alert-warning" style={{ margin: 0, padding: '16px', background: 'rgba(245,158,11,0.1)', color: 'var(--warning)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(245,158,11,0.2)', display: 'flex', gap: '12px' }}>
+                  <AlertTriangle size={24} style={{ flexShrink: 0 }} />
+                  <div style={{ fontSize: '13px', lineHeight: '1.5' }}>
+                    <strong style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>Peringatan Jarak Berdekatan!</strong>
+                    Ditemukan <strong>{proximityWarning.count} tiang</strong> dalam radius 20 meter.<br/>
+                    Tiang terdekat berjarak <strong>{proximityWarning.dist} meter</strong> (ID: <span style={{ fontFamily: 'monospace' }}>{proximityWarning.poleId}</span>).<br/>
+                    <span style={{ color: 'var(--text-secondary)' }}>Apakah Anda yakin ingin tetap menyimpan tiang ini?</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="modal-footer" style={{ flexShrink: 0, marginTop: proximityWarning ? '16px' : '0' }}>
+              <button className="btn btn-secondary" onClick={() => { setIsModalOpen(false); setProximityWarning(null); }}>Batal</button>
+              {proximityWarning ? (
+                <button className="btn btn-primary" disabled={saving} onClick={() => handleSave(true)} style={{ background: 'var(--warning)', borderColor: 'var(--warning)' }}>
+                  {saving ? '...' : '⚠️ Ya, Lanjut Simpan'}
+                </button>
+              ) : (
+                <button className="btn btn-primary" disabled={saving} onClick={() => handleSave(false)}>
+                  {saving ? '...' : editingId ? '✓ Simpan Perubahan' : '✓ Tambah Tiang'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1050,22 +1172,57 @@ export default function DataTiang() {
             </div>
             <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
               <div style={{ overflowX: 'auto' }}>
-                <table className="table" style={{ fontSize: '12px', minWidth: '600px' }}>
-                  <thead><tr><th>Baris</th><th>Site</th><th>Jenis</th><th>Kecamatan</th><th>Desa</th><th>Lat</th><th>Lon</th><th>Status</th></tr></thead>
+                <table className="table" style={{ fontSize: '12px', minWidth: '800px' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px', textAlign: 'center' }}>
+                        <input type="checkbox" 
+                          checked={importRows.length > 0 && importRows.filter(r => r._valid).every(r => r._selected)}
+                          onChange={(e) => {
+                            const val = e.target.checked
+                            setImportRows(rows => rows.map(r => r._valid ? { ...r, _selected: val } : r))
+                          }}
+                        />
+                      </th>
+                      <th>Baris</th><th>Site</th><th>Jenis</th><th>Kecamatan</th><th>Desa</th><th>Lat</th><th>Lon</th><th>Status</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {importRows.map(row => (
-                      <tr key={row._rowNo} style={{ opacity: row._valid ? 1 : 0.45 }}>
+                      <tr key={row._rowNo} style={{ opacity: row._valid ? 1 : 0.45, background: row._proximityWarning && !row._selected ? 'rgba(245,158,11,0.05)' : 'transparent' }}>
+                        <td style={{ textAlign: 'center' }}>
+                          <input type="checkbox" disabled={!row._valid} checked={row._selected || false}
+                            onChange={(e) => {
+                              const val = e.target.checked
+                              setImportRows(rows => rows.map(r => r._rowNo === row._rowNo ? { ...r, _selected: val } : r))
+                            }}
+                          />
+                        </td>
                         <td style={{ color: 'var(--text-secondary)' }}>{row._rowNo}</td><td>{SITES.find(s => s.value === row.site)?.label || row.site}</td><td>{POLE_TYPES.find(t => t.value === row.pole_type)?.label || row.pole_type}</td>
                         <td>{row.kecamatan || <span style={{ color: 'var(--danger)' }}>Kosong!</span>}</td><td>{row.desa || <span style={{ color: 'var(--danger)' }}>Kosong!</span>}</td>
                         <td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{row.latitude || '-'}</td><td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{row.longitude || '-'}</td>
-                        <td>{row._valid ? <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓ Valid</span> : <span style={{ color: 'var(--danger)', fontWeight: 600 }}>✗ Dilewati</span>}</td>
+                        <td>
+                          {row._valid ? (
+                            row._proximityWarning ? (
+                              <div style={{ color: 'var(--warning)', display: 'flex', alignItems: 'flex-start', gap: '4px', fontSize: '11px', lineHeight: 1.2 }}>
+                                <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: '1px' }} />
+                                <div>
+                                  <strong style={{ display: 'block' }}>Peringatan Jarak</strong>
+                                  {row._proximityWarning}
+                                </div>
+                              </div>
+                            ) : (
+                              <span style={{ color: 'var(--success)', fontWeight: 600 }}>✓ Valid</span>
+                            )
+                          ) : <span style={{ color: 'var(--danger)', fontWeight: 600 }}>✗ Dilewati</span>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </div>
-            <div className="modal-footer" style={{ flexShrink: 0, padding: '16px 24px', background: 'var(--bg-card)', borderTop: '1px solid var(--border)' }}><button className="btn btn-secondary" onClick={() => { setIsImportModalOpen(false); setImportRows([]) }}>Batal</button><button className="btn btn-primary" onClick={handleSaveImport}>✓ Lanjutkan Import</button></div>
+            <div className="modal-footer" style={{ flexShrink: 0, padding: '16px 24px', background: 'var(--bg-card)', borderTop: '1px solid var(--border)' }}><button className="btn btn-secondary" onClick={() => { setIsImportModalOpen(false); setImportRows([]) }}>Batal</button><button className="btn btn-primary" disabled={importRows.filter(r => r._selected).length === 0} onClick={handleSaveImport}>✓ Import {importRows.filter(r => r._selected).length} Baris</button></div>
           </div>
         </div>
       )}
