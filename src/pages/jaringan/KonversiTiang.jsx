@@ -36,101 +36,66 @@ async function parseKMZ(file) {
 /** Strip prefix "Kecamatan ", "Desa ", dll */
 const cleanName = (s) => (s || '').replace(/^(Kecamatan|Kelurahan|Desa|Kabupaten|Kota|Kab\.)\s+/i, '').trim()
 
-/** BigDataCloud reverse geocode — lebih teliti dengan semua admin levels */
-async function fetchBDC(lat, lon) {
-  try {
-    const res = await fetch(
-      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=id`,
-      { signal: AbortSignal.timeout(8000) }
-    )
-    if (!res.ok) return {}
-    const d = await res.json()
-    const admin = d.localityInfo?.administrative || []
-    const lvl = (n) => cleanName(admin.find(a => a.adminLevel === n)?.name || '')
-    
-    // Indonesia: adminLevel 4=Provinsi, 5=Kabupaten, 6=Kecamatan, 7=Desa
-    const provinsi  = lvl(4) || cleanName(d.principalSubdivision || '')
-    const kabupaten = lvl(5) || cleanName(d.city || d.county || '')
-    const kecamatan = lvl(6) || ''
-    // Desa: coba level 7, jika kosong coba level 8, lalu locality
-    const desa      = lvl(7) || lvl(8) || cleanName(d.locality || '')
-
-    return { provinsi, kabupaten, kecamatan, desa, locality: cleanName(d.locality || '') }
-  } catch { return {} }
+/** Check if point is inside bbox [minX, minY, maxX, maxY] */
+function pointInBbox(lon, lat, bbox) {
+  if (!bbox) return false;
+  return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
 }
 
-/** Google Maps Geocoding API — paling akurat untuk Indonesia */
-let _googleApiKey = ''
-async function fetchGoogleMaps(lat, lon) {
-  if (!_googleApiKey) return null
-  try {
-    const res = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${_googleApiKey}&language=id`,
-      { signal: AbortSignal.timeout(10000) }
-    )
-    if (!res.ok) return null
-    const d = await res.json()
-    if (d.status !== 'OK' || !d.results?.length) {
-      if (d.status === 'REQUEST_DENIED') { _googleApiKey = ''; toast.error('Google API Key tidak valid!') }
-      return null
+/** Ray-casting algorithm for point in polygon ring */
+function pointInRing(lon, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (((yi > lat) !== (yj > lat)) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) {
+      inside = !inside;
     }
-    const comps = d.results[0].address_components || []
-    const get = (type) => comps.find(c => c.types.includes(type))?.long_name || ''
-    // Indonesia: level_1=Provinsi, level_2=Kabupaten, level_3=Kecamatan, level_4/sublocality=Desa
-    return {
-      provinsi:  get('administrative_area_level_1'),
-      kabupaten: cleanName(get('administrative_area_level_2')),
-      kecamatan: cleanName(get('administrative_area_level_3')),
-      desa:      cleanName(get('administrative_area_level_4') || get('sublocality_level_1') || get('neighborhood') || get('sublocality') || ''),
-    }
-  } catch { return null }
+  }
+  return inside;
 }
 
-/** Cache & mutex queue untuk Nominatim (maks 1 req/s) */
-const nomCache = new Map()
-let nomLock = Promise.resolve()
+/** Handle Polygon and MultiPolygon */
+function pointInPolygonGeom(lon, lat, geometry) {
+  if (!geometry) return false;
+  const type = geometry.type;
+  if (type === 'Polygon') {
+    if (!pointInRing(lon, lat, geometry.coordinates[0])) return false;
+    for (let i = 1; i < geometry.coordinates.length; i++) {
+      if (pointInRing(lon, lat, geometry.coordinates[i])) return false; // in hole
+    }
+    return true;
+  } else if (type === 'MultiPolygon') {
+    for (const poly of geometry.coordinates) {
+      if (!pointInRing(lon, lat, poly[0])) continue;
+      let inHole = false;
+      for (let i = 1; i < poly.length; i++) {
+        if (pointInRing(lon, lat, poly[i])) { inHole = true; break; }
+      }
+      if (!inHole) return true;
+    }
+    return false;
+  }
+  return false;
+}
 
-
-async function fetchNominatimSafe(lat, lon, zoom) {
-  const z = zoom || 18
-  // Cache key pakai koordinat penuh agar tidak ada pembulatan yang mengacaukan
-  const key = `${z}_${lat}_${lon}`
-  if (nomCache.has(key)) return nomCache.get(key)
-
-  return new Promise(resolve => {
-    nomLock = nomLock.then(async () => {
-      if (nomCache.has(key)) { resolve(nomCache.get(key)); return }
-      await delay(1100)
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=id&zoom=${z}&addressdetails=1`,
-          { headers: { 'User-Agent': 'MaintoryApp/1.0' }, signal: AbortSignal.timeout(10000) }
-        )
-        if (!res.ok) throw new Error('Failed')
-        const d = await res.json()
-        const a = d.address || {}
-        
-        // Untuk Indonesia, Nominatim field mapping:
-        // county/regency → Kabupaten
-        // district → Kecamatan (paling akurat)
-        // village/hamlet → Desa (paling akurat)
-        const data = {
-          provinsi:  a.state || '',
-          kabupaten: cleanName(a.county || a.regency || a.city || ''),
-          kecamatan: cleanName(a.district || a.municipality || a.city_district || ''),
-          desa:      cleanName(a.village || a.suburb || a.hamlet || a.quarter || a.neighbourhood || ''),
-        }
-        nomCache.set(key, data)
-        resolve(data)
-      } catch { resolve({}) }
-    })
-  })
+/** Find which feature contains the point */
+function findContainingFeature(geojson, lon, lat) {
+  if (!geojson || !geojson.features) return null;
+  for (let i = 0; i < geojson.features.length; i++) {
+    const f = geojson.features[i];
+    if (f.bbox && !pointInBbox(lon, lat, f.bbox)) continue;
+    if (pointInPolygonGeom(lon, lat, f.geometry)) {
+      return f;
+    }
+  }
+  return null;
 }
 
 // Global spatial cache (Grid ~11m = 4 desimal) agar titik yg sama tidak di-fetch ulang
 const spatialCache = new Map()
 
-/** Gabungkan sumber geocode — Google Maps (akurasi tinggi) atau BDC + Nominatim (fallback) */
+/** Gabungkan sumber geocode — Point-in-Polygon (Akurat 100% dari BPS) */
 async function reverseGeocode(lat, lon) {
   // 1. Spatial Cache ~11m precision
   const latR = Math.round(parseFloat(lat) * 10000) / 10000
@@ -138,78 +103,26 @@ async function reverseGeocode(lat, lon) {
   const cacheKey = `${latR}_${lonR}`
   if (spatialCache.has(cacheKey)) return spatialCache.get(cacheKey)
 
-  // 2. Google Maps API (jika API key tersedia) → akurasi tertinggi untuk Indonesia
-  if (_googleApiKey) {
-    const gm = await fetchGoogleMaps(lat, lon)
-    if (gm?.kecamatan) {
-      const result = { ...gm, confident: true, kecBDC: '', kecNom: 'Google Maps' }
-      spatialCache.set(cacheKey, result)
-      return result
-    }
-  }
+  let provinsi = '-', kabupaten = '-', kecamatan = '-', desa = '-'
+  let confident = false
 
-  // 3. Fallback: BDC + Nominatim cross-check
-  const [bdcR, nomR] = await Promise.allSettled([
-    fetchBDC(lat, lon),
-    fetchNominatimSafe(lat, lon, 18)
-  ])
-  const b = bdcR.status === 'fulfilled' ? bdcR.value : {}
-  const n = nomR.status === 'fulfilled' ? nomR.value : {}
-
-  const provinsi  = b.provinsi  || n.provinsi  || ''
-  const kabupaten = b.kabupaten || n.kabupaten || ''
-  const kecBDC = b.kecamatan || ''
-  const kecNom = n.kecamatan || ''
-
-  let kecamatan = kecNom || kecBDC || ''
-  let desa = n.desa || b.desa || ''
-
-  const normalize = (s) => (s || '').toLowerCase().trim()
-  const kecAgree = !kecBDC || !kecNom || normalize(kecBDC) === normalize(kecNom)
-  let confident = kecAgree && !!kecamatan && !!desa
-
-  if (!kecamatan) {
-    const n13 = await fetchNominatimSafe(lat, lon, 13)
-    kecamatan = n13.kecamatan || ''
-    if (!desa) desa = n13.desa || ''
-    if (!kecamatan && b.locality && b.locality !== desa) kecamatan = b.locality
-    confident = false
-  }
-
-  if (!desa && b.locality) desa = b.locality
-  if (!kecamatan || !desa) confident = false
-
-  // 4. Fallback Database Lokal (Akurasi Tinggi se-Jawa Tengah)
-  // Berdasarkan saran: Jika nama desa sudah dapat, cek kamus data shapefile/BPS
-  if (desa && kabupaten) {
-    // Dynamic import kamus BPS agar tidak memberatkan bundle awal PWA
-    const localDesaDB = (await import('../../assets/desa_jateng.json')).default;
+  try {
+    // Dynamic import geojson (cached oleh browser & PWA)
+    const geojsonData = (await import('../../assets/desa_jateng_pip.json')).default;
     
-    const normKab = normalize(kabupaten).replace(/^(kabupaten|kota)\s+/i, '')
-    // Kadang Nominatim menyertakan kata "Desa" atau "Kelurahan" di namanya
-    const normDesa = normalize(desa).replace(/^(desa|kelurahan)\s+/i, '')
+    // Cari fitur polygon yang memuat lat/lon ini
+    const feature = findContainingFeature(geojsonData, parseFloat(lon), parseFloat(lat))
     
-    if (localDesaDB[normKab]) {
-      // Coba exact match dulu
-      if (localDesaDB[normKab][normDesa]) {
-        kecamatan = localDesaDB[normKab][normDesa]
-        confident = true // Data valid dari BPS
-      } else {
-        // Jika tidak exact match, coba cari nama desa yang mengandung string
-        const matchedDesaKey = Object.keys(localDesaDB[normKab]).find(k => 
-          k === normDesa || k.includes(normDesa) || normDesa.includes(k)
-        )
-        if (matchedDesaKey) {
-          kecamatan = localDesaDB[normKab][matchedDesaKey]
-          desa = matchedDesaKey // perbaiki nama desa sesuai data resmi BPS
-          confident = true
-        }
-      }
+    if (feature) {
+      provinsi = feature.properties.prov || '-'
+      kabupaten = feature.properties.kab || '-'
+      kecamatan = feature.properties.kec || '-'
+      desa = feature.properties.desa || '-'
+      confident = true // Sangat yakin karena bersumber dari Polygon BPS
     }
+  } catch (err) {
+    console.error("Gagal Point-in-Polygon:", err)
   }
-
-  // Jika setelah pakai kamus masih ada perbedaan antara BDC & Nominatim DAN tidak di-override kamus
-  // Biarkan confident = false, biar user mengecek
 
   // Kapitalisasi standar (Title Case)
   const toTitleCase = (str) => str.replace(
@@ -222,9 +135,9 @@ async function reverseGeocode(lat, lon) {
     kabupaten: toTitleCase(kabupaten), 
     kecamatan: toTitleCase(kecamatan), 
     desa: toTitleCase(desa), 
-    confident, 
-    kecBDC, 
-    kecNom 
+    confident,
+    kecBDC: '', 
+    kecNom: 'BPS GeoJSON'
   }
   spatialCache.set(cacheKey, result)
   return result
@@ -313,7 +226,7 @@ export default function KonversiTiang() {
   const [geocoding, setGeocoding] = useState(false)
   const [paused, setPaused] = useState(false)
   const [geocoded, setGeocoded] = useState(false)
-  const [progress, setProgress] = useState({ done: 0, total: 0 })
+  const [progress, setProgress] = useState({ current: 0, total: 0, status: 'idle' })
   const [failCount, setFailCount] = useState(0)
 
   // Excel → KMZ state
@@ -329,19 +242,6 @@ export default function KonversiTiang() {
   const [urlProgress, setUrlProgress] = useState({ done: 0, total: 0 })
   const [urlDone, setUrlDone] = useState(false)
   const urlStopRef = useRef(false)
-
-  // Google Maps API Key (tersimpan di localStorage)
-  const [apiKey, setApiKey] = useState(() => {
-    const saved = typeof localStorage !== 'undefined' ? (localStorage.getItem('gmaps_key') || '') : ''
-    _googleApiKey = saved
-    return saved
-  })
-  const handleApiKeyChange = (key) => {
-    setApiKey(key)
-    _googleApiKey = key
-    spatialCache.clear() // Wajib clear cache saat key berubah
-    try { localStorage.setItem('gmaps_key', key) } catch {}
-  }
 
   const SITES = [
     { value: 'banyumas', label: 'Banyumas' },
@@ -366,13 +266,13 @@ export default function KonversiTiang() {
     setKmzRows([])
     setGeocoded(false)
     setPaused(false)
-    setProgress({ done: 0, total: 0 })
+    setProgress({ current: 0, total: 0, status: 'idle' })
     setFailCount(0)
     try {
       const marks = await parseKMZ(file)
       const rows = marks.map(m => ({ ...m, provinsi: '', kabupaten: '', kecamatan: '', desa: '', status: 'pending' }))
       setKmzRows(rows)
-      setProgress({ done: 0, total: rows.length })
+      setProgress({ current: 0, total: rows.length, status: 'idle' })
       toast.success(`${rows.length} titik ditemukan. Klik Mulai Geocode.`)
     } catch (err) {
       toast.error(err.message || 'Gagal membaca KMZ')
@@ -408,7 +308,7 @@ export default function KonversiTiang() {
       })
 
       setKmzRows([...results])
-      setProgress({ done: Math.min(i + BATCH, results.length), total: results.length })
+      setProgress({ current: Math.min(i + BATCH, results.length), total: results.length, status: 'running' })
       setFailCount(fails)
     }
 
@@ -586,7 +486,7 @@ export default function KonversiTiang() {
   }
 
   // ── RENDER ────────────────────────────────────────────────────────────────────
-  const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
+  const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0
   const doneCount  = kmzRows.filter(r => r.status === 'done').length
   const emptyCount = kmzRows.filter(r => r.status === 'done' && !r.provinsi && !r.kabupaten).length
 
@@ -644,7 +544,7 @@ export default function KonversiTiang() {
               background: 'var(--bg-secondary)', transition: 'all 0.2s',
             }}
             onMouseEnter={e => { if (!geocoding) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'rgba(59,130,246,0.04)' } }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-secondary)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'rgba(59,130,246,0.04)' }}
           >
             <input ref={kmzRef} type="file" accept=".kmz" style={{ display: 'none' }} onChange={handleKmzUpload} />
             <Upload size={32} style={{ color: 'var(--accent)', marginBottom: '10px' }} />
@@ -661,7 +561,7 @@ export default function KonversiTiang() {
                     {geocoding ? (paused ? '⏸ Dijeda...' : '⚡ Geocoding...') : geocoded ? '✅ Selesai' : '🕒 Siap diproses'}
                   </span>
                   <span style={{ marginLeft: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                    {progress.done}/{progress.total} titik
+                    {progress.current}/{progress.total} titik
                     {emptyCount > 0 && <span style={{ color: 'var(--warning)', marginLeft: '8px' }}>⚠ {emptyCount} lokasi tidak ditemukan</span>}
                   </span>
                 </div>
@@ -691,7 +591,7 @@ export default function KonversiTiang() {
                       </button>
                     </>
                   )}
-                  {!geocoding && !geocoded && progress.done > 0 && (
+                  {!geocoding && !geocoded && progress.current > 0 && (
                     <button className="btn btn-primary btn-sm" onClick={handleExportExcel} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--success, #22c55e)' }}>
                       <FileSpreadsheet size={13} /> Download Sebagian
                     </button>
@@ -709,14 +609,6 @@ export default function KonversiTiang() {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '11px', color: 'var(--text-muted)' }}>
                 <span>{pct}%</span>
-                <span>
-                  {geocoding && !paused && progress.total > 0 && (() => {
-                    const remaining = progress.total - progress.done
-                    const batches = Math.ceil(remaining / 5)
-                    const secs = batches * 1.5
-                    return secs < 60 ? `~${Math.ceil(secs)} dtk tersisa` : `~${Math.ceil(secs / 60)} mnt tersisa`
-                  })()}
-                </span>
               </div>
             </div>
           )}
@@ -844,14 +736,6 @@ export default function KonversiTiang() {
       {/* ═══════════ MODE: URL → EXCEL ═══════════ */}
       {mode === 'url2excel' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* ── API Key Box ────────────────────────────────── */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: apiKey ? 'rgba(34,197,94,0.07)' : 'rgba(139,92,246,0.08)', border: `1px solid ${apiKey ? 'rgba(34,197,94,0.3)' : 'rgba(139,92,246,0.25)'}`, borderRadius: 'var(--radius-md)', flexWrap: 'wrap' }}>
-            <div style={{ fontSize: '20px' }}>🔑</div>
-            <div style={{ flex: 1, minWidth: '180px' }}>
-              <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)' }}>
-                {apiKey ? '✅ Google Maps API aktif — akurasi kecamatan & desa sangat tinggi' : 'Google Maps API Key (Opsional, Akurasi Sangat Tinggi)'}
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                 {apiKey
                   ? 'Kecamatan & Desa diambil langsung dari Google Maps (administrative_area_level_3).'
                   : <>
