@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -1199,7 +1199,7 @@ export default function DataTiang() {
                   </thead>
                   <tbody>
                     {importRows.map(row => (
-                      <React.Fragment key={row._rowNo}>
+                      <Fragment key={row._rowNo}>
                         <tr style={{ opacity: row._valid ? 1 : 0.45, background: row._proximityWarning && !row._selected ? 'rgba(245,158,11,0.05)' : 'transparent' }}>
                           <td style={{ textAlign: 'center' }}>
                             <input type="checkbox" disabled={!row._valid} checked={row._selected || false}
@@ -1233,7 +1233,7 @@ export default function DataTiang() {
                             </td>
                           </tr>
                         )}
-                      </React.Fragment>
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
