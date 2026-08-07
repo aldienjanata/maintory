@@ -487,15 +487,6 @@ export default function KonversiTiang() {
 
       const activePoles = allPoles.filter(p => !p.status || p.status === 'active')
 
-      // Hitung total T7 dan T9 per desa
-      const desaTotals = {}
-      activePoles.forEach(p => {
-        const desa = p.desa || 'Tanpa Desa'
-        if (!desaTotals[desa]) desaTotals[desa] = { T7: 0, T9: 0 }
-        if (p.pole_type === 'tiang_7m') desaTotals[desa].T7++
-        if (p.pole_type === 'tiang_9m') desaTotals[desa].T9++
-      })
-
       // Sort by Desa then ID
       activePoles.sort((a, b) => {
         const dA = (a.desa || '').localeCompare(b.desa || '')
@@ -517,14 +508,42 @@ export default function KonversiTiang() {
 
       let rowIndex = 6 // Row 6 di Excel (baris data pertama)
       let currentDesa = null
+      let desaStartRow = 6
       
       const existingRowsCount = ws.rowCount
       const styleRow = ws.getRow(6) // Ambil style dari baris pertama data contoh
 
+      // Fungsi untuk merge & format baris desa
+      const finalizeDesa = (endRow) => {
+        if (endRow >= desaStartRow) {
+          if (endRow > desaStartRow) {
+            ws.mergeCells(`K${desaStartRow}:K${endRow}`)
+            ws.mergeCells(`L${desaStartRow}:L${endRow}`)
+          }
+          const cellK = ws.getCell(`K${desaStartRow}`)
+          const cellL = ws.getCell(`L${desaStartRow}`)
+          
+          cellK.value = { formula: `SUM(I${desaStartRow}:I${endRow})` }
+          cellL.value = { formula: `SUM(J${desaStartRow}:J${endRow})` }
+          
+          // Pastikan tulisan di tengah dan background tidak abu-abu
+          ;[cellK, cellL].forEach(cell => {
+            cell.alignment = { vertical: 'middle', horizontal: 'center' }
+            cell.fill = { type: 'pattern', pattern: 'none' }
+          })
+        }
+      }
+
       activePoles.forEach((p, idx) => {
         const desa = p.desa || 'Tanpa Desa'
         const isFirstOfDesa = desa !== currentDesa
-        if (isFirstOfDesa) currentDesa = desa
+        if (isFirstOfDesa) {
+          if (currentDesa !== null) {
+            finalizeDesa(rowIndex - 1)
+          }
+          currentDesa = desa
+          desaStartRow = rowIndex
+        }
 
         const qtyT7 = p.pole_type === 'tiang_7m' ? 1 : ''
         const qtyT9 = p.pole_type === 'tiang_9m' ? 1 : ''
@@ -534,6 +553,15 @@ export default function KonversiTiang() {
         const lonDms = p.longitude ? decimalToDMS(p.longitude, false) : ''
 
         const row = ws.getRow(rowIndex)
+        
+        // Copy style dari baris template jika baris ini adalah baris baru
+        if (rowIndex > existingRowsCount) {
+          row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+            const templateCell = styleRow.getCell(colNumber)
+            cell.style = templateCell.style
+          })
+        }
+
         row.getCell(1).value = idx + 1 // Col A
         row.getCell(2).value = p.pole_id || '-' // Col B
         row.getCell(3).value = desa // Col C
@@ -544,38 +572,44 @@ export default function KonversiTiang() {
         row.getCell(8).value = lonDms // Col H
         row.getCell(9).value = qtyT7 // Col I
         row.getCell(10).value = qtyT9 // Col J
-        if (isFirstOfDesa) {
-          row.getCell(11).value = desaTotals[desa].T7 // Col K
-          row.getCell(12).value = desaTotals[desa].T9 // Col L
-        } else {
-          row.getCell(11).value = ''
-          row.getCell(12).value = ''
-        }
         
-        // Copy style dari baris template jika baris ini adalah baris baru
-        if (rowIndex > existingRowsCount) {
-          row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-            const templateCell = styleRow.getCell(colNumber)
-            cell.style = templateCell.style
-          })
+        // Bersihkan nilai cell K & L sebelum diisi formula nanti
+        row.getCell(11).value = ''
+        row.getCell(12).value = ''
+
+        // Hilangkan blok warna abu-abu (pattern none) untuk sisa kolom (K sampai Z agar bersih)
+        for(let col = 11; col <= 26; col++) {
+          row.getCell(col).fill = { type: 'pattern', pattern: 'none' }
         }
+
         rowIndex++
       })
+
+      // Proses desa terakhir
+      if (currentDesa !== null) {
+        finalizeDesa(rowIndex - 1)
+      }
 
       // Hapus sisa baris contoh jika jumlah tiang kurang dari jumlah baris contoh
       if (rowIndex <= existingRowsCount) {
         ws.spliceRows(rowIndex, existingRowsCount - rowIndex + 1)
       }
 
-      // Bersihkan sheet lain yang belum ada datanya
+      // Bersihkan sheet lain yang belum ada datanya secara berurutan dari bawah
       const wsKabel = workbook.getWorksheet('Data Jaringan Kabel Fiber Optik')
-      if (wsKabel && wsKabel.rowCount >= 5) {
-        wsKabel.spliceRows(5, wsKabel.rowCount - 4) // Hapus dari baris 5 ke bawah
+      if (wsKabel) {
+        const rc = wsKabel.rowCount
+        for (let i = rc; i >= 5; i--) {
+          wsKabel.spliceRows(i, 1)
+        }
       }
 
       const wsSebaran = workbook.getWorksheet('Data Sebaran ODP DAN ODC')
-      if (wsSebaran && wsSebaran.rowCount >= 4) {
-        wsSebaran.spliceRows(4, wsSebaran.rowCount - 3) // Hapus dari baris 4 ke bawah
+      if (wsSebaran) {
+        const rc = wsSebaran.rowCount
+        for (let i = rc; i >= 4; i--) {
+          wsSebaran.spliceRows(i, 1)
+        }
       }
 
       toast.loading('Menyimpan file...', { id: 'exportFO' })
