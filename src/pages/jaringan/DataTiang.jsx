@@ -266,6 +266,7 @@ export default function DataTiang() {
   const [filterStatus, setFilterStatus] = useState('active') // 'active' | 'dismantled' | 'all'
   const [cabutModal, setCabutModal] = useState(null) // pole yang akan dicabut
   const [cabutNotes, setCabutNotes] = useState('')
+  const [cabutDate, setCabutDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [cabutSaving, setCabutSaving] = useState(false)
 
   // Pagination
@@ -483,7 +484,7 @@ export default function DataTiang() {
     try {
       const { error } = await supabase.from('network_poles').update({
         status: 'dismantled',
-        dismantled_at: new Date().toISOString(),
+        dismantled_at: cabutDate ? new Date(cabutDate).toISOString() : new Date().toISOString(),
         dismantled_notes: cabutNotes.trim() || null,
         dismantled_by: profile.id,
         updated_by: profile.id,
@@ -1158,7 +1159,7 @@ export default function DataTiang() {
                   {['admin', 'superadmin'].includes(role) && (
                     <td><div style={{ display: 'flex', gap: '4px' }}>
                       {!isDismantled && <button className="btn btn-secondary btn-sm" style={{ padding: '4px 7px' }} onClick={() => openEdit(pole)}><Edit2 size={12} /></button>}
-                      {!isDismantled && <button className="btn btn-sm" title="Cabut Tiang" style={{ padding: '4px 7px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.25)' }} onClick={() => { setCabutModal(pole); setCabutNotes('') }}><Scissors size={12} /></button>}
+                      {!isDismantled && <button className="btn btn-sm" title="Cabut Tiang" style={{ padding: '4px 7px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.25)' }} onClick={() => { setCabutModal(pole); setCabutNotes(''); setCabutDate(format(new Date(), 'yyyy-MM-dd')) }}><Scissors size={12} /></button>}
                       {isDismantled && <button className="btn btn-sm" title="Pulihkan Tiang" style={{ padding: '4px 7px', background: 'rgba(16,185,129,0.1)', color: 'var(--success)', border: '1px solid rgba(16,185,129,0.3)' }} onClick={() => handlePulihkan(pole)}><RotateCcw size={12} /></button>}
                       {role === 'superadmin' && <button className="btn btn-sm" style={{ padding: '4px 7px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.25)' }} onClick={() => setConfirmDelete(pole)}><Trash2 size={12} /></button>}
                     </div></td>
@@ -1481,10 +1482,19 @@ export default function DataTiang() {
                 </div>
               </div>
               <p style={{ margin: '0 0 6px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                Tiang ini akan dicatat sebagai <strong style={{ color: 'var(--danger)' }}>Dicabut</strong> dengan tanggal hari ini.
+                Tiang ini akan dicatat sebagai <strong style={{ color: 'var(--danger)' }}>Dicabut</strong>.
                 ID tiang tetap tersimpan dan bisa dilihat di filter <em>Dicabut</em>.
               </p>
               <div style={{ marginTop: '14px' }}>
+                <div style={{ marginBottom: '10px' }}>
+                  <label className="form-label">Tanggal Pencabutan</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={cabutDate}
+                    onChange={e => setCabutDate(e.target.value)}
+                  />
+                </div>
                 <label className="form-label">Alasan / Catatan Pencabutan <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>(opsional)</span></label>
                 <textarea
                   className="form-input" rows={3}
