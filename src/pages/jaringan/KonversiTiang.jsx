@@ -232,6 +232,7 @@ function parseInputToCoords(input) {
 // ── COMPONENT ──────────────────────────────────────────────────────────────────
 export default function KonversiTiang() {
   const [mode, setMode] = useState('kmz2excel')
+  const [exportFOLoading, setExportFOLoading] = useState(false)
 
   // KMZ → Excel state
   const [kmzFile, setKmzFile] = useState(null)
