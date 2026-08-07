@@ -8,7 +8,7 @@ import {
   Plus, X, Edit2, Trash2, MapPin, Search, Download,
   ChevronDown, ChevronUp, ExternalLink, Antenna, Upload,
   FileSpreadsheet, Map, Settings as SettingsIcon, AlertTriangle,
-  CheckSquare, Square, Eraser
+  CheckSquare, Square, Eraser, Scissors, RotateCcw
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { id as localeId } from 'date-fns/locale'
@@ -262,6 +262,12 @@ export default function DataTiang() {
   const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('')
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
 
+  // Cabut Tiang
+  const [filterStatus, setFilterStatus] = useState('active') // 'active' | 'dismantled' | 'all'
+  const [cabutModal, setCabutModal] = useState(null) // pole yang akan dicabut
+  const [cabutNotes, setCabutNotes] = useState('')
+  const [cabutSaving, setCabutSaving] = useState(false)
+
   // Pagination
   const [page, setPage] = useState(1)
   const perPage = 15
@@ -345,6 +351,9 @@ export default function DataTiang() {
 
   const filtered = useMemo(() => {
     let data = [...poles]
+    // Filter status tiang (aktif / dicabut / semua)
+    if (filterStatus === 'active') data = data.filter(p => !p.status || p.status === 'active')
+    else if (filterStatus === 'dismantled') data = data.filter(p => p.status === 'dismantled')
     if (filterSite) data = data.filter(p => p.site === filterSite)
     if (filterKecamatan) data = data.filter(p => p.kecamatan === filterKecamatan)
     if (filterDesa) data = data.filter(p => p.desa === filterDesa)
@@ -356,14 +365,13 @@ export default function DataTiang() {
     data.sort((a, b) => {
       let va = a[sortKey] ?? '', vb = b[sortKey] ?? ''
       if (va === vb) {
-        // Fallback to ID Tiang for deterministic order
         let ida = a.pole_id ?? '', idb = b.pole_id ?? ''
         return ida > idb ? 1 : (ida < idb ? -1 : 0)
       }
       return sortDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1)
     })
     return data
-  }, [poles, filterSite, filterKecamatan, filterDesa, filterType, searchQuery, sortKey, sortDir])
+  }, [poles, filterStatus, filterSite, filterKecamatan, filterDesa, filterType, searchQuery, sortKey, sortDir])
 
   const paginated = useMemo(() => filtered.slice((page - 1) * perPage, page * perPage), [filtered, page])
   const totalPages = Math.ceil(filtered.length / perPage)
@@ -465,6 +473,44 @@ export default function DataTiang() {
       setConfirmDelete(null)
       fetchData()
     } catch { toast.error('Gagal menghapus data') }
+    finally { hideProgress() }
+  }
+
+  const handleCabut = async () => {
+    if (!cabutModal) return
+    setCabutSaving(true)
+    showProgress('Mencabut Tiang', 'Menyimpan data pencabutan...', 50)
+    try {
+      const { error } = await supabase.from('network_poles').update({
+        status: 'dismantled',
+        dismantled_at: new Date().toISOString(),
+        dismantled_notes: cabutNotes.trim() || null,
+        dismantled_by: profile.id,
+        updated_by: profile.id,
+      }).eq('id', cabutModal.id)
+      if (error) throw error
+      toast.success(`Tiang ${cabutModal.pole_id} dicatat sebagai dicabut!`)
+      setCabutModal(null)
+      setCabutNotes('')
+      fetchData()
+    } catch (e) { toast.error(e.message || 'Gagal mencatat pencabutan') }
+    finally { setCabutSaving(false); hideProgress() }
+  }
+
+  const handlePulihkan = async (pole) => {
+    showProgress('Memulihkan Tiang', 'Memperbarui status...', 50)
+    try {
+      const { error } = await supabase.from('network_poles').update({
+        status: 'active',
+        dismantled_at: null,
+        dismantled_notes: null,
+        dismantled_by: null,
+        updated_by: profile.id,
+      }).eq('id', pole.id)
+      if (error) throw error
+      toast.success(`Tiang ${pole.pole_id} dipulihkan kembali ke aktif!`)
+      fetchData()
+    } catch (e) { toast.error(e.message || 'Gagal memulihkan tiang') }
     finally { hideProgress() }
   }
 
@@ -958,13 +1004,15 @@ export default function DataTiang() {
       {/* ── SUMMARY CARDS ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginBottom: '16px' }}>
         {[
-          { label: 'Total Tiang', value: poles.length, color: 'var(--accent)' },
-          { label: 'Tiang 7 m', value: poles.filter(p => p.pole_type === 'tiang_7m').length, color: 'var(--success)' },
-          { label: 'Tiang 9 m', value: poles.filter(p => p.pole_type === 'tiang_9m').length, color: 'var(--warning)' },
+          { label: 'Total Tiang', value: poles.filter(p => !p.status || p.status === 'active').length, color: 'var(--accent)' },
+          { label: 'Tiang 7 m', value: poles.filter(p => p.pole_type === 'tiang_7m' && (!p.status || p.status === 'active')).length, color: 'var(--success)' },
+          { label: 'Tiang 9 m', value: poles.filter(p => p.pole_type === 'tiang_9m' && (!p.status || p.status === 'active')).length, color: 'var(--warning)' },
           { label: 'Kecamatan', value: kecamatanList.length, color: 'var(--purple)' },
-          { label: 'Ada Koordinat', value: poles.filter(p => p.latitude && p.longitude).length, color: '#22d3ee' },
+          { label: 'Ada Koordinat', value: poles.filter(p => p.latitude && p.longitude && (!p.status || p.status === 'active')).length, color: '#22d3ee' },
+          { label: 'Dicabut', value: poles.filter(p => p.status === 'dismantled').length, color: 'var(--danger)', clickable: true },
         ].map(card => (
-          <div key={card.label} className="card" style={{ padding: '12px 14px', borderTop: `3px solid ${card.color}` }}>
+          <div key={card.label} className="card" style={{ padding: '12px 14px', borderTop: `3px solid ${card.color}`, cursor: card.clickable ? 'pointer' : undefined }}
+            onClick={card.clickable ? () => setFilterStatus(s => s === 'dismantled' ? 'active' : 'dismantled') : undefined}>
             <div style={{ fontSize: '20px', fontWeight: 700, color: card.color }}>{card.value}</div>
             <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{card.label}</div>
           </div>
@@ -977,6 +1025,15 @@ export default function DataTiang() {
           <div style={{ position: 'relative', flex: '1 1 auto', minWidth: '200px', maxWidth: '350px' }}>
             <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', pointerEvents: 'none' }} />
             <input className="form-input" style={{ paddingLeft: '30px', height: '34px', fontSize: '13px', width: '100%' }} placeholder="Cari ID, Desa, Kecamatan..." value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setPage(1) }} />
+          </div>
+          {/* Filter Status */}
+          <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', padding: '3px', border: '1px solid var(--border)' }}>
+            {[{ v: 'active', label: 'Aktif' }, { v: 'dismantled', label: 'Dicabut' }, { v: 'all', label: 'Semua' }].map(opt => (
+              <button key={opt.v} onClick={() => { setFilterStatus(opt.v); setPage(1) }}
+                style={{ padding: '4px 12px', fontSize: '12px', fontWeight: 600, borderRadius: 'calc(var(--radius-md) - 2px)', border: 'none', cursor: 'pointer', transition: '0.15s',
+                  background: filterStatus === opt.v ? (opt.v === 'dismantled' ? 'var(--danger)' : 'var(--accent)') : 'transparent',
+                  color: filterStatus === opt.v ? '#fff' : 'var(--text-secondary)' }}>{opt.label}</button>
+            ))}
           </div>
           <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '110px', width: 'auto' }} value={filterSite} onChange={e => { setFilterSite(e.target.value); setPage(1) }}><option value="">Semua Site</option>{SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select>
           <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '140px', width: 'auto' }} value={filterKecamatan} onChange={e => { setFilterKecamatan(e.target.value); setFilterDesa(''); setPage(1) }}><option value="">Semua Kecamatan</option>{kecamatanList.map(k => <option key={k} value={k}>{k}</option>)}</select>
@@ -1069,8 +1126,10 @@ export default function DataTiang() {
                 <tr><td colSpan={12} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>Memuat data...</td></tr>
               ) : paginated.length === 0 ? (
                 <tr><td colSpan={12} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}><Antenna size={28} style={{ opacity: 0.25, marginBottom: '8px', display: 'block', margin: '0 auto 8px' }} />Belum ada data tiang</td></tr>
-              ) : paginated.map((pole, idx) => (
-                <tr key={pole.id} style={{ background: selectedIds.has(pole.id) ? 'rgba(239,68,68,0.06)' : undefined }}>
+              ) : paginated.map((pole, idx) => {
+                const isDismantled = pole.status === 'dismantled'
+                return (
+                <tr key={pole.id} style={{ background: isDismantled ? 'rgba(239,68,68,0.06)' : selectedIds.has(pole.id) ? 'rgba(239,68,68,0.06)' : undefined, opacity: isDismantled ? 0.85 : 1 }}>
                   {role === 'superadmin' && (
                     <td style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => toggleSelect(pole.id)}>
                       {selectedIds.has(pole.id)
@@ -1080,21 +1139,32 @@ export default function DataTiang() {
                   )}
                   <td style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '11px' }}>{(page - 1) * perPage + idx + 1}</td>
                   <td><span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '20px', background: 'var(--bg-primary)', border: '1px solid var(--border)', fontWeight: 600 }}>{SITES.find(s => s.value === pole.site)?.label || pole.site}</span></td>
-                  <td><span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent)', fontWeight: 600 }}>{pole.pole_id || '-'}</span></td>
+                  <td>
+                    <span style={{ fontFamily: 'monospace', fontSize: '12px', color: isDismantled ? 'var(--danger)' : 'var(--accent)', fontWeight: 600, textDecoration: isDismantled ? 'line-through' : 'none' }}>{pole.pole_id || '-'}</span>
+                    {isDismantled && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 6px', borderRadius: '20px', background: 'rgba(239,68,68,0.15)', color: 'var(--danger)', fontWeight: 700, border: '1px solid rgba(239,68,68,0.3)' }}>DICABUT</span>}
+                    {isDismantled && pole.dismantled_at && <div style={{ fontSize: '10px', color: 'var(--danger)', opacity: 0.7, marginTop: '1px' }}>{format(new Date(pole.dismantled_at), 'dd MMM yyyy', { locale: localeId })}</div>}
+                  </td>
                   <td><span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '20px', fontWeight: 600, background: pole.pole_type === 'tiang_9m' ? 'rgba(251,191,36,0.15)' : 'rgba(16,185,129,0.12)', color: pole.pole_type === 'tiang_9m' ? 'var(--warning)' : 'var(--success)' }}>{POLE_TYPES.find(t => t.value === pole.pole_type)?.label}</span></td>
                   <td style={{ fontSize: '12px' }}>{pole.kecamatan || '-'}</td>
                   <td style={{ fontSize: '12px' }}>{pole.desa || '-'}</td>
                   <td>{pole.latitude && pole.longitude ? <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontFamily: 'monospace', lineHeight: '1.4' }}><div>Lat: {Number(pole.latitude).toFixed(5)}</div><div>Lon: {Number(pole.longitude).toFixed(5)}</div></div> : <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>-</span>}</td>
                   <td>{pole.maps_url ? <a href={pole.maps_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px' }}><MapPin size={12} /><ExternalLink size={11} /></a> : '-'}</td>
-                  <td style={{ fontSize: '11px', color: 'var(--text-secondary)', maxWidth: '120px' }}><span title={pole.keterangan} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pole.keterangan || '-'}</span></td>
+                  <td style={{ fontSize: '11px', color: 'var(--text-secondary)', maxWidth: '120px' }}>
+                    <span title={pole.keterangan} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pole.keterangan || '-'}</span>
+                    {isDismantled && pole.dismantled_notes && <span title={pole.dismantled_notes} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--danger)', fontStyle: 'italic', fontSize: '10px' }}>Cabut: {pole.dismantled_notes}</span>}
+                  </td>
                   <td style={{ fontSize: '11px' }}><div style={{ fontWeight: 500 }}>{getUserName(pole.created_by)}</div>{pole.updated_by && pole.updated_by !== pole.created_by && <div style={{ color: 'var(--text-secondary)', fontSize: '10px' }}>Edit: {getUserName(pole.updated_by)}</div>}</td>
                   <td style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{pole.created_at ? format(new Date(pole.created_at), 'dd MMM yy', { locale: localeId }) : '-'}</td>
                   {['admin', 'superadmin'].includes(role) && (
-                    <td><div style={{ display: 'flex', gap: '4px' }}><button className="btn btn-secondary btn-sm" style={{ padding: '4px 7px' }} onClick={() => openEdit(pole)}><Edit2 size={12} /></button><button className="btn btn-sm" style={{ padding: '4px 7px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.25)' }} onClick={() => setConfirmDelete(pole)}><Trash2 size={12} /></button></div></td>
+                    <td><div style={{ display: 'flex', gap: '4px' }}>
+                      {!isDismantled && <button className="btn btn-secondary btn-sm" style={{ padding: '4px 7px' }} onClick={() => openEdit(pole)}><Edit2 size={12} /></button>}
+                      {!isDismantled && <button className="btn btn-sm" title="Cabut Tiang" style={{ padding: '4px 7px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.25)' }} onClick={() => { setCabutModal(pole); setCabutNotes('') }}><Scissors size={12} /></button>}
+                      {isDismantled && <button className="btn btn-sm" title="Pulihkan Tiang" style={{ padding: '4px 7px', background: 'rgba(16,185,129,0.1)', color: 'var(--success)', border: '1px solid rgba(16,185,129,0.3)' }} onClick={() => handlePulihkan(pole)}><RotateCcw size={12} /></button>}
+                      {role === 'superadmin' && <button className="btn btn-sm" style={{ padding: '4px 7px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.25)' }} onClick={() => setConfirmDelete(pole)}><Trash2 size={12} /></button>}
+                    </div></td>
                   )}
                 </tr>
-              ))}
-            </tbody>
+              )})}
           </table>
         </div>
 
@@ -1389,6 +1459,50 @@ export default function DataTiang() {
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setConfirmDelete(null)}>Batal</button>
               <button style={{ background: 'var(--danger)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer' }} onClick={() => handleDelete(confirmDelete)}>Ya, Hapus</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════ MODAL CABUT TIANG ══════ */}
+      {cabutModal && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ width: '460px', maxWidth: '96vw' }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '8px' }}><Scissors size={18} /> Catat Pencabutan Tiang</h3>
+              <button className="btn-close" onClick={() => setCabutModal(null)}><X size={20} /></button>
+            </div>
+            <div className="modal-body" style={{ padding: '20px 24px' }}>
+              <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 'var(--radius-md)', padding: '12px 14px', marginBottom: '16px' }}>
+                <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '14px', color: 'var(--danger)' }}>{cabutModal.pole_id}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  {cabutModal.kecamatan} · {cabutModal.desa} {cabutModal.jalan ? `· ${cabutModal.jalan}` : ''}
+                </div>
+              </div>
+              <p style={{ margin: '0 0 6px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Tiang ini akan dicatat sebagai <strong style={{ color: 'var(--danger)' }}>Dicabut</strong> dengan tanggal hari ini.
+                ID tiang tetap tersimpan dan bisa dilihat di filter <em>Dicabut</em>.
+              </p>
+              <div style={{ marginTop: '14px' }}>
+                <label className="form-label">Alasan / Catatan Pencabutan <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>(opsional)</span></label>
+                <textarea
+                  className="form-input" rows={3}
+                  style={{ resize: 'vertical' }}
+                  placeholder="Contoh: Tiang rusak/patah, dipindahkan ke lokasi lain, proyek jalan, dll."
+                  value={cabutNotes}
+                  onChange={e => setCabutNotes(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setCabutModal(null)}>Batal</button>
+              <button
+                disabled={cabutSaving}
+                style={{ background: 'var(--danger)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                onClick={handleCabut}
+              >
+                <Scissors size={14} /> {cabutSaving ? 'Menyimpan...' : 'Ya, Catat Sebagai Dicabut'}
+              </button>
             </div>
           </div>
         </div>
