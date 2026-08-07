@@ -526,10 +526,20 @@ export default function KonversiTiang() {
       })
 
       // 3. Hapus SEMUA baris mulai baris 6 ke bawah (termasuk TOTAL rows)
-      //    Lakukan dari bawah agar index tidak bergeser
       if (ws.rowCount >= 6) {
         ws.spliceRows(6, ws.rowCount - 5)
       }
+
+      // 4. Koreksi header: A4:A5 harus berisi "NO" (template asli nilainya null)
+      ws.getCell('A4').value = 'NO'
+
+      // 5. Koreksi G2:G3: unmerge dan hapus border agar kosong seperti kolom H2:H3
+      ws.unMergeCells('G2:G3')
+      ;['G2', 'G3'].forEach(addr => {
+        ws.getCell(addr).value = null
+        ws.getCell(addr).border = {}
+        ws.getCell(addr).fill = { type: 'pattern', pattern: 'none' }
+      })
 
 
       // 5. Tulis data tiang satu per satu — TANPA insertRow sama sekali
