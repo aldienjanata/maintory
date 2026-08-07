@@ -717,7 +717,7 @@ export default function KonversiTiang() {
           { key: 'kmz2excel', label: 'KMZ → Excel', icon: <FileSpreadsheet size={15} /> },
           { key: 'excel2kmz', label: 'Excel → KMZ', icon: <MapIcon size={15} /> },
           { key: 'url2excel', label: 'URL Maps → Excel', icon: <Link size={15} /> },
-          { key: 'exportFO', label: 'Export Data FO', icon: <Download size={15} /> },
+          { key: 'exportFO', label: 'Export Data Jaringan', icon: <Download size={15} /> },
         ].map(m => (
           <button key={m.key} onClick={() => setMode(m.key)} style={{
             display: 'flex', alignItems: 'center', gap: '7px',
