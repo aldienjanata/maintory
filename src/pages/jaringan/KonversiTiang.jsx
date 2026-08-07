@@ -531,14 +531,6 @@ export default function KonversiTiang() {
         ws.spliceRows(6, ws.rowCount - 5)
       }
 
-      // 4. Berikan warna header biru muda profesional pada baris 4 & 5
-      ;[4, 5].forEach(r => {
-        ws.getRow(r).eachCell({ includeEmpty: true }, (cell) => {
-          if (cell.col <= 12) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } }
-          }
-        })
-      })
 
       // 5. Tulis data tiang satu per satu — TANPA insertRow sama sekali
       let rowIndex = 6
@@ -636,16 +628,16 @@ export default function KonversiTiang() {
       ws.getCell(`L${tr1}`).value = { formula: `SUM(L6:L${lastDataRow})` }
       ws.getCell(`L${tr1}`).alignment = { horizontal: 'center', vertical: 'middle' }
 
-      // 7. Bersihkan ISI (bukan struktur) sheet lain yang belum ada datanya
+      // 7. Bersihkan ISI (bukan struktur) sheet lain — mulai dari baris 6 agar header baris 4 & 5 tidak terhapus
       const wsKabel = workbook.getWorksheet('Data Jaringan Kabel Fiber Optik')
       if (wsKabel) {
-        for (let i = 5; i <= wsKabel.rowCount; i++) {
+        for (let i = 6; i <= wsKabel.rowCount; i++) {
           wsKabel.getRow(i).eachCell(c => { c.value = null })
         }
       }
       const wsSebaran = workbook.getWorksheet('Data Sebaran ODP DAN ODC')
       if (wsSebaran) {
-        for (let i = 4; i <= wsSebaran.rowCount; i++) {
+        for (let i = 6; i <= wsSebaran.rowCount; i++) {
           wsSebaran.getRow(i).eachCell(c => { c.value = null })
         }
       }
