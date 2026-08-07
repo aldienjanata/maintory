@@ -1165,6 +1165,7 @@ export default function DataTiang() {
                   )}
                 </tr>
               )})}
+            </tbody>
           </table>
         </div>
 
