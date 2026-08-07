@@ -102,7 +102,7 @@ export default function Sidebar({ isOpen, onClose }) {
         {renderNavSection('MAIN MENU')}
         {renderNavSection('INVENTORY')}
         {renderNavSection('OPERATIONS')}
-        {renderNavSection('JARINGAN')}
+        {renderNavSection('JARINGAN FIBER OPTIK')}
         {renderNavSection('SYSTEM')}
       </nav>
 
