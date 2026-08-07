@@ -502,11 +502,21 @@ export default function KonversiTiang() {
       
       const workbook = new ExcelJS.Workbook()
       await workbook.xlsx.load(arrayBuffer)
-      
+
       const ws = workbook.getWorksheet('DATA ASET TIANG')
       if (!ws) throw new Error('Sheet DATA ASET TIANG tidak ditemukan di template')
 
-      // Unmerge sel bawaan template pada area data (baris 6 ke bawah) untuk menghindari error "Cannot merge already merged cells"
+      // 1. Simpan style data row (baris 6) dan style TOTAL row (baris 11) SEBELUM diubah
+      const dataStyle = {}
+      const totalStyle = {}
+      for (let c = 1; c <= 12; c++) {
+        dataStyle[c] = JSON.parse(JSON.stringify(ws.getRow(6).getCell(c).style || {}))
+        totalStyle[c] = JSON.parse(JSON.stringify(ws.getRow(11).getCell(c).style || {}))
+      }
+      const dataRowHeight = ws.getRow(6).height || 15
+      const totalRowHeight = ws.getRow(11).height || 28
+
+      // 2. Unmerge seluruh merge di baris >= 6 agar tidak tabrakan
       const existingMerges = [...(ws.model.merges || [])]
       existingMerges.forEach(mergeStr => {
         const match = mergeStr.match(/\D+(\d+):\D+(\d+)/)
@@ -515,22 +525,27 @@ export default function KonversiTiang() {
         }
       })
 
-      // Berikan warna biru muda yang rapi & resmi untuk header (Baris 4 & 5) di DATA ASET TIANG
-      [4, 5].forEach(r => {
-        const rowHeader = ws.getRow(r)
-        rowHeader.eachCell({ includeEmpty: true }, (c) => {
-          if (c.col <= 12) {
-             c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } } // Biru muda profesional
+      // 3. Hapus SEMUA baris mulai baris 6 ke bawah (termasuk TOTAL rows)
+      //    Lakukan dari bawah agar index tidak bergeser
+      if (ws.rowCount >= 6) {
+        ws.spliceRows(6, ws.rowCount - 5)
+      }
+
+      // 4. Berikan warna header biru muda profesional pada baris 4 & 5
+      ;[4, 5].forEach(r => {
+        ws.getRow(r).eachCell({ includeEmpty: true }, (cell) => {
+          if (cell.col <= 12) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } }
           }
         })
       })
 
-      let rowIndex = 6 // Row 6 di Excel (baris data pertama)
+      // 5. Tulis data tiang satu per satu — TANPA insertRow sama sekali
+      let rowIndex = 6
       let currentDesa = null
       let desaStartRow = 6
-      let lastProcessedRow = 5
+      let lastDataRow = 6
 
-      // Fungsi untuk merge & format baris desa
       const finalizeDesa = (endRow) => {
         if (endRow >= desaStartRow) {
           if (endRow > desaStartRow) {
@@ -539,11 +554,8 @@ export default function KonversiTiang() {
           }
           const cellK = ws.getCell(`K${desaStartRow}`)
           const cellL = ws.getCell(`L${desaStartRow}`)
-          
           cellK.value = { formula: `SUM(I${desaStartRow}:I${endRow})` }
           cellL.value = { formula: `SUM(J${desaStartRow}:J${endRow})` }
-          
-          // Pastikan tulisan di tengah dan background tidak abu-abu
           ;[cellK, cellL].forEach(cell => {
             cell.alignment = { vertical: 'middle', horizontal: 'center' }
             cell.fill = { type: 'pattern', pattern: 'none' }
@@ -553,83 +565,84 @@ export default function KonversiTiang() {
 
       activePoles.forEach((p, idx) => {
         const desa = p.desa || 'Tanpa Desa'
-        const isFirstOfDesa = desa !== currentDesa
-        if (isFirstOfDesa) {
-          if (currentDesa !== null) {
-            finalizeDesa(rowIndex - 1)
-          }
+        if (desa !== currentDesa) {
+          if (currentDesa !== null) finalizeDesa(rowIndex - 1)
           currentDesa = desa
           desaStartRow = rowIndex
         }
 
-        // Jika baris lebih dari 10 (melebihi kapasitas template 5 baris), insert baris baru!
-        // Ini akan secara otomatis mendorong baris TOTAL (baris 11) ke bawah.
-        if (rowIndex > 10) {
-          ws.insertRow(rowIndex, [], 'i')
-        }
-        
-        ws.getRow(rowIndex).height = 15 // Pastikan ukuran baris seragam
-
         const qtyT7 = p.pole_type === 'tiang_7m' ? 1 : ''
         const qtyT9 = p.pole_type === 'tiang_9m' ? 1 : ''
-
-        // Convert coordinates to DMS
         const latDms = p.latitude ? decimalToDMS(p.latitude, true) : ''
         const lonDms = p.longitude ? decimalToDMS(p.longitude, false) : ''
 
         const row = ws.getRow(rowIndex)
-        
-        row.getCell(1).value = idx + 1 // Col A
-        row.getCell(2).value = p.pole_id || '-' // Col B
-        row.getCell(3).value = desa // Col C
-        row.getCell(4).value = p.site === 'cilacap' ? 'CILACAP' : p.site === 'cilacap_herman' ? 'CILACAP (HERMAN)' : 'BANYUMAS' // Col D
-        row.getCell(5).value = p.latitude || '' // Col E
-        row.getCell(6).value = p.longitude || '' // Col F
-        row.getCell(7).value = latDms // Col G
-        row.getCell(8).value = lonDms // Col H
-        row.getCell(9).value = qtyT7 // Col I
-        row.getCell(10).value = qtyT9 // Col J
-        
-        // Bersihkan nilai cell K & L sebelum diisi formula
-        row.getCell(11).value = ''
-        row.getCell(12).value = ''
+        row.height = dataRowHeight
 
-        // Hilangkan blok warna abu-abu (pattern none) untuk sisa kolom
-        for(let col = 11; col <= 26; col++) {
-          row.getCell(col).fill = { type: 'pattern', pattern: 'none' }
+        // Terapkan style dari template data row
+        for (let c = 1; c <= 12; c++) {
+          row.getCell(c).style = dataStyle[c]
         }
 
+        row.getCell(1).value = idx + 1
+        row.getCell(2).value = p.pole_id || '-'
+        row.getCell(3).value = desa
+        row.getCell(4).value = p.site === 'cilacap' ? 'CILACAP' : p.site === 'cilacap_herman' ? 'CILACAP (HERMAN)' : 'BANYUMAS'
+        row.getCell(5).value = p.latitude || ''
+        row.getCell(6).value = p.longitude || ''
+        row.getCell(7).value = latDms
+        row.getCell(8).value = lonDms
+        row.getCell(9).value = qtyT7
+        row.getCell(10).value = qtyT9
+        row.getCell(11).value = null
+        row.getCell(12).value = null
+        row.getCell(11).fill = { type: 'pattern', pattern: 'none' }
+        row.getCell(12).fill = { type: 'pattern', pattern: 'none' }
+
+        lastDataRow = rowIndex
         rowIndex++
-        lastProcessedRow = rowIndex - 1
       })
 
-      // Proses desa terakhir
-      if (currentDesa !== null) {
-        finalizeDesa(lastProcessedRow)
-      }
+      // Finalize desa terakhir
+      if (currentDesa !== null) finalizeDesa(lastDataRow)
 
-      // Pastikan sisa baris kosong template (jika tiang < 5) tetap rapi
-      for (let r = 6; r <= 10; r++) {
-         if (!ws.getRow(r).height) ws.getRow(r).height = 15
-      }
+      // 6. Tambahkan baris TOTAL di akhir data (2 baris, merge A:H)
+      const tr1 = rowIndex
+      const tr2 = rowIndex + 1
+      ;[tr1, tr2].forEach(r => {
+        const row = ws.getRow(r)
+        row.height = totalRowHeight
+        for (let c = 1; c <= 12; c++) {
+          row.getCell(c).style = totalStyle[c]
+        }
+      })
+      ws.mergeCells(`A${tr1}:H${tr2}`)
+      ws.getCell(`A${tr1}`).value = 'TOTAL'
+      ws.getCell(`A${tr1}`).alignment = { horizontal: 'center', vertical: 'middle' }
 
-      // Baris TOTAL otomatis tergeser oleh insertRow. Posisinya minimal di baris 11.
-      const totalRowIndex = Math.max(11, rowIndex)
-      const endRowForSum = totalRowIndex - 1
-      
-      ws.getCell(`I${totalRowIndex}`).value = { formula: `SUM(I6:I${endRowForSum})` }
-      ws.getCell(`J${totalRowIndex}`).value = { formula: `SUM(J6:J${endRowForSum})` }
-      ws.getCell(`K${totalRowIndex}`).value = { formula: `SUM(K6:K${endRowForSum})` }
-      ws.getCell(`L${totalRowIndex}`).value = { formula: `SUM(L6:L${endRowForSum})` }
+      ws.mergeCells(`I${tr1}:I${tr2}`)
+      ws.getCell(`I${tr1}`).value = { formula: `SUM(I6:I${lastDataRow})` }
+      ws.getCell(`I${tr1}`).alignment = { horizontal: 'center', vertical: 'middle' }
 
-      // Bersihkan NILAI dari sheet lain tanpa menghapus ukuran, tabel, border, dll
+      ws.mergeCells(`J${tr1}:J${tr2}`)
+      ws.getCell(`J${tr1}`).value = { formula: `SUM(J6:J${lastDataRow})` }
+      ws.getCell(`J${tr1}`).alignment = { horizontal: 'center', vertical: 'middle' }
+
+      ws.mergeCells(`K${tr1}:K${tr2}`)
+      ws.getCell(`K${tr1}`).value = { formula: `SUM(K6:K${lastDataRow})` }
+      ws.getCell(`K${tr1}`).alignment = { horizontal: 'center', vertical: 'middle' }
+
+      ws.mergeCells(`L${tr1}:L${tr2}`)
+      ws.getCell(`L${tr1}`).value = { formula: `SUM(L6:L${lastDataRow})` }
+      ws.getCell(`L${tr1}`).alignment = { horizontal: 'center', vertical: 'middle' }
+
+      // 7. Bersihkan ISI (bukan struktur) sheet lain yang belum ada datanya
       const wsKabel = workbook.getWorksheet('Data Jaringan Kabel Fiber Optik')
       if (wsKabel) {
         for (let i = 5; i <= wsKabel.rowCount; i++) {
           wsKabel.getRow(i).eachCell(c => { c.value = null })
         }
       }
-
       const wsSebaran = workbook.getWorksheet('Data Sebaran ODP DAN ODC')
       if (wsSebaran) {
         for (let i = 4; i <= wsSebaran.rowCount; i++) {
@@ -648,7 +661,7 @@ export default function KonversiTiang() {
       URL.revokeObjectURL(url)
       toast.success('Berhasil export ke format pusat!', { id: 'exportFO' })
     } catch (err) {
-      toast.error('Gagal export data: ' + err.message, { id: 'exportFO' })
+      toast.error('Gagal export data: ' + (err instanceof Error ? err.message : String(err)), { id: 'exportFO' })
     } finally {
       setExportFOLoading(false)
     }
