@@ -3,6 +3,7 @@ import JSZip from 'jszip'
 import * as XLSX from 'xlsx'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
+import { supabase } from '../../lib/supabase'
 import {
   FileSpreadsheet, Map as MapIcon, Upload, RefreshCw,
   CheckCircle, Loader, Info, Pause, Play, Square, AlertCircle,
@@ -176,6 +177,18 @@ async function buildKMZ(rows) {
   zip.file('doc.kml', kml)
   try { const b = await (await fetch('/icon_tiang.png')).blob(); zip.folder('files').file('icon_tiang.png', b) } catch {}
   return await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
+}
+
+/** Konversi Decimal ke format DMS string, misal: 7°36'53.21"S */
+function decimalToDMS(dec, isLat) {
+  if (dec === null || dec === undefined || isNaN(dec)) return '';
+  const absDec = Math.abs(dec);
+  const d = Math.floor(absDec);
+  const mDec = (absDec - d) * 60;
+  const m = Math.floor(mDec);
+  const s = ((mDec - m) * 60).toFixed(2);
+  const dir = dec < 0 ? (isLat ? 'S' : 'W') : (isLat ? 'N' : 'E');
+  return `${d}°${m}'${s}"${dir}`;
 }
 
 // ── INPUT PARSER (URL / DECIMAL / DMS) ─────────────────────────────────────────
@@ -449,6 +462,104 @@ export default function KonversiTiang() {
     toast.success('File Excel berhasil didownload!')
   }
 
+  // ── EXPORT FO PUSAT ──────────────────────────────────────────────────────────
+  const handleExportFO = async () => {
+    setExportFOLoading(true)
+    try {
+      toast.loading('Mengambil data tiang...', { id: 'exportFO' })
+      let allPoles = []
+      let from = 0
+      const step = 1000
+      while (true) {
+        const { data, error } = await supabase
+          .from('network_poles')
+          .select('*')
+          .neq('status', 'dismantled')
+          .range(from, from + step - 1)
+        if (error) throw error
+        if (data && data.length > 0) {
+          allPoles = [...allPoles, ...data]
+          if (data.length < step) break
+          from += step
+        } else { break }
+      }
+
+      const activePoles = allPoles.filter(p => !p.status || p.status === 'active')
+
+      // Hitung total T7 dan T9 per desa
+      const desaTotals = {}
+      activePoles.forEach(p => {
+        const desa = p.desa || 'Tanpa Desa'
+        if (!desaTotals[desa]) desaTotals[desa] = { T7: 0, T9: 0 }
+        if (p.pole_type === 'tiang_7m') desaTotals[desa].T7++
+        if (p.pole_type === 'tiang_9m') desaTotals[desa].T9++
+      })
+
+      // Sort by Desa then ID
+      activePoles.sort((a, b) => {
+        const dA = (a.desa || '').localeCompare(b.desa || '')
+        if (dA !== 0) return dA
+        return (a.pole_id || '').localeCompare(b.pole_id || '')
+      })
+
+      toast.loading('Memproses Excel...', { id: 'exportFO' })
+      const response = await fetch('/Template_FO.xlsx')
+      if (!response.ok) throw new Error('File Template_FO.xlsx tidak ditemukan di public')
+      const arrayBuffer = await response.arrayBuffer()
+      const wb = XLSX.read(arrayBuffer, { type: 'array' })
+      const ws = wb.Sheets['DATA ASET TIANG']
+      if (!ws) throw new Error('Sheet DATA ASET TIANG tidak ditemukan di template')
+
+      let rowIndex = 5 // Row 6 di Excel (0-indexed adalah 5)
+      let currentDesa = null
+
+      activePoles.forEach((p, idx) => {
+        const desa = p.desa || 'Tanpa Desa'
+        const isFirstOfDesa = desa !== currentDesa
+        if (isFirstOfDesa) currentDesa = desa
+
+        const qtyT7 = p.pole_type === 'tiang_7m' ? 1 : ''
+        const qtyT9 = p.pole_type === 'tiang_9m' ? 1 : ''
+
+        // Convert coordinates to DMS
+        const latDms = p.latitude ? decimalToDMS(p.latitude, true) : ''
+        const lonDms = p.longitude ? decimalToDMS(p.longitude, false) : ''
+
+        const row = [
+          idx + 1, // Col A (No)
+          p.pole_id || '-', // Col B (ID Tiang)
+          desa, // Col C (Desa)
+          p.site === 'cilacap' ? 'CILACAP' : p.site === 'cilacap_herman' ? 'CILACAP (HERMAN)' : 'BANYUMAS', // Col D (Site)
+          p.latitude || '', // Col E (Lat Dec)
+          p.longitude || '', // Col F (Lon Dec)
+          latDms, // Col G (Lat DMS)
+          lonDms, // Col H (Lon DMS)
+          qtyT7, // Col I
+          qtyT9, // Col J
+          isFirstOfDesa ? desaTotals[desa].T7 : '', // Col K
+          isFirstOfDesa ? desaTotals[desa].T9 : ''  // Col L
+        ]
+        XLSX.utils.sheet_add_aoa(ws, [row], { origin: `A${rowIndex + 1}` })
+        rowIndex++
+      })
+
+      toast.loading('Menyimpan file...', { id: 'exportFO' })
+      const outWb = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
+      const blob = new Blob([outWb], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `DATA JARINGAN FIBER OPTIK BANYUMAS ( ${format(new Date(), 'dd-MM-yyyy')} ).xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Berhasil export ke format pusat!', { id: 'exportFO' })
+    } catch (err) {
+      toast.error('Gagal export data: ' + err.message, { id: 'exportFO' })
+    } finally {
+      setExportFOLoading(false)
+    }
+  }
+
   // ── EXCEL → KMZ ──────────────────────────────────────────────────────────────
   const handleExcelUpload = (e) => {
     const file = e.target.files?.[0]
@@ -512,6 +623,7 @@ export default function KonversiTiang() {
           { key: 'kmz2excel', label: 'KMZ → Excel', icon: <FileSpreadsheet size={15} /> },
           { key: 'excel2kmz', label: 'Excel → KMZ', icon: <MapIcon size={15} /> },
           { key: 'url2excel', label: 'URL Maps → Excel', icon: <Link size={15} /> },
+          { key: 'exportFO', label: 'Export Data FO', icon: <Download size={15} /> },
         ].map(m => (
           <button key={m.key} onClick={() => setMode(m.key)} style={{
             display: 'flex', alignItems: 'center', gap: '7px',
@@ -890,6 +1002,37 @@ export default function KonversiTiang() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ═══════════ MODE: EXPORT FO PUSAT ═══════════ */}
+      {mode === 'exportFO' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'flex', gap: '10px', padding: '14px 16px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 'var(--radius-md)' }}>
+            <Info size={18} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '1px' }} />
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.7' }}>
+              Ambil seluruh data tiang aktif dari database dan masukkan otomatis ke dalam format file Excel <strong>DATA JARINGAN FIBER OPTIK</strong> untuk dikirim ke pusat.
+              Kolom Total T7 dan T9 akan dihitung otomatis per desa.
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px', padding: '40px', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', background: 'var(--bg-secondary)' }}>
+            <div style={{ textAlign: 'center' }}>
+              <Download size={48} style={{ color: 'var(--accent)', opacity: 0.2, marginBottom: '16px' }} />
+              <h3 style={{ margin: '0 0 8px', fontSize: '16px' }}>Export ke Format Pusat</h3>
+              <p style={{ margin: '0 0 24px', fontSize: '13px', color: 'var(--text-secondary)' }}>Download seluruh data tiang dalam format standarisasi Excel.</p>
+              
+              <button
+                className="btn btn-primary"
+                onClick={handleExportFO}
+                disabled={exportFOLoading}
+                style={{ padding: '12px 24px', fontSize: '15px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                {exportFOLoading ? <Loader size={18} className="spin" /> : <Download size={18} />}
+                {exportFOLoading ? 'Memproses Data...' : 'Export Sekarang'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
