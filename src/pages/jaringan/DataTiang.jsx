@@ -205,7 +205,7 @@ async function generateKMZ(poles, users) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `Data_Tiang_${format(new Date(), 'yyyyMMdd')}.kmz`
+  a.download = `Data Tiang ${format(new Date(), 'dd-MM-yyyy')}.kmz`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -605,7 +605,7 @@ export default function DataTiang() {
       const ws = XLSX.utils.json_to_sheet(rows)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Data Tiang')
-      XLSX.writeFile(wb, `Data_Tiang_${format(new Date(), 'yyyyMMdd')}.xlsx`)
+      XLSX.writeFile(wb, `Data Tiang ${format(new Date(), 'dd-MM-yyyy')}.xlsx`)
       hideProgress()
       toast.success('Export Excel berhasil!')
     }, 500)
@@ -668,7 +668,7 @@ export default function DataTiang() {
     ws['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 22 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 50 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Template')
-    XLSX.writeFile(wb, 'Template_Import_Tiang.xlsx')
+    XLSX.writeFile(wb, `Template Import Tiang ${format(new Date(), 'dd-MM-yyyy')}.xlsx`)
     toast.success('Template berhasil diunduh!')
   }
 

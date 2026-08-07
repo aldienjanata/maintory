@@ -354,7 +354,7 @@ export default function KonversiTiang() {
     ws['!cols'] = cols
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Data Tiang')
-    XLSX.writeFile(wb, `Data_Tiang_from_KMZ_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`)
+    XLSX.writeFile(wb, `Data Tiang dari KMZ ${format(new Date(), 'dd-MM-yyyy HH.mm')}.xlsx`)
     toast.success('File Excel berhasil didownload!')
   }
 
@@ -433,16 +433,19 @@ export default function KonversiTiang() {
       'Kabupaten/Kota': r.kabupaten || '',
       'Kecamatan': r.kecamatan || '',
       'Desa/Kelurahan': r.desa || '',
+      'Jalan/Gang/Dusun': '',
       'Maps URL': r.url,
-      'Latitude': r.lat ?? '',
-      'Longitude': r.lon ?? '',
+      'Latitude ( Decimal )': r.lat ?? '',
+      'Longitude ( Decimal )': r.lon ?? '',
+      'Latitude ( dms )': '',
+      'Longitude ( dms )': '',
       'Keterangan': r.keterangan || '',
     }))
     const ws = XLSX.utils.json_to_sheet(data)
-    ws['!cols'] = [15, 12, 16, 18, 22, 22, 40, 14, 14, 30].map(w => ({ wch: w }))
+    ws['!cols'] = [15, 12, 16, 18, 22, 22, 22, 40, 18, 18, 16, 16, 30].map(w => ({ wch: w }))
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Template Import')
-    XLSX.writeFile(wb, `Template_Import_dari_URL_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`)
+    XLSX.writeFile(wb, `Template Import dari URL ${format(new Date(), 'dd-MM-yyyy HH.mm')}.xlsx`)
     toast.success('File Excel berhasil didownload!')
   }
 
@@ -476,7 +479,7 @@ export default function KonversiTiang() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `Data_Tiang_${format(new Date(), 'yyyyMMdd')}.kmz`
+      a.download = `Data Tiang ${format(new Date(), 'dd-MM-yyyy')}.kmz`
       a.click()
       URL.revokeObjectURL(url)
       toast.success('File KMZ berhasil didownload!')
