@@ -531,7 +531,19 @@ export default function KonversiTiang() {
       }
 
       // 4. Koreksi header: A4:A5 harus berisi "NO" (template asli nilainya null)
+      //    Gunakan style yang sudah ada agar border tidak hilang
       ws.getCell('A4').value = 'NO'
+      ws.getCell('A4').style = {
+        font: { bold: true, italic: true, size: 16, color: { theme: 1 }, name: 'Agency FB', family: 2 },
+        border: {
+          left: { style: 'medium', color: { indexed: 64 } },
+          right: { style: 'thin', color: { indexed: 64 } },
+          top: { style: 'medium', color: { indexed: 64 } },
+          bottom: { style: 'thin', color: { indexed: 64 } }
+        },
+        fill: { type: 'pattern', pattern: 'none' },
+        alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }
+      }
 
       // 5. Koreksi G2:G3: unmerge dan hapus border agar kosong seperti kolom H2:H3
       ws.unMergeCells('G2:G3')
@@ -540,6 +552,18 @@ export default function KonversiTiang() {
         ws.getCell(addr).border = {}
         ws.getCell(addr).fill = { type: 'pattern', pattern: 'none' }
       })
+
+      // 6. Pulihkan border baris 5 (bottom border bisa hilang akibat spliceRows)
+      //    Ini memastikan garis bawah header tetap ada
+      ws.getRow(5).eachCell({ includeEmpty: true }, cell => {
+        if (!cell.border) cell.border = {}
+        if (!cell.border.bottom) {
+          cell.border = { ...cell.border, bottom: { style: 'medium', color: { indexed: 64 } } }
+        }
+      })
+
+      // 7. Tambah AutoFilter di baris 5 DATA ASET TIANG
+      ws.autoFilter = 'A5:L5'
 
 
       // 5. Tulis data tiang satu per satu — TANPA insertRow sama sekali
@@ -650,6 +674,8 @@ export default function KonversiTiang() {
         for (let i = 6; i <= wsSebaran.rowCount; i++) {
           wsSebaran.getRow(i).eachCell(c => { c.value = null })
         }
+        // Pindahkan autoFilter dari baris 3 ke baris 4 (baris header yang benar)
+        wsSebaran.autoFilter = `A4:L4`
       }
 
       toast.loading('Menyimpan file...', { id: 'exportFO' })
