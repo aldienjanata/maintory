@@ -516,7 +516,19 @@ export default function KonversiTiang() {
       const dataRowHeight = ws.getRow(6).height || 15
       const totalRowHeight = ws.getRow(11).height || 28
 
-      // 2. Unmerge seluruh merge di baris >= 6 agar tidak tabrakan
+      // 2. Simpan SEMUA style + value baris 4 & 5 sebelum spliceRows (agar border tidak rusak)
+      const headerStyles = { 4: {}, 5: {} }
+      const headerValues = { 4: {}, 5: {} }
+      const headerHeights = { 4: ws.getRow(4).height, 5: ws.getRow(5).height }
+      ;[4, 5].forEach(r => {
+        for (let c = 1; c <= 12; c++) {
+          const cell = ws.getRow(r).getCell(c)
+          headerStyles[r][c] = JSON.parse(JSON.stringify(cell.style || {}))
+          headerValues[r][c] = cell.value
+        }
+      })
+
+      // 3. Unmerge seluruh merge di baris >= 6 agar tidak tabrakan
       const existingMerges = [...(ws.model.merges || [])]
       existingMerges.forEach(mergeStr => {
         const match = mergeStr.match(/\D+(\d+):\D+(\d+)/)
@@ -525,27 +537,29 @@ export default function KonversiTiang() {
         }
       })
 
-      // 3. Hapus SEMUA baris mulai baris 6 ke bawah (termasuk TOTAL rows)
+      // 4. Hapus SEMUA baris mulai baris 6 ke bawah (termasuk TOTAL rows)
       if (ws.rowCount >= 6) {
         ws.spliceRows(6, ws.rowCount - 5)
       }
 
-      // 4. Koreksi header: A4:A5 harus berisi "NO" (template asli nilainya null)
-      //    Gunakan style yang sudah ada agar border tidak hilang
-      ws.getCell('A4').value = 'NO'
-      ws.getCell('A4').style = {
-        font: { bold: true, italic: true, size: 16, color: { theme: 1 }, name: 'Agency FB', family: 2 },
-        border: {
-          left: { style: 'medium', color: { indexed: 64 } },
-          right: { style: 'thin', color: { indexed: 64 } },
-          top: { style: 'medium', color: { indexed: 64 } },
-          bottom: { style: 'thin', color: { indexed: 64 } }
-        },
-        fill: { type: 'pattern', pattern: 'none' },
-        alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }
-      }
+      // 5. Restore style + value baris 4 & 5 yang mungkin rusak akibat spliceRows
+      ;[4, 5].forEach(r => {
+        const row = ws.getRow(r)
+        row.height = headerHeights[r]
+        for (let c = 1; c <= 12; c++) {
+          const cell = row.getCell(c)
+          cell.style = headerStyles[r][c]
+          // Jangan restore value untuk merged slave cells
+          if (headerValues[r][c] !== null && headerValues[r][c] !== undefined) {
+            cell.value = headerValues[r][c]
+          }
+        }
+      })
 
-      // 5. Koreksi G2:G3: unmerge dan hapus border agar kosong seperti kolom H2:H3
+      // 6. Koreksi: A4:A5 harus berisi "NO" (template asli nilainya null)
+      ws.getCell('A4').value = 'NO'
+
+      // 7. Koreksi G2:G3: unmerge dan hapus border agar kosong seperti kolom H2:H3
       ws.unMergeCells('G2:G3')
       ;['G2', 'G3'].forEach(addr => {
         ws.getCell(addr).value = null
@@ -553,16 +567,7 @@ export default function KonversiTiang() {
         ws.getCell(addr).fill = { type: 'pattern', pattern: 'none' }
       })
 
-      // 6. Pulihkan border baris 5 (bottom border bisa hilang akibat spliceRows)
-      //    Ini memastikan garis bawah header tetap ada
-      ws.getRow(5).eachCell({ includeEmpty: true }, cell => {
-        if (!cell.border) cell.border = {}
-        if (!cell.border.bottom) {
-          cell.border = { ...cell.border, bottom: { style: 'medium', color: { indexed: 64 } } }
-        }
-      })
-
-      // 7. Tambah AutoFilter di baris 5 DATA ASET TIANG
+      // 8. Tambah AutoFilter di baris 5 DATA ASET TIANG
       ws.autoFilter = 'A5:L5'
 
 
