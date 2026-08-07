@@ -504,15 +504,22 @@ export default function KonversiTiang() {
       })
 
       toast.loading('Memproses Excel...', { id: 'exportFO' })
+      const ExcelJS = (await import('exceljs')).default
       const response = await fetch('/Template_FO.xlsx')
       if (!response.ok) throw new Error('File Template_FO.xlsx tidak ditemukan di public')
       const arrayBuffer = await response.arrayBuffer()
-      const wb = XLSX.read(arrayBuffer, { type: 'array' })
-      const ws = wb.Sheets['DATA ASET TIANG']
+      
+      const workbook = new ExcelJS.Workbook()
+      await workbook.xlsx.load(arrayBuffer)
+      
+      const ws = workbook.getWorksheet('DATA ASET TIANG')
       if (!ws) throw new Error('Sheet DATA ASET TIANG tidak ditemukan di template')
 
-      let rowIndex = 5 // Row 6 di Excel (0-indexed adalah 5)
+      let rowIndex = 6 // Row 6 di Excel (baris data pertama)
       let currentDesa = null
+      
+      const existingRowsCount = ws.rowCount
+      const styleRow = ws.getRow(6) // Ambil style dari baris pertama data contoh
 
       activePoles.forEach((p, idx) => {
         const desa = p.desa || 'Tanpa Desa'
@@ -526,27 +533,54 @@ export default function KonversiTiang() {
         const latDms = p.latitude ? decimalToDMS(p.latitude, true) : ''
         const lonDms = p.longitude ? decimalToDMS(p.longitude, false) : ''
 
-        const row = [
-          idx + 1, // Col A (No)
-          p.pole_id || '-', // Col B (ID Tiang)
-          desa, // Col C (Desa)
-          p.site === 'cilacap' ? 'CILACAP' : p.site === 'cilacap_herman' ? 'CILACAP (HERMAN)' : 'BANYUMAS', // Col D (Site)
-          p.latitude || '', // Col E (Lat Dec)
-          p.longitude || '', // Col F (Lon Dec)
-          latDms, // Col G (Lat DMS)
-          lonDms, // Col H (Lon DMS)
-          qtyT7, // Col I
-          qtyT9, // Col J
-          isFirstOfDesa ? desaTotals[desa].T7 : '', // Col K
-          isFirstOfDesa ? desaTotals[desa].T9 : ''  // Col L
-        ]
-        XLSX.utils.sheet_add_aoa(ws, [row], { origin: `A${rowIndex + 1}` })
+        const row = ws.getRow(rowIndex)
+        row.getCell(1).value = idx + 1 // Col A
+        row.getCell(2).value = p.pole_id || '-' // Col B
+        row.getCell(3).value = desa // Col C
+        row.getCell(4).value = p.site === 'cilacap' ? 'CILACAP' : p.site === 'cilacap_herman' ? 'CILACAP (HERMAN)' : 'BANYUMAS' // Col D
+        row.getCell(5).value = p.latitude || '' // Col E
+        row.getCell(6).value = p.longitude || '' // Col F
+        row.getCell(7).value = latDms // Col G
+        row.getCell(8).value = lonDms // Col H
+        row.getCell(9).value = qtyT7 // Col I
+        row.getCell(10).value = qtyT9 // Col J
+        if (isFirstOfDesa) {
+          row.getCell(11).value = desaTotals[desa].T7 // Col K
+          row.getCell(12).value = desaTotals[desa].T9 // Col L
+        } else {
+          row.getCell(11).value = ''
+          row.getCell(12).value = ''
+        }
+        
+        // Copy style dari baris template jika baris ini adalah baris baru
+        if (rowIndex > existingRowsCount) {
+          row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+            const templateCell = styleRow.getCell(colNumber)
+            cell.style = templateCell.style
+          })
+        }
         rowIndex++
       })
 
+      // Hapus sisa baris contoh jika jumlah tiang kurang dari jumlah baris contoh
+      if (rowIndex <= existingRowsCount) {
+        ws.spliceRows(rowIndex, existingRowsCount - rowIndex + 1)
+      }
+
+      // Bersihkan sheet lain yang belum ada datanya
+      const wsKabel = workbook.getWorksheet('Data Jaringan Kabel Fiber Optik')
+      if (wsKabel && wsKabel.rowCount >= 5) {
+        wsKabel.spliceRows(5, wsKabel.rowCount - 4) // Hapus dari baris 5 ke bawah
+      }
+
+      const wsSebaran = workbook.getWorksheet('Data Sebaran ODP DAN ODC')
+      if (wsSebaran && wsSebaran.rowCount >= 4) {
+        wsSebaran.spliceRows(4, wsSebaran.rowCount - 3) // Hapus dari baris 4 ke bawah
+      }
+
       toast.loading('Menyimpan file...', { id: 'exportFO' })
-      const outWb = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
-      const blob = new Blob([outWb], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
