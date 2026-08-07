@@ -513,6 +513,15 @@ export default function KonversiTiang() {
       const existingRowsCount = ws.rowCount
       const styleRow = ws.getRow(6) // Ambil style dari baris pertama data contoh
 
+      // Unmerge sel bawaan template pada area data (baris 6 ke bawah) untuk menghindari error "Cannot merge already merged cells"
+      const existingMerges = [...(ws.model.merges || [])]
+      existingMerges.forEach(mergeStr => {
+        const match = mergeStr.match(/\D+(\d+):\D+(\d+)/)
+        if (match && parseInt(match[2], 10) >= 6) {
+          ws.unMergeCells(mergeStr)
+        }
+      })
+
       // Fungsi untuk merge & format baris desa
       const finalizeDesa = (endRow) => {
         if (endRow >= desaStartRow) {
