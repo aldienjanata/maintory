@@ -506,12 +506,7 @@ export default function KonversiTiang() {
       const ws = workbook.getWorksheet('DATA ASET TIANG')
       if (!ws) throw new Error('Sheet DATA ASET TIANG tidak ditemukan di template')
 
-      let rowIndex = 6 // Row 6 di Excel (baris data pertama)
-      let currentDesa = null
-      let desaStartRow = 6
-      
-      const existingRowsCount = ws.rowCount
-      const styleRow = ws.getRow(6) // Ambil style dari baris pertama data contoh
+
 
       // Unmerge sel bawaan template pada area data (baris 6 ke bawah) untuk menghindari error "Cannot merge already merged cells"
       const existingMerges = [...(ws.model.merges || [])]
@@ -521,6 +516,23 @@ export default function KonversiTiang() {
           ws.unMergeCells(mergeStr)
         }
       })
+
+      // Ambil style dari baris pertama data contoh (baris 6) dan baris TOTAL (baris 11)
+      const dataStyles = []
+      const totalStyles = []
+      for (let c = 1; c <= 12; c++) {
+        dataStyles[c] = ws.getRow(6).getCell(c).style
+        totalStyles[c] = ws.getRow(11).getCell(c).style
+      }
+
+      // Bersihkan seluruh baris dari baris 6 ke bawah agar bersih dari dummy data
+      if (ws.rowCount >= 6) {
+        ws.spliceRows(6, ws.rowCount - 5)
+      }
+
+      let rowIndex = 6 // Row 6 di Excel (baris data pertama)
+      let currentDesa = null
+      let desaStartRow = 6
 
       // Fungsi untuk merge & format baris desa
       const finalizeDesa = (endRow) => {
@@ -563,14 +575,6 @@ export default function KonversiTiang() {
 
         const row = ws.getRow(rowIndex)
         
-        // Copy style dari baris template jika baris ini adalah baris baru
-        if (rowIndex > existingRowsCount) {
-          row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-            const templateCell = styleRow.getCell(colNumber)
-            cell.style = templateCell.style
-          })
-        }
-
         row.getCell(1).value = idx + 1 // Col A
         row.getCell(2).value = p.pole_id || '-' // Col B
         row.getCell(3).value = desa // Col C
@@ -586,6 +590,11 @@ export default function KonversiTiang() {
         row.getCell(11).value = ''
         row.getCell(12).value = ''
 
+        // Terapkan dataStyles ke setiap cell (Col A sampai L)
+        for (let c = 1; c <= 12; c++) {
+          row.getCell(c).style = dataStyles[c] || {}
+        }
+
         // Hilangkan blok warna abu-abu (pattern none) untuk sisa kolom (K sampai Z agar bersih)
         for(let col = 11; col <= 26; col++) {
           row.getCell(col).fill = { type: 'pattern', pattern: 'none' }
@@ -599,9 +608,33 @@ export default function KonversiTiang() {
         finalizeDesa(rowIndex - 1)
       }
 
-      // Hapus sisa baris contoh jika jumlah tiang kurang dari jumlah baris contoh
-      if (rowIndex <= existingRowsCount) {
-        ws.spliceRows(rowIndex, existingRowsCount - rowIndex + 1)
+      // Generate baris TOTAL secara dinamis di akhir
+      const totalEndRow = rowIndex - 1
+      if (totalEndRow >= 6) {
+        const totalRow1 = ws.getRow(rowIndex)
+        const totalRow2 = ws.getRow(rowIndex + 1)
+        
+        for (let c = 1; c <= 12; c++) {
+          totalRow1.getCell(c).style = totalStyles[c] || {}
+          totalRow2.getCell(c).style = totalStyles[c] || {}
+        }
+        
+        ws.mergeCells(`A${rowIndex}:H${rowIndex+1}`)
+        const cellTotal = ws.getCell(`A${rowIndex}`)
+        cellTotal.value = 'TOTAL'
+        cellTotal.alignment = { horizontal: 'center', vertical: 'middle' }
+        
+        ws.mergeCells(`I${rowIndex}:I${rowIndex+1}`)
+        ws.getCell(`I${rowIndex}`).value = { formula: `SUM(I6:I${totalEndRow})` }
+        
+        ws.mergeCells(`J${rowIndex}:J${rowIndex+1}`)
+        ws.getCell(`J${rowIndex}`).value = { formula: `SUM(J6:J${totalEndRow})` }
+        
+        ws.mergeCells(`K${rowIndex}:K${rowIndex+1}`)
+        ws.getCell(`K${rowIndex}`).value = { formula: `SUM(K6:K${totalEndRow})` }
+        
+        ws.mergeCells(`L${rowIndex}:L${rowIndex+1}`)
+        ws.getCell(`L${rowIndex}`).value = { formula: `SUM(L6:L${totalEndRow})` }
       }
 
       // Bersihkan sheet lain yang belum ada datanya secara berurutan dari bawah
