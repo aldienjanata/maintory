@@ -105,6 +105,18 @@ function getDistanceFromLatLonInm(lat1, lon1, lat2, lon2) {
   return Math.round(R * c)
 }
 
+/** Konversi Decimal ke format DMS string, misal: 7°36'53.21"S */
+function decimalToDMS(dec, isLat) {
+  if (dec === null || dec === undefined || isNaN(dec)) return '';
+  const absDec = Math.abs(dec);
+  const d = Math.floor(absDec);
+  const mDec = (absDec - d) * 60;
+  const m = Math.floor(mDec);
+  const s = ((mDec - m) * 60).toFixed(2);
+  const dir = dec < 0 ? (isLat ? 'S' : 'W') : (isLat ? 'N' : 'E');
+  return `${d}°${m}'${s}"${dir}`;
+}
+
 function parseDMS(dmsStr) {
   if (!dmsStr) return null;
   const str = String(dmsStr).trim();
@@ -574,20 +586,23 @@ export default function DataTiang() {
     if (filtered.length === 0) return toast.error('Tidak ada data')
     showProgress('Export Excel', 'Menyiapkan file...', 50)
     setTimeout(() => {
-      const rows = filtered.map((p, i) => ({
-        'No': i + 1, 'Site': SITES.find(s => s.value === p.site)?.label || p.site,
-        'ID Tiang': p.pole_id || '', 'Jenis Tiang': POLE_TYPES.find(t => t.value === p.pole_type)?.label || p.pole_type,
-        'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
-        'Desa/Kelurahan': p.desa || '', 'Jalan/Gang/Dusun': p.jalan || '', 'Maps URL': p.maps_url || '', 
-        'Latitude': p.latitude || '', 'Longitude': p.longitude || '', 
-        'Latitude_1': '', 'Longitude_1': '', // Kolom DMS kosong saat export (biar template sinkron)
-        'Keterangan': p.keterangan || '', 'Diinput Oleh': getUserName(p.created_by),
-        'Edit Oleh': getUserName(p.updated_by), 'Tanggal Input': p.created_at ? format(new Date(p.created_at), 'dd/MM/yyyy HH:mm') : '',
-        'Tanggal Update': p.updated_at ? format(new Date(p.updated_at), 'dd/MM/yyyy HH:mm') : '',
-      }))
+      const rows = filtered.map((p, i) => {
+        const lat = p.latitude ? Number(p.latitude) : null
+        const lon = p.longitude ? Number(p.longitude) : null
+        return {
+          'No': i + 1, 'Site': SITES.find(s => s.value === p.site)?.label || p.site,
+          'ID Tiang': p.pole_id || '', 'Jenis Tiang': POLE_TYPES.find(t => t.value === p.pole_type)?.label || p.pole_type,
+          'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
+          'Desa/Kelurahan': p.desa || '', 'Jalan/Gang/Dusun': p.jalan || '', 'Maps URL': p.maps_url || '',
+          'Latitude ( Decimal )': lat || '', 'Longitude ( Decimal )': lon || '',
+          'Latitude ( dms )': lat ? decimalToDMS(lat, true) : '',
+          'Longitude ( dms )': lon ? decimalToDMS(lon, false) : '',
+          'Keterangan': p.keterangan || '', 'Diinput Oleh': getUserName(p.created_by),
+          'Edit Oleh': getUserName(p.updated_by), 'Tanggal Input': p.created_at ? format(new Date(p.created_at), 'dd/MM/yyyy HH:mm') : '',
+          'Tanggal Update': p.updated_at ? format(new Date(p.updated_at), 'dd/MM/yyyy HH:mm') : '',
+        }
+      })
       const ws = XLSX.utils.json_to_sheet(rows)
-      // Override header untuk memastikan Latitude_1 dan Longitude_1 diganti namanya jadi Latitude dan Longitude
-      XLSX.utils.sheet_add_aoa(ws, [['No', 'Site', 'ID Tiang', 'Jenis Tiang', 'Provinsi', 'Kabupaten/Kota', 'Kecamatan', 'Desa/Kelurahan', 'Jalan/Gang/Dusun', 'Maps URL', 'Latitude', 'Longitude', 'Latitude', 'Longitude', 'Keterangan', 'Diinput Oleh', 'Edit Oleh', 'Tanggal Input', 'Tanggal Update']], { origin: 'A1' })
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Data Tiang')
       XLSX.writeFile(wb, `Data_Tiang_${format(new Date(), 'yyyyMMdd')}.xlsx`)
@@ -624,15 +639,33 @@ export default function DataTiang() {
   }
 
   const handleDownloadTemplate = () => {
-    const template = [{
-      'Site': 'banyumas', 'Jenis Tiang': 'tiang_7m', 'Provinsi': 'Jawa Tengah', 'Kabupaten/Kota': 'Banyumas',
-      'Kecamatan': 'Purwokerto Selatan', 'Desa/Kelurahan': 'Tanjung', 'Jalan/Gang/Dusun': 'Jl. Pahlawan', 'Maps URL': 'https://maps.app.goo.gl/contoh',
-      'Latitude': '-7.4321234', 'Longitude': '109.2345678', 'Latitude_1': '7°36\'53.21"S', 'Longitude_1': '109°16\'6.35"E', 'Keterangan': 'Contoh keterangan',
-    }]
+    // Row 1: Contoh dengan koordinat DMS saja (Decimal dikosongkan → auto-isi)
+    // Row 2: Contoh dengan koordinat Decimal saja (DMS dikosongkan → auto-isi)
+    // Row 3: Contoh Maps URL saja (koordinat dikosongkan → auto-isi)
+    const template = [
+      {
+        'Site': 'BANYUMAS', 'Jenis Tiang': 'tiang_7m', 'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'CILACAP',
+        'Kecamatan': 'KROYA', 'Desa/Kelurahan': 'MUJUR', 'Jalan/Gang/Dusun': 'Gg. BIMA',
+        'Maps URL': '', // kosong → otomatis dibuat dari koordinat
+        'Latitude ( Decimal )': '', // kosong → otomatis diisi dari DMS
+        'Longitude ( Decimal )': '',
+        'Latitude ( dms )': `7°36'52.20"S`,
+        'Longitude ( dms )': `109°15'43.10"E`,
+        'Keterangan': 'Contoh: isi DMS saja, Decimal & Maps URL otomatis terisi'
+      },
+      {
+        'Site': 'BANYUMAS', 'Jenis Tiang': 'tiang_9m', 'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'BANYUMAS',
+        'Kecamatan': 'PURWOKERTO SELATAN', 'Desa/Kelurahan': 'TANJUNG', 'Jalan/Gang/Dusun': 'Jl. Pahlawan',
+        'Maps URL': '',
+        'Latitude ( Decimal )': '-7.4321234',
+        'Longitude ( Decimal )': '109.2345678',
+        'Latitude ( dms )': '', // kosong → otomatis diisi dari Decimal
+        'Longitude ( dms )': '',
+        'Keterangan': 'Contoh: isi Decimal saja, DMS & Maps URL otomatis terisi'
+      },
+    ]
     const ws = XLSX.utils.json_to_sheet(template)
-    // Override header Latitude_1 dan Longitude_1 agar tampil sebagai Latitude dan Longitude
-    XLSX.utils.sheet_add_aoa(ws, [['Site', 'Jenis Tiang', 'Provinsi', 'Kabupaten/Kota', 'Kecamatan', 'Desa/Kelurahan', 'Jalan/Gang/Dusun', 'Maps URL', 'Latitude', 'Longitude', 'Latitude', 'Longitude', 'Keterangan']], { origin: 'A1' })
-    ws['!cols'] = [{ wch: 15 }, { wch: 12 }, { wch: 16 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 25 }, { wch: 40 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 30 }]
+    ws['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 22 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 50 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Template')
     XLSX.writeFile(wb, 'Template_Import_Tiang.xlsx')
@@ -652,13 +685,26 @@ export default function DataTiang() {
         const mapped = []
         for (let i = 0; i < rows.length; i++) {
           const r = rows[i]
-          let lat = r['Latitude'] ? Number(r['Latitude']) : null
-          let lon = r['Longitude'] ? Number(r['Longitude']) : null
 
-          // Jika format Decimal kosong tetapi format DMS terisi, parse otomatis!
-          if (!lat && r['Latitude_1']) lat = parseDMS(r['Latitude_1'])
-          if (!lon && r['Longitude_1']) lon = parseDMS(r['Longitude_1'])
-          
+          // Baca koordinat — support nama kolom baru (Decimal/dms) maupun nama lama
+          let lat = r['Latitude ( Decimal )'] ? Number(r['Latitude ( Decimal )']) : (r['Latitude'] ? Number(r['Latitude']) : null)
+          let lon = r['Longitude ( Decimal )'] ? Number(r['Longitude ( Decimal )']) : (r['Longitude'] ? Number(r['Longitude']) : null)
+          const dmsLatRaw = r['Latitude ( dms )'] || r['Latitude_1'] || ''
+          const dmsLonRaw = r['Longitude ( dms )'] || r['Longitude_1'] || ''
+
+          // Aturan 1: Jika Decimal kosong tapi DMS terisi → parse DMS → Decimal
+          if (!lat && dmsLatRaw) lat = parseDMS(dmsLatRaw)
+          if (!lon && dmsLonRaw) lon = parseDMS(dmsLonRaw)
+
+          // Aturan 2: Jika DMS kosong tapi Decimal ada → generate DMS (untuk keperluan display review)
+          const dmsLat = dmsLatRaw || (lat ? decimalToDMS(lat, true) : '')
+          const dmsLon = dmsLonRaw || (lon ? decimalToDMS(lon, false) : '')
+
+          // Aturan 3: Jika Maps URL kosong tapi koordinat ada → auto-generate Maps URL Google
+          let mapsUrl = r['Maps URL'] || ''
+          const isAutoUrl = !mapsUrl && lat && lon
+          if (isAutoUrl) mapsUrl = `http://maps.google.com/?q=${lat},${lon}`
+
           let proxWarning = null
           let selected = !!r['Kecamatan'] && !!r['Desa/Kelurahan'] // default selected if valid
           
@@ -692,10 +738,15 @@ export default function DataTiang() {
           }
           
           mapped.push({
-            _rowNo: i + 2, site: r['Site']?.toLowerCase() || 'banyumas', pole_type: r['Jenis Tiang']?.toLowerCase() || 'tiang_7m',
-            provinsi: r['Provinsi'] || '', kabupaten: r['Kabupaten/Kota'] || '', kecamatan: r['Kecamatan'] || '',
-            desa: r['Desa/Kelurahan'] || '', maps_url: r['Maps URL'] || '', longitude: lon,
-            latitude: lat, keterangan: r['Keterangan'] || '',
+            _rowNo: i + 2,
+            site: (r['Site'] || 'banyumas').toLowerCase().trim(),
+            pole_type: (r['Jenis Tiang'] || 'tiang_7m').toLowerCase().trim(),
+            provinsi: r['Provinsi'] || '', kabupaten: r['Kabupaten/Kota'] || '',
+            kecamatan: r['Kecamatan'] || '', desa: r['Desa/Kelurahan'] || '',
+            jalan: r['Jalan/Gang/Dusun'] || '',
+            maps_url: mapsUrl, longitude: lon, latitude: lat,
+            _dmsLat: dmsLat, _dmsLon: dmsLon, _autoUrl: isAutoUrl,
+            keterangan: r['Keterangan'] || '',
             _valid: !!r['Kecamatan'] && !!r['Desa/Kelurahan'],
             _selected: selected,
             _proximityWarning: proxWarning
