@@ -549,6 +549,7 @@ export default function DataOdpOdc() {
     
     try {
       const chunkSize = 10
+      const totalChunks = Math.ceil(updates.length / chunkSize)
       for (let i = 0; i < updates.length; i += chunkSize) {
         const chunk = updates.slice(i, i + chunkSize)
         await Promise.all(chunk.map(u => 
@@ -559,6 +560,10 @@ export default function DataOdpOdc() {
             updated_by: profile.id
           }).eq('id', u.id)
         ))
+        // Update progress: 50% → 95% selama proses simpan
+        const chunkIndex = Math.floor(i / chunkSize) + 1
+        const pct = 50 + Math.round((chunkIndex / totalChunks) * 45)
+        showProgress('Sinkronisasi Tiang', `Menyimpan... (${Math.min(i + chunkSize, updates.length)}/${updates.length} data)`, pct)
       }
       toast.success(`✅ ${updates.length} ODP/ODC berhasil disinkronkan ke tiang terdekat!`)
       fetchData()
