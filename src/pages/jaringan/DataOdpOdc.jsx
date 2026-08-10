@@ -881,7 +881,11 @@ export default function DataOdpOdc() {
             }
           }
           
-          let typeStr = String(r['JENIS PASSIVE SPLITTER (ODP/FAT/ODU)'] || r['Jenis'] || '').toUpperCase()
+          let typeStr = String(
+            r['Jenis ODP/ODC'] || r['JENIS ODP/ODC'] || 
+            r['Jenis'] || r['JENIS'] || r['Type'] || r['TYPE'] ||
+            r['JENIS PASSIVE SPLITTER (ODP/FAT/ODU)'] || ''
+          ).toUpperCase().trim()
           let type = typeStr.includes('ODC') ? 'ODC' : 'ODP'
 
           // Get Device ID from either ODC or ODP column based on template
