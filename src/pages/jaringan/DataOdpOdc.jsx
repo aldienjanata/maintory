@@ -707,7 +707,9 @@ export default function DataOdpOdc() {
     // Row 3: Contoh Maps URL saja (koordinat dikosongkan → auto-isi)
     const template = [
       {
-        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'odpOdc_7m', 'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'CILACAP',
+        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODP', 'Kapasitas': '8 Port', 'OLT': 'ZTE-01',
+        'Jenis Kabel Power': 'Single Mode', 'Core Power': 'Core 1-8', 'Jarak ke OLT/Server (m)': 1500,
+        'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'CILACAP',
         'Kecamatan': 'KROYA', 'Desa/Kelurahan': 'MUJUR', 'Jalan/Gang/Dusun': 'Gg. BIMA',
         'Maps URL': '', // kosong → otomatis dibuat dari koordinat
         'Latitude ( Decimal )': '', // kosong → otomatis diisi dari DMS
@@ -717,7 +719,9 @@ export default function DataOdpOdc() {
         'Keterangan': 'Contoh: isi DMS saja, Decimal & Maps URL otomatis terisi'
       },
       {
-        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'odpOdc_9m', 'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'BANYUMAS',
+        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODC', 'Kapasitas': '144 Port', 'OLT': 'HUAWEI-02',
+        'Jenis Kabel Power': 'Multi Mode', 'Core Power': 'Core 1-12', 'Jarak ke OLT/Server (m)': 2000,
+        'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'BANYUMAS',
         'Kecamatan': 'PURWOKERTO SELATAN', 'Desa/Kelurahan': 'TANJUNG', 'Jalan/Gang/Dusun': 'Jl. Pahlawan',
         'Maps URL': '',
         'Latitude ( Decimal )': '-7.4321234',
@@ -728,7 +732,7 @@ export default function DataOdpOdc() {
       },
     ]
     const ws = XLSX.utils.json_to_sheet(template)
-    ws['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 22 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 50 }]
+    ws['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 15 }, { wch: 18 }, { wch: 12 }, { wch: 22 }, { wch: 14 }, { wch: 16 }, { wch: 22 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 50 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Template')
     XLSX.writeFile(wb, `Template Import ODP/ODC ${format(new Date(), 'dd-MM-yyyy')}.xlsx`)
