@@ -754,6 +754,26 @@ export default function DataOdpOdc() {
 
           let lat = Number(r['LATITUDE (LINTANG)'] || r['Latitude ( Decimal )'] || r['Latitude']) || null
           let lon = Number(r['LONGITUDE (BUJUR)'] || r['Longitude ( Decimal )'] || r['Longitude']) || null
+
+          if (!lat || !lon) {
+            let latDms = r['Latitude ( dms )'] || r['Latitude (dms)']
+            let lonDms = r['Longitude ( dms )'] || r['Longitude (dms)']
+            if (latDms && lonDms) {
+              lat = parseDMS(latDms)
+              lon = parseDMS(lonDms)
+            }
+          }
+
+          if (!lat || !lon) {
+            let mapsUrl = r['Maps URL'] || r['Maps'] || r['URL Google Maps']
+            if (mapsUrl) {
+              const extracted = extractCoordsFromUrl(mapsUrl)
+              if (extracted) {
+                lat = Number(extracted.latitude)
+                lon = Number(extracted.longitude)
+              }
+            }
+          }
           
           let typeStr = String(r['JENIS PASSIVE SPLITTER (ODP/FAT/ODU)'] || r['Jenis'] || '').toUpperCase()
           let type = typeStr.includes('ODC') ? 'ODC' : 'ODP'
