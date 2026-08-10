@@ -502,22 +502,39 @@ export default function DataOdpOdc() {
   }
 
   const handleSyncPoles = async () => {
-    const orphaned = devices.filter(d => !d.pole_id && d.latitude && d.longitude)
-    if (orphaned.length === 0) return toast.info('Tidak ada ODP/ODC yang perlu disinkronisasi.')
+    if (networkPoles.length === 0) return toast.error('Data tiang belum dimuat. Tunggu sebentar dan coba lagi.')
+    
+    const needsSync = devices.filter(d => d.latitude && d.longitude)
+    if (needsSync.length === 0) return toast.info('Tidak ada ODP/ODC dengan koordinat GPS.')
     
     setSyncingPoles(true)
-    showProgress('Sinkronisasi Tiang', 'Mencari tiang terdekat untuk semua ODP/ODC tanpa tiang...', 10)
+    showProgress('Sinkronisasi Tiang', `Mencari tiang terdekat (radius 50m) untuk ${needsSync.length} ODP/ODC...`, 10)
     
     let updates = []
+    const SYNC_RADIUS_M = 50  // radius lebih longgar untuk sinkronisasi manual
     
-    for (const d of orphaned) {
-      const nearest = findNearestPole(Number(d.latitude), Number(d.longitude))
-      if (nearest) {
+    for (const d of needsSync) {
+      const lat = Number(d.latitude)
+      const lon = Number(d.longitude)
+      let nearestDist = Infinity
+      let nearestPole = null
+      for (const p of networkPoles) {
+        if (!p.latitude || !p.longitude) continue
+        const dist = getDistanceFromLatLonInm(Number(p.latitude), Number(p.longitude), lat, lon)
+        if (dist < nearestDist) {
+          nearestDist = dist
+          nearestPole = p
+        }
+      }
+      if (nearestPole && nearestDist <= SYNC_RADIUS_M) {
         updates.push({
           id: d.id,
-          pole_id: nearest.id,
-          latitude: nearest.latitude, // align with pole
-          longitude: nearest.longitude // align with pole
+          device_id: d.device_id,
+          pole_id: nearestPole.id,
+          pole_label: nearestPole.pole_id || nearestPole.id,
+          dist: Math.round(nearestDist),
+          latitude: Number(nearestPole.latitude),
+          longitude: Number(nearestPole.longitude),
         })
       }
     }
@@ -525,13 +542,12 @@ export default function DataOdpOdc() {
     if (updates.length === 0) {
       setSyncingPoles(false)
       hideProgress()
-      return toast.info('Sudah dicari, tapi tidak ditemukan satupun tiang baru di radius 10m.')
+      return toast.info(`Tidak ada tiang ditemukan dalam radius ${SYNC_RADIUS_M}m dari ODP/ODC manapun.`)
     }
     
-    showProgress('Sinkronisasi Tiang', `Menyimpan ${updates.length} penyesuaian titik...`, 50)
+    showProgress('Sinkronisasi Tiang', `Menyimpan ${updates.length} sinkronisasi...`, 50)
     
     try {
-      // Chunk updates into batches of 10 for safety
       const chunkSize = 10
       for (let i = 0; i < updates.length; i += chunkSize) {
         const chunk = updates.slice(i, i + chunkSize)
@@ -544,10 +560,10 @@ export default function DataOdpOdc() {
           }).eq('id', u.id)
         ))
       }
-      toast.success(`Berhasil mensinkronkan ${updates.length} ODP/ODC dengan tiang baru! Titik koordinat telah disamakan.`)
+      toast.success(`✅ ${updates.length} ODP/ODC berhasil disinkronkan ke tiang terdekat!`)
       fetchData()
     } catch (err) {
-      toast.error('Gagal melakukan sinkronisasi massal')
+      toast.error('Gagal melakukan sinkronisasi: ' + err.message)
       console.error(err)
     } finally {
       setSyncingPoles(false)
