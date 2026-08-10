@@ -409,26 +409,55 @@ export default function DataOdpOdc() {
     setIsModalOpen(true)
   }
 
+  const findNearestPole = (lat, lon) => {
+    if (!lat || !lon || networkPoles.length === 0) return null
+    let nearestPole = null
+    let nearestDist = Infinity
+    for (const p of networkPoles) {
+      if (!p.latitude || !p.longitude) continue
+      const dist = getDistanceFromLatLonInm(Number(p.latitude), Number(p.longitude), lat, lon)
+      if (dist < nearestDist) {
+        nearestDist = dist
+        nearestPole = { ...p, _dist: dist }
+      }
+    }
+    // Only link if the nearest pole is within 10m radius
+    return nearestPole && nearestDist <= 10 ? nearestPole : null
+  }
+
   const executeSave = async () => {
     setSaving(true)
     setProximityWarning(null)
     showProgress('Menyimpan ODP/ODC', 'Mengirim data ke server...', 50)
     try {
+      const lat = form.latitude ? Number(form.latitude) : null
+      const lon = form.longitude ? Number(form.longitude) : null
+
+      // Smart nearest-pole auto-link
+      let linked_pole_id = form.pole_id || null
+      if (lat && lon) {
+        const nearestPole = findNearestPole(lat, lon)
+        if (nearestPole) linked_pole_id = nearestPole.id
+      }
+
       const payload = {
         ...form,
-        longitude: form.longitude ? Number(form.longitude) : null,
-        latitude: form.latitude ? Number(form.latitude) : null,
+        longitude: lon,
+        latitude: lat,
+        pole_id: linked_pole_id,
         updated_by: profile.id,
       }
       if (editingId) {
         const { error } = await supabase.from('network_odp_odc').update(payload).eq('id', editingId)
         if (error) throw error
-        toast.success('Data odpOdc diperbarui!')
+        const poleInfo = linked_pole_id ? ` (Tiang: ${networkPoles.find(p => p.id === linked_pole_id)?.pole_id || linked_pole_id})` : ''
+        toast.success(`Data ODP/ODC diperbarui!${poleInfo}`)
       } else {
         const deviceId = generateDeviceId(form.site, form.desa, form.type, devices, idFormat)
         const { error } = await supabase.from('network_odp_odc').insert({ ...payload, device_id: deviceId, created_by: profile.id })
         if (error) throw error
-        toast.success(`ODP/ODC ${deviceId} ditambahkan!`)
+        const poleInfo = linked_pole_id ? ` → Terpasang di Tiang: ${networkPoles.find(p => p.id === linked_pole_id)?.pole_id || linked_pole_id}` : ''
+        toast.success(`${deviceId} ditambahkan!${poleInfo}`)
       }
       setIsModalOpen(false)
       fetchData()
@@ -806,13 +835,24 @@ export default function DataOdpOdc() {
           let mapsUrlFallback = String(r['Maps URL'] || r['Maps'] || r['URL Google Maps'] || '')
           let keterangan = String(r['Keterangan'] || r['KETERANGAN'] || '')
 
-          // Cari Tiang Terdekat
+          // Cari Tiang Terdekat (Cerdas: pilih yang paling dekat dalam 10m)
           let linked_pole_id = null
+          let linked_pole_label = null
           if (lat && lon && networkPoles.length > 0) {
-             const closePoles = networkPoles.filter(p => getDistanceFromLatLonInm(p.latitude, p.longitude, lat, lon) < 5)
-             if (closePoles.length > 0) {
-                linked_pole_id = closePoles[0].id // link to nearest pole
-             }
+            let nearestDist = Infinity
+            let nearestPole = null
+            for (const p of networkPoles) {
+              if (!p.latitude || !p.longitude) continue
+              const dist = getDistanceFromLatLonInm(Number(p.latitude), Number(p.longitude), lat, lon)
+              if (dist < nearestDist) {
+                nearestDist = dist
+                nearestPole = p
+              }
+            }
+            if (nearestPole && nearestDist <= 10) {
+              linked_pole_id = nearestPole.id
+              linked_pole_label = `${nearestPole.pole_id || nearestPole.id} (~${Math.round(nearestDist)}m)`
+            }
           }
 
           const isValid = !!(desa && lat && lon)
@@ -848,7 +888,8 @@ export default function DataOdpOdc() {
             latitude: lat,
             longitude: lon,
             keterangan,
-            pole_id: linked_pole_id
+            pole_id: linked_pole_id,
+            _poleLabel: linked_pole_label
           })
         }
         setImportRows(mapped)
@@ -1038,6 +1079,9 @@ export default function DataOdpOdc() {
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {['admin', 'superadmin'].includes(role) && (
             <>
+              <button className="btn btn-primary btn-sm" onClick={() => { setEditingId(null); setForm({...EMPTY_FORM}); setIsModalOpen(true); setProximityWarning(null) }} title="Tambah Data ODP/ODC Baru">
+                <Plus size={14} /> Tambah
+              </button>
               <button className="btn btn-secondary btn-sm" onClick={() => setIsFormatModalOpen(true)} title="Pengaturan Format ID ODP/ODC">
                 <SettingsIcon size={14} /> Format ID
               </button>
@@ -1431,7 +1475,7 @@ export default function DataOdpOdc() {
                           }}
                         />
                       </th>
-                      <th>Baris</th><th>Site</th><th>Jenis</th><th>Kecamatan</th><th>Desa</th><th>Lat</th><th>Lon</th><th>Status</th>
+                      <th>Baris</th><th>Site</th><th>Jenis</th><th>Kecamatan</th><th>Desa</th><th>Tiang Terdekat</th><th>Lat</th><th>Lon</th><th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1448,6 +1492,7 @@ export default function DataOdpOdc() {
                           </td>
                           <td style={{ color: 'var(--text-secondary)', fontWeight: row._proximityWarning && !row._selected ? 'bold' : 'normal' }}>{row._rowNo}</td><td>{SITES.find(s => s.value === row.site)?.label || row.site}</td><td>{DEVICE_TYPES.find(t => t.value === row.type)?.label || row.type}</td>
                           <td>{row.kecamatan || <span style={{ color: 'var(--danger)' }}>Kosong!</span>}</td><td>{row.desa || <span style={{ color: 'var(--danger)' }}>Kosong!</span>}</td>
+                          <td style={{ fontSize: '11px', fontWeight: 600, color: row._poleLabel ? 'var(--success)' : 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{row._poleLabel || <span style={{ color: 'var(--text-secondary)' }}>Tidak ditemukan</span>}</td>
                           <td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{row.latitude || '-'}</td><td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{row.longitude || '-'}</td>
                           <td>
                             {row._valid ? (
