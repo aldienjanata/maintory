@@ -23,11 +23,23 @@ const SITES = [
 ]
 const SITE_CODE = { banyumas: 'BMS', cilacap: 'CLP', cilacap_herman: 'CLH' }
 const DEVICE_TYPES = [
-  { value: 'ODP', label: 'ODP' },
-  { value: 'ODC', label: 'ODC' },
+  { value: 'ODP', label: 'ODP (Optical Distribution Point)' },
+  { value: 'ODC', label: 'ODC (Optical Distribution Cabinet)' },
+]
+// Kapasitas port berdasarkan jenis perangkat
+const ODP_CAPACITIES = [
+  { value: '8 Port', label: '8 Port' },
+  { value: '16 Port', label: '16 Port' },
+  { value: '24 Port', label: '24 Port' },
+]
+const ODC_CAPACITIES = [
+  { value: '48 Port', label: '48 Port' },
+  { value: '96 Port', label: '96 Port' },
+  { value: '144 Port', label: '144 Port' },
+  { value: '288 Port', label: '288 Port' },
 ]
 const EMPTY_FORM = {
-  site: 'banyumas', type: 'ODP',
+  site: 'banyumas', type: 'ODP', kapasitas: '',
   pole_id: '', olt: '', divisi: '',
   provinsi: 'Jawa Tengah', kabupaten: 'Banyumas',
   kecamatan: '', desa: '', maps_url: '',
@@ -989,8 +1001,8 @@ export default function DataOdpOdc() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginBottom: '16px' }}>
         {[
           { label: 'Total ODP/ODC', value: devices.filter(p => !p.status || p.status === 'active').length, color: 'var(--accent)' },
-          { label: 'ODP/ODC 7 m', value: devices.filter(p => p.type === 'odpOdc_7m' && (!p.status || p.status === 'active')).length, color: 'var(--success)' },
-          { label: 'ODP/ODC 9 m', value: devices.filter(p => p.type === 'odpOdc_9m' && (!p.status || p.status === 'active')).length, color: 'var(--warning)' },
+          { label: 'Total ODP', value: devices.filter(p => p.type === 'ODP' && (!p.status || p.status === 'active')).length, color: 'var(--success)' },
+          { label: 'Total ODC', value: devices.filter(p => p.type === 'ODC' && (!p.status || p.status === 'active')).length, color: '#6366f1' },
           { label: 'Kecamatan', value: kecamatanList.length, color: 'var(--purple)' },
           { label: 'Ada Koordinat', value: devices.filter(p => p.latitude && p.longitude && (!p.status || p.status === 'active')).length, color: '#22d3ee' },
           { label: 'Dicabut', value: devices.filter(p => p.status === 'dismantled').length, color: 'var(--danger)', clickable: true },
@@ -1128,7 +1140,7 @@ export default function DataOdpOdc() {
                     {isDismantled && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 6px', borderRadius: '20px', background: 'rgba(239,68,68,0.15)', color: 'var(--danger)', fontWeight: 700, border: '1px solid rgba(239,68,68,0.3)' }}>DICABUT</span>}
                     {isDismantled && device.dismantled_at && <div style={{ fontSize: '10px', color: 'var(--danger)', opacity: 0.7, marginTop: '1px' }}>{format(new Date(device.dismantled_at), 'dd MMM yyyy', { locale: localeId })}</div>}
                   </td>
-                  <td><span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '20px', fontWeight: 600, background: device.type === 'odpOdc_9m' ? 'rgba(251,191,36,0.15)' : 'rgba(16,185,129,0.12)', color: device.type === 'odpOdc_9m' ? 'var(--warning)' : 'var(--success)' }}>{DEVICE_TYPES.find(t => t.value === device.type)?.label}</span></td>
+                  <td><span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '20px', fontWeight: 600, background: device.type === 'ODC' ? 'rgba(99,102,241,0.15)' : 'rgba(16,185,129,0.12)', color: device.type === 'ODC' ? '#6366f1' : 'var(--success)' }}>{device.type || '-'}{device.kapasitas ? ` · ${device.kapasitas}` : ''}</span></td>
                   <td style={{ fontSize: '12px' }}>{device.kecamatan || '-'}</td>
                   <td style={{ fontSize: '12px' }}>{device.desa || '-'}</td>
                   <td>{device.latitude && device.longitude ? <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontFamily: 'monospace', lineHeight: '1.4' }}><div>Lat: {Number(device.latitude).toFixed(5)}</div><div>Lon: {Number(device.longitude).toFixed(5)}</div></div> : <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>-</span>}</td>
@@ -1160,7 +1172,7 @@ export default function DataOdpOdc() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '8px' }}>
                 <div>
                   <div style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--accent)', fontWeight: 700 }}>{device.device_id || '-'}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{SITES.find(s => s.value === device.site)?.label} · <span style={{ color: device.type === 'odpOdc_9m' ? 'var(--warning)' : 'var(--success)', fontWeight: 600 }}>{DEVICE_TYPES.find(t => t.value === device.type)?.label}</span></div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{SITES.find(s => s.value === device.site)?.label} · <span style={{ color: device.type === 'ODC' ? '#6366f1' : 'var(--success)', fontWeight: 600 }}>{device.type}{device.kapasitas ? ` · ${device.kapasitas}` : ''}</span></div>
                 </div>
                 {['admin', 'superadmin'].includes(role) && (
                   <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}><button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => openEdit(device)}><Edit2 size={12} /></button><button className="btn btn-sm" style={{ padding: '4px 8px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.25)' }} onClick={() => setConfirmDelete(device)}><Trash2 size={12} /></button></div>
@@ -1202,9 +1214,24 @@ export default function DataOdpOdc() {
             </div>
             <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
                   <div><label className="form-label">Site <span style={{ color: 'var(--danger)' }}>*</span></label><select className="form-input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}>{SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
-                  <div><label className="form-label">Jenis ODP/ODC <span style={{ color: 'var(--danger)' }}>*</span></label><select className="form-input" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>{DEVICE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
+                  <div>
+                    <label className="form-label">Jenis Perangkat <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <select className="form-input" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, kapasitas: '' }))}>
+                      <option value="ODP">ODP (Optical Distribution Point)</option>
+                      <option value="ODC">ODC (Optical Distribution Cabinet)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label">Kapasitas</label>
+                    <select className="form-input" value={form.kapasitas} onChange={e => setForm(f => ({ ...f, kapasitas: e.target.value }))}>
+                      <option value="">-- Pilih Kapasitas --</option>
+                      {(form.type === 'ODC' ? ODC_CAPACITIES : ODP_CAPACITIES).map(c => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2px' }}><span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>📍 Lokasi Administratif</span></div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
