@@ -400,7 +400,7 @@ export default function DataOdpOdc() {
   const openEdit = (device) => {
     setEditingId(device.id)
     setForm({
-      site: device.site || 'banyumas', type: device.type || 'odpOdc_7m',
+      site: device.site || 'banyumas', type: device.type || 'ODP',
       provinsi: device.provinsi || '', kabupaten: device.kabupaten || '',
       kecamatan: device.kecamatan || '', desa: device.desa || '',
       maps_url: device.maps_url || '', longitude: device.longitude || '',
