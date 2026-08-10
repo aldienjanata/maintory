@@ -315,9 +315,10 @@ export default function DataOdpOdc() {
         }
       }
 
-      const [usersRes, settingsRes] = await Promise.all([
+      const [usersRes, settingsRes, polesRes] = await Promise.all([
         supabase.from('users').select('id, full_name'),
-        supabase.from('app_settings').select('device_id_format').maybeSingle()
+        supabase.from('app_settings').select('device_id_format').maybeSingle(),
+        supabase.from('network_poles').select('id, pole_id, latitude, longitude, desa, kecamatan').not('latitude', 'is', null).not('longitude', 'is', null)
       ])
       
       setDevices(allPoles)
@@ -326,6 +327,7 @@ export default function DataOdpOdc() {
         setIdFormat(settingsRes.data.device_id_format)
         setFormatForm(settingsRes.data.device_id_format)
       }
+      if (polesRes.data) setNetworkPoles(polesRes.data)
     } catch { toast.error('Gagal memuat data') }
     finally { setLoading(false) }
   }
@@ -857,13 +859,20 @@ export default function DataOdpOdc() {
 
           const isValid = !!(desa && lat && lon)
 
-          // Cek proximity dengan ODP/ODC lain (mencegah duplikat gila-gilaan)
+          // Cek proximity hanya sesama jenis (ODP↔ODP, ODC↔ODC)
           let proximityWarning = null
           if (isValid && lat && lon) {
-            const veryCloseDb = devices.filter(d => getDistanceFromLatLonInm(d.latitude, d.longitude, lat, lon) < 1)
-            const veryCloseExcel = mapped.filter(m => m.latitude && m.longitude && getDistanceFromLatLonInm(m.latitude, m.longitude, lat, lon) < 1)
+            const veryCloseDb = devices.filter(d =>
+              d.type === type &&
+              getDistanceFromLatLonInm(Number(d.latitude), Number(d.longitude), lat, lon) < 1
+            )
+            const veryCloseExcel = mapped.filter(m =>
+              m.type === type &&
+              m.latitude && m.longitude &&
+              getDistanceFromLatLonInm(m.latitude, m.longitude, lat, lon) < 1
+            )
             const totalClose = veryCloseDb.length + veryCloseExcel.length
-            if (totalClose > 0) proximityWarning = `Jarak < 1 meter dengan ${totalClose} ODP/ODC lain (duplikat lokasi)`
+            if (totalClose > 0) proximityWarning = `Jarak < 1m dengan ${totalClose} ${type} lain (duplikat lokasi)`
           }
 
           mapped.push({
