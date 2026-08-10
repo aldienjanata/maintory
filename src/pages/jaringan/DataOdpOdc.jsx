@@ -944,6 +944,9 @@ export default function DataOdpOdc() {
             if (nearestPole && nearestDist <= 10) {
               linked_pole_id = nearestPole.id
               linked_pole_label = `${nearestPole.pole_id || nearestPole.id} (~${Math.round(nearestDist)}m)`
+              // Snap koordinat ODP/ODC ke koordinat tiang agar satu titik
+              lat = Number(nearestPole.latitude)
+              lon = Number(nearestPole.longitude)
             }
           }
 
@@ -989,7 +992,9 @@ export default function DataOdpOdc() {
             longitude: lon,
             keterangan,
             pole_id: linked_pole_id,
-            _poleLabel: linked_pole_label
+            _poleLabel: linked_pole_label,
+            latitude: lat,
+            longitude: lon,
           })
         }
         setImportRows(mapped)
@@ -1354,8 +1359,15 @@ export default function DataOdpOdc() {
                   <td style={{ fontSize: '12px' }}>{device.desa || '-'}</td>
                   <td>{device.latitude && device.longitude ? <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontFamily: 'monospace', lineHeight: '1.4' }}><div>Lat: {Number(device.latitude).toFixed(5)}</div><div>Lon: {Number(device.longitude).toFixed(5)}</div></div> : <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>-</span>}</td>
                   <td>{device.maps_url ? <a href={device.maps_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '3px', fontSize: '12px' }}><MapPin size={12} /><ExternalLink size={11} /></a> : '-'}</td>
-                  <td style={{ fontSize: '11px', color: 'var(--text-secondary)', maxWidth: '120px' }}>
-                    <span title={device.keterangan} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{device.keterangan || '-'}</span>
+                  <td style={{ fontSize: '11px', color: 'var(--text-secondary)', maxWidth: '150px' }}>
+                    {device.pole_id && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                        <span style={{ fontSize: '10px', padding: '1px 5px', borderRadius: '20px', background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          📡 {networkPoles.find(p => p.id === device.pole_id)?.pole_id || device.pole_id}
+                        </span>
+                      </div>
+                    )}
+                    <span title={device.keterangan} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{device.keterangan || (!device.pole_id ? '-' : '')}</span>
                     {isDismantled && device.dismantled_notes && <span title={device.dismantled_notes} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--danger)', fontStyle: 'italic', fontSize: '10px' }}>Cabut: {device.dismantled_notes}</span>}
                   </td>
                   <td style={{ fontSize: '11px' }}><div style={{ fontWeight: 500 }}>{getUserName(device.created_by)}</div>{device.updated_by && device.updated_by !== device.created_by && <div style={{ color: 'var(--text-secondary)', fontSize: '10px' }}>Edit: {getUserName(device.updated_by)}</div>}</td>
