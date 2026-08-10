@@ -1459,11 +1459,23 @@ export default function DataOdpOdc() {
             <div className="modal-header">
               <div>
                 <h3 style={{ margin: 0 }}>Preview Import Data ODP & ODC</h3>
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {importRows.filter(r => r._valid).length} baris valid · {importRows.filter(r => !r._valid).length} baris tidak valid
+                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                  <span>✅ {importRows.filter(r => r._valid).length} valid</span>
+                  <span>·</span>
+                  <span>❌ {importRows.filter(r => !r._valid).length} tidak valid</span>
                   {importRows.filter(r => r._proximityWarning && !r._selected).length > 0 && (
-                    <span style={{ color: 'var(--warning)', fontWeight: 600, marginLeft: '8px', fontSize: '13px' }}>
-                      · ⚠️ {importRows.filter(r => r._proximityWarning && !r._selected).length} baris berdekatan
+                    <span style={{ color: 'var(--warning)', fontWeight: 600, background: 'rgba(245,158,11,0.12)', padding: '2px 8px', borderRadius: '6px', border: '1px solid rgba(245,158,11,0.3)' }}>
+                      ⚠️ {importRows.filter(r => r._proximityWarning && !r._selected).length} berdekatan
+                    </span>
+                  )}
+                  {importRows.filter(r => r._valid && !r._poleLabel).length > 0 && (
+                    <span style={{ color: '#f97316', fontWeight: 600, background: 'rgba(249,115,22,0.12)', padding: '2px 8px', borderRadius: '6px', border: '1px solid rgba(249,115,22,0.3)' }}>
+                      📍 {importRows.filter(r => r._valid && !r._poleLabel).length} tanpa tiang
+                    </span>
+                  )}
+                  {importRows.filter(r => r._valid && r._poleLabel).length > 0 && (
+                    <span style={{ color: 'var(--success)', fontWeight: 600, background: 'rgba(16,185,129,0.1)', padding: '2px 8px', borderRadius: '6px', border: '1px solid rgba(16,185,129,0.25)' }}>
+                      🗼 {importRows.filter(r => r._valid && r._poleLabel).length} ada tiang
                     </span>
                   )}
                 </p>
@@ -1490,7 +1502,15 @@ export default function DataOdpOdc() {
                   <tbody>
                     {importRows.map(row => (
                       <Fragment key={row._rowNo}>
-                        <tr style={{ opacity: row._valid ? 1 : 0.45, background: row._proximityWarning && !row._selected ? 'rgba(239, 68, 68, 0.1)' : 'transparent', borderLeft: row._proximityWarning && !row._selected ? '4px solid var(--danger)' : '4px solid transparent' }}>
+                        <tr style={{
+                          opacity: row._valid ? 1 : 0.45,
+                          background: row._proximityWarning && !row._selected
+                            ? 'rgba(239, 68, 68, 0.1)'
+                            : (row._valid && !row._poleLabel ? 'rgba(249, 115, 22, 0.05)' : 'transparent'),
+                          borderLeft: row._proximityWarning && !row._selected
+                            ? '4px solid var(--danger)'
+                            : (row._valid && !row._poleLabel ? '4px solid #f97316' : '4px solid transparent')
+                        }}>
                           <td style={{ textAlign: 'center' }}>
                             <input type="checkbox" disabled={!row._valid} checked={row._selected || false}
                               onChange={(e) => {
