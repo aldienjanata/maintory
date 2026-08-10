@@ -720,79 +720,75 @@ export default function DataOdpOdc() {
         for (let i = 0; i < rows.length; i++) {
           const r = rows[i]
 
-          // Baca koordinat — support nama kolom baru (Decimal/dms) maupun nama lama
-          let lat = r['Latitude ( Decimal )'] ? Number(r['Latitude ( Decimal )']) : (r['Latitude'] ? Number(r['Latitude']) : null)
-          let lon = r['Longitude ( Decimal )'] ? Number(r['Longitude ( Decimal )']) : (r['Longitude'] ? Number(r['Longitude']) : null)
-          const dmsLatRaw = r['Latitude ( dms )'] || r['Latitude_1'] || ''
-          const dmsLonRaw = r['Longitude ( dms )'] || r['Longitude_1'] || ''
-
-          // Aturan 1: Jika Decimal kosong tapi DMS terisi → parse DMS → Decimal
-          if (!lat && dmsLatRaw) lat = parseDMS(dmsLatRaw)
-          if (!lon && dmsLonRaw) lon = parseDMS(dmsLonRaw)
-
-          // Aturan 2: Jika DMS kosong tapi Decimal ada → generate DMS (untuk keperluan display review)
-          const dmsLat = dmsLatRaw || (lat ? decimalToDMS(lat, true) : '')
-          const dmsLon = dmsLonRaw || (lon ? decimalToDMS(lon, false) : '')
-
-          // Aturan 3: Jika Maps URL kosong tapi koordinat ada → auto-generate Maps URL Google
-          let mapsUrl = r['Maps URL'] || ''
-          const isAutoUrl = !mapsUrl && lat && lon
-          if (isAutoUrl) mapsUrl = `http://maps.google.com/?q=${lat},${lon}`
-
-          let proxWarning = null
-          let selected = !!r['Kecamatan'] && !!r['Desa/Kelurahan'] // default selected if valid
+          let lat = Number(r['LATITUDE (LINTANG)'] || r['Latitude ( Decimal )'] || r['Latitude']) || null
+          let lon = Number(r['LONGITUDE (BUJUR)'] || r['Longitude ( Decimal )'] || r['Longitude']) || null
           
-          if (lat && lon) {
-            // Cek ke file yang sama (baris sebelumnya)
-            for (const prev of mapped) {
-              if (!prev.latitude || !prev.longitude) continue
-              const dist = getDistanceFromLatLonInm(lat, lon, prev.latitude, prev.longitude)
-              if (dist <= 10) {
-                proxWarning = `Jarak ${dist}m dengan Baris ${prev._rowNo}`
-                selected = false
-                break
-              }
-            }
-            if (!proxWarning) {
-              let nearestDist = Infinity
-              let nearestDbId = null
-              for (const p of devices) {
-                if (!p.latitude || !p.longitude) continue
-                const dist = getDistanceFromLatLonInm(lat, lon, Number(p.latitude), Number(p.longitude))
-                if (dist <= 10 && dist < nearestDist) {
-                  nearestDist = dist
-                  nearestDbId = p.device_id
-                }
-              }
-              if (nearestDist <= 10) {
-                proxWarning = `Jarak ${nearestDist}m dengan ID ODP/ODC ${nearestDbId || '?'}`
-                selected = false
-              }
-            }
+          let typeStr = String(r['JENIS PASSIVE SPLITTER (ODP/FAT/ODU)'] || r['Jenis'] || '').toUpperCase()
+          let type = typeStr.includes('ODC') ? 'ODC' : 'ODP'
+
+          // Get Device ID from either ODC or ODP column based on template
+          let device_id = ''
+          if (type === 'ODC') {
+             device_id = String(r['ODC'] || r['PERANGKAT PASIF'] || '')
+          } else {
+             device_id = String(r['ODP'] || r['PERANGKAT PASIF'] || '')
           }
-          
+
+          // if not from template, check standard 'device_id' or 'ID' column
+          if (!device_id) device_id = String(r['device_id'] || r['ID'] || '')
+
+          let siteStr = String(r['site'] || r['Site'] || 'Banyumas').toLowerCase()
+          let siteVal = SITES.find(s => s.label.toLowerCase() === siteStr || s.value === siteStr)?.value || 'banyumas'
+
+          let desa = String(r['DESA/KELURAHAN'] || r['Desa'] || r['desa'] || '').toUpperCase()
+          let kecamatan = String(r['Kecamatan'] || r['kecamatan'] || '').toUpperCase()
+          let olt = String(r['OLT'] || '')
+          let divisi = String(r['DEIVISI'] || r['DIVISI'] || '')
+
+          // Cari Tiang Terdekat
+          let linked_pole_id = null
+          if (lat && lon && networkPoles.length > 0) {
+             const closePoles = networkPoles.filter(p => getDistanceFromLatLonInm(p.latitude, p.longitude, lat, lon) < 5)
+             if (closePoles.length > 0) {
+                linked_pole_id = closePoles[0].id // link to nearest pole
+             }
+          }
+
+          const isValid = !!(desa && lat && lon)
+
+          // Cek proximity dengan ODP/ODC lain (mencegah duplikat gila-gilaan)
+          let proximityWarning = null
+          if (isValid && lat && lon) {
+            const veryClose = devices.filter(d => getDistanceFromLatLonInm(d.latitude, d.longitude, lat, lon) < 1)
+            if (veryClose.length > 0) proximityWarning = `Jarak < 1 meter dengan ${veryClose.length} ODP/ODC yang sudah ada`
+          }
+
           mapped.push({
             _rowNo: i + 2,
-            site: (r['Site'] || 'banyumas').toLowerCase().trim(),
-            type: (r['Jenis ODP/ODC'] || 'odpOdc_7m').toLowerCase().trim(),
-            provinsi: r['Provinsi'] || '', kabupaten: r['Kabupaten/Kota'] || '',
-            kecamatan: r['Kecamatan'] || '', desa: r['Desa/Kelurahan'] || '',
-            jalan: r['Jalan/Gang/Dusun'] || '',
-            maps_url: mapsUrl, longitude: lon, latitude: lat,
-            _dmsLat: dmsLat, _dmsLon: dmsLon, _autoUrl: isAutoUrl,
-            keterangan: r['Keterangan'] || '',
-            _valid: !!r['Kecamatan'] && !!r['Desa/Kelurahan'],
-            _selected: selected,
-            _proximityWarning: proxWarning
+            _valid: isValid,
+            _selected: isValid,
+            _proximityWarning: proximityWarning,
+            site: siteVal,
+            type,
+            device_id,
+            olt,
+            divisi,
+            desa,
+            kecamatan,
+            latitude: lat,
+            longitude: lon,
+            pole_id: linked_pole_id
           })
         }
-        
         setImportRows(mapped)
         setIsImportModalOpen(true)
-      } catch { toast.error('File tidak valid. Gunakan template yang disediakan.') }
+      } catch (err) {
+        toast.error('Gagal membaca file Excel')
+        console.error(err)
+      }
+      if (importRef.current) importRef.current.value = ''
     }
     reader.readAsArrayBuffer(file)
-    e.target.value = ''
   }
 
   const handleSaveImport = async () => {
