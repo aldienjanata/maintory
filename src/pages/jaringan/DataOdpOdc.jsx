@@ -45,22 +45,37 @@ const EMPTY_FORM = {
   provinsi: 'Jawa Tengah', kabupaten: 'Banyumas',
   kecamatan: '', desa: '', maps_url: '',
   longitude: '', latitude: '', keterangan: '',
+  parent_odc: '', // ID induk ODC jika ini ODP
 }
 const DEFAULT_FORMAT = 'NAT/{SITE_CODE}/{DESA}/{TYPE}/{NO}'
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
-function generateDeviceId(site, desa, type, existingDevices, formatTemplate = DEFAULT_FORMAT) {
+function generateDeviceId(site, desa, type, existingDevices, formatTemplate = DEFAULT_FORMAT, parentOdcId = null) {
   if (!desa || !type) return ''
   const siteCode = SITE_CODE[site] || 'BMS'
   const desaSlug = desa.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '').substring(0, 15)
+  const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   
-  const sameDevices = existingDevices.filter(
-    p => p.site === site && p.type === type && p.desa?.toUpperCase().trim() === desa.toUpperCase().trim() && p.device_id
-  )
+  let sameDevices
+  if (parentOdcId && type === 'ODP') {
+     sameDevices = existingDevices.filter(p => p.device_id && p.device_id.startsWith(`${parentOdcId}/ODP`))
+  } else {
+     sameDevices = existingDevices.filter(
+       p => p.site === site && p.type === type && p.desa?.toUpperCase().trim() === desa.toUpperCase().trim() && p.device_id
+     )
+  }
 
   let maxNo = 0
   for (const p of sameDevices) {
-    const match = p.device_id.match(new RegExp(`${type}\\s+(\\d+)`, 'i'))
+    let match
+    if (parentOdcId && type === 'ODP') {
+        const regex = new RegExp(`^${escapeRegExp(parentOdcId)}/ODP/(\\d+)`, 'i')
+        match = p.device_id.match(regex)
+    } else {
+        match = p.device_id.match(new RegExp(`${type}\\s+(\\d+)`, 'i'))
+        if (!match) match = p.device_id.match(new RegExp(`${type}/(\\d+)`, 'i'))
+    }
+
     if (match && match[1]) {
       const num = parseInt(match[1], 10)
       if (num > maxNo) maxNo = num
@@ -76,6 +91,10 @@ function generateDeviceId(site, desa, type, existingDevices, formatTemplate = DE
   if (maxNo === 0) maxNo = sameDevices.length
   const no = String(maxNo + 1).padStart(3, '0')
   
+  if (parentOdcId && type === 'ODP') {
+      return `${parentOdcId}/ODP/${no}`
+  }
+
   return formatTemplate
     .replace(/{SITE_CODE}/g, siteCode)
     .replace(/{DESA}/g, desaSlug)
@@ -486,7 +505,7 @@ export default function DataOdpOdc() {
         const poleInfo = linked_pole_id ? ` (Tiang: ${networkPoles.find(p => p.id === linked_pole_id)?.pole_id || linked_pole_id})` : ''
         toast.success(`Data ODP/ODC diperbarui!${poleInfo}`)
       } else {
-        const deviceId = generateDeviceId(form.site, form.desa, form.type, devices, idFormat)
+        const deviceId = generateDeviceId(form.site, form.desa, form.type, devices, idFormat, form.parent_odc)
         const { error } = await supabase.from('network_odp_odc').insert({ ...payload, device_id: deviceId, created_by: profile.id })
         if (error) throw error
         const poleInfo = linked_pole_id ? ` → Terpasang di Tiang: ${networkPoles.find(p => p.id === linked_pole_id)?.pole_id || linked_pole_id}` : ''
@@ -843,7 +862,7 @@ export default function DataOdpOdc() {
     // Row 3: Contoh Maps URL saja (koordinat dikosongkan → auto-isi)
     const template = [
       {
-        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODP', 'Jenis Box': 'Box 8', 'Kapasitas': '8 Port',
+        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODP', 'Induk ODC': '1', 'Jenis Box': 'Box 8', 'Kapasitas': '8 Port',
         'Jenis Kabel Power': '1C', 'Core Power': 'Core 1-8', 'Jarak ke OLT/Server (m)': '1.500',
         'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'CILACAP',
         'Kecamatan': 'KROYA', 'Desa/Kelurahan': 'MUJUR', 'Jalan/Gang/Dusun': 'Gg. BIMA',
@@ -852,10 +871,10 @@ export default function DataOdpOdc() {
         'Longitude ( Decimal )': '',
         'Latitude ( dms )': `7°36'52.20"S`,
         'Longitude ( dms )': `109°15'43.10"E`,
-        'Keterangan': 'Contoh: isi DMS saja, Decimal & Maps URL otomatis terisi'
+        'Keterangan': 'Contoh ODP: Induk ODC diisi angka 1 (akan mencari ODC 001 di desa tsb)'
       },
       {
-        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODC', 'Jenis Box': 'Box 144', 'Kapasitas': '144 Port',
+        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODC', 'Induk ODC': '', 'Jenis Box': 'Box 144', 'Kapasitas': '144 Port',
         'Jenis Kabel Power': 'PE 24C', 'Core Power': 'Core 1-12', 'Jarak ke OLT/Server (m)': '2.000',
         'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'BANYUMAS',
         'Kecamatan': 'PURWOKERTO SELATAN', 'Desa/Kelurahan': 'TANJUNG', 'Jalan/Gang/Dusun': 'Jl. Pahlawan',
@@ -948,7 +967,6 @@ export default function DataOdpOdc() {
           let mapsUrlFallback = String(r['Maps URL'] || r['Maps'] || r['URL Google Maps'] || '')
           let keterangan = String(r['Keterangan'] || r['KETERANGAN'] || '')
 
-          // Cari Tiang Terdekat (Cerdas: pilih yang paling dekat dalam 10m)
           let linked_pole_id = null
           let linked_pole_label = null
           if (lat && lon && networkPoles.length > 0) {
@@ -965,7 +983,6 @@ export default function DataOdpOdc() {
             if (nearestPole && nearestDist <= 10) {
               linked_pole_id = nearestPole.id
               linked_pole_label = `${nearestPole.pole_id || nearestPole.id} (~${Math.round(nearestDist)}m)`
-              // Snap koordinat ODP/ODC ke koordinat tiang agar satu titik
               lat = Number(nearestPole.latitude)
               lon = Number(nearestPole.longitude)
             }
@@ -973,7 +990,6 @@ export default function DataOdpOdc() {
 
           const isValid = !!(desa && lat && lon)
 
-          // Cek proximity hanya sesama jenis (ODP↔ODP, ODC↔ODC)
           let proximityWarning = null
           if (isValid && lat && lon) {
             const veryCloseDb = devices.filter(d =>
@@ -997,6 +1013,7 @@ export default function DataOdpOdc() {
             site: siteVal,
             type,
             device_id,
+            induk_odc,
             divisi,
             jenis_box,
             kapasitas,
@@ -1013,9 +1030,7 @@ export default function DataOdpOdc() {
             longitude: lon,
             keterangan,
             pole_id: linked_pole_id,
-            _poleLabel: linked_pole_label,
-            latitude: lat,
-            longitude: lon,
+            _poleLabel: linked_pole_label
           })
         }
         setImportRows(mapped)
@@ -1037,8 +1052,6 @@ export default function DataOdpOdc() {
     showProgress('Memulai Import', 'Memvalidasi data di server...', 5)
     
     try {
-      // ⚠️ PENTING: Selalu query fresh dari Supabase, JANGAN pakai devices state
-      // karena devices state bisa saja masih stale (belum diupdate setelah delete)
       showProgress('Memulai Import', 'Menghitung odpOdc existing dari database...', 8)
       let freshPoles = []
       let from = 0
@@ -1046,8 +1059,8 @@ export default function DataOdpOdc() {
       while (true) {
         const { data, error } = await supabase
           .from('network_odp_odc')
-          .select('site, desa, type')
-          .order('id', { ascending: true }) // Deterministik
+          .select('id, device_id, site, desa, type')
+          .order('id', { ascending: true })
           .range(from, from + step - 1)
         if (error) throw error
         if (!data || data.length === 0) break
@@ -1056,30 +1069,39 @@ export default function DataOdpOdc() {
         from += step
       }
 
-      const counts = {}
-      for (const p of freshPoles) {
-        if (!p.desa) continue
-        const key = `${p.site}_${p.desa.toUpperCase().trim()}_${p.type || 'ODP'}`
-        counts[key] = (counts[key] || 0) + 1
-      }
-
       showProgress('Menyiapkan ID', `Database punya ${freshPoles.length} odpOdc. Membuat device ID...`, 15)
+      
+      const payloadDevices = [...freshPoles]
       const payloads = valid.map(row => {
-        const key = `${row.site}_${row.desa.toUpperCase().trim()}_${row.type}`
-        counts[key] = (counts[key] || 0) + 1
-        
         const siteCode = SITE_CODE[row.site] || 'BMS'
         const desaSlug = row.desa.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '').substring(0, 15)
-        const deviceId = row.device_id || idFormat.replace(/{SITE_CODE}/g, siteCode).replace(/{DESA}/g, desaSlug).replace(/{TYPE}/g, row.type).replace(/{NO}/g, String(counts[key]).padStart(3, '0'))
+        
+        let deviceId = row.device_id
+        if (!deviceId) {
+           let parentOdcId = null
+           if (row.type === 'ODP' && row.induk_odc) {
+              const odcNoStr = String(row.induk_odc).padStart(3, '0')
+              if (String(row.induk_odc).includes('/ODC/')) {
+                 parentOdcId = row.induk_odc
+              } else {
+                 parentOdcId = idFormat.replace(/{SITE_CODE}/g, siteCode).replace(/{DESA}/g, desaSlug).replace(/{TYPE}/g, 'ODC').replace(/{NO}/g, odcNoStr)
+              }
+           }
+           deviceId = generateDeviceId(row.site, row.desa, row.type, payloadDevices, idFormat, parentOdcId)
+        }
+
+        payloadDevices.push({
+           site: row.site, desa: row.desa, type: row.type, device_id: deviceId
+        })
 
         return {
-          site: row.site, type: row.type, device_id: deviceId, provinsi: row.provinsi,
-          kapasitas: row.kapasitas || null, divisi: row.divisi || null, jenis_box: row.jenis_box || null,
-          jenis_kabel_power: row.jenis_kabel_power || null, core_power: row.core_power || null, jarak_ke_olt: row.jarak_ke_olt || null,
-          pole_id: row.pole_id || null,
-          kabupaten: row.kabupaten, kecamatan: row.kecamatan, desa: row.desa, maps_url: row.maps_url,
-          longitude: row.longitude, latitude: row.latitude, keterangan: row.keterangan,
-          created_by: profile.id, updated_by: profile.id,
+          site: row.site, type: row.type, device_id: deviceId, parent_odc: row.induk_odc || null,
+          provinsi: row.provinsi, kapasitas: row.kapasitas || null, divisi: row.divisi || null, 
+          jenis_box: row.jenis_box || null, jenis_kabel_power: row.jenis_kabel_power || null, 
+          core_power: row.core_power || null, jarak_ke_olt: row.jarak_ke_olt || null,
+          pole_id: row.pole_id || null, kabupaten: row.kabupaten, kecamatan: row.kecamatan, 
+          desa: row.desa, maps_url: row.maps_url, longitude: row.longitude, latitude: row.latitude, 
+          keterangan: row.keterangan, created_by: profile.id, updated_by: profile.id,
         }
       })
 
@@ -1097,7 +1119,7 @@ export default function DataOdpOdc() {
       showProgress('Selesai', 'Penyimpanan berhasil!', 100)
       setTimeout(() => {
         hideProgress()
-        toast.success(`${successCount} odpOdc berhasil diimport! (DB awal: ${freshPoles.length} odpOdc)`)
+        toast.success(`${successCount} odpOdc berhasil diimport!`)
         setImportRows([])
         fetchData()
       }, 500)
@@ -1137,7 +1159,7 @@ export default function DataOdpOdc() {
       const sortedPoles = [...devices].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       
       const payloads = sortedPoles.map(p => {
-        const key = `${p.site}_${(p.desa || '').toUpperCase().trim()}`
+        const key = `${p.site}_${(p.desa || '').toUpperCase().trim()}_${p.type}`
         counts[key] = (counts[key] || 0) + 1
         
         const siteCode = SITE_CODE[p.site] || 'BMS'
@@ -1145,12 +1167,12 @@ export default function DataOdpOdc() {
         const newPoleId = formatForm
           .replace(/{SITE_CODE}/g, siteCode)
           .replace(/{DESA}/g, desaSlug)
+          .replace(/{TYPE}/g, p.type)
           .replace(/{NO}/g, String(counts[key]).padStart(3, '0'))
           
         return { id: p.id, device_id: newPoleId }
       })
       
-      // Filter yang benar-benar berubah saja
       const toUpdate = payloads.filter(p => {
         const original = devices.find(op => op.id === p.id)
         return original && original.device_id !== p.device_id
@@ -1168,7 +1190,6 @@ export default function DataOdpOdc() {
         const percent = 15 + ((i / toUpdate.length) * 85)
         showProgress('Update ID Massal', `Memperbarui ID ${i + 1}–${Math.min(i + chunkSize, toUpdate.length)} dari ${toUpdate.length}...`, percent)
         const chunk = toUpdate.slice(i, i + chunkSize)
-        // Update satu per satu agar error bisa tertangkap
         for (const c of chunk) {
           const { error } = await supabase.from('network_odp_odc').update({ device_id: c.device_id }).eq('id', c.id)
           if (error) throw error
@@ -1189,7 +1210,7 @@ export default function DataOdpOdc() {
     }
   }
 
-  const deviceIdPreview = !editingId && form.desa ? generateDeviceId(form.site, form.desa, form.type, devices, idFormat) : null
+  const deviceIdPreview = !editingId && form.desa ? generateDeviceId(form.site, form.desa, form.type, devices, idFormat, form.parent_odc) : null
   const dummyPreview = generateDeviceId('banyumas', 'Tanjung', 'ODP', [], formatForm)
 
   return (
@@ -1257,7 +1278,6 @@ export default function DataOdpOdc() {
             <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', pointerEvents: 'none' }} />
             <input className="form-input" style={{ paddingLeft: '30px', height: '34px', fontSize: '13px', width: '100%' }} placeholder="Cari ID, Desa, Kecamatan..." value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setPage(1) }} />
           </div>
-          {/* Filter Status */}
           <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', padding: '3px', border: '1px solid var(--border)' }}>
             {[{ v: 'active', label: 'Aktif' }, { v: 'dismantled', label: 'Dicabut' }, { v: 'all', label: 'Semua' }].map(opt => (
               <button key={opt.v} onClick={() => { setFilterStatus(opt.v); setPage(1) }}
@@ -1372,6 +1392,7 @@ export default function DataOdpOdc() {
                   <td><span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '20px', background: 'var(--bg-primary)', border: '1px solid var(--border)', fontWeight: 600 }}>{SITES.find(s => s.value === device.site)?.label || device.site}</span></td>
                   <td>
                     <span style={{ fontFamily: 'monospace', fontSize: '12px', color: isDismantled ? 'var(--danger)' : 'var(--accent)', fontWeight: 600, textDecoration: isDismantled ? 'line-through' : 'none' }}>{device.device_id || '-'}</span>
+                    {device.parent_odc && <div style={{ fontSize: '10px', color: '#6366f1', marginTop: '1px' }}>Induk: {device.parent_odc}</div>}
                     {isDismantled && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 6px', borderRadius: '20px', background: 'rgba(239,68,68,0.15)', color: 'var(--danger)', fontWeight: 700, border: '1px solid rgba(239,68,68,0.3)' }}>DICABUT</span>}
                     {isDismantled && device.dismantled_at && <div style={{ fontSize: '10px', color: 'var(--danger)', opacity: 0.7, marginTop: '1px' }}>{format(new Date(device.dismantled_at), 'dd MMM yyyy', { locale: localeId })}</div>}
                   </td>
@@ -1414,6 +1435,7 @@ export default function DataOdpOdc() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '8px' }}>
                 <div>
                   <div style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--accent)', fontWeight: 700 }}>{device.device_id || '-'}</div>
+                  {device.parent_odc && <div style={{ fontSize: '10px', color: '#6366f1', marginTop: '1px' }}>Induk: {device.parent_odc}</div>}
                   <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{SITES.find(s => s.value === device.site)?.label} · <span style={{ color: device.type === 'ODC' ? '#6366f1' : 'var(--success)', fontWeight: 600 }}>{device.type}{device.kapasitas ? ` · ${device.kapasitas}` : ''}</span></div>
                 </div>
                 {['admin', 'superadmin'].includes(role) && (
@@ -1460,11 +1482,21 @@ export default function DataOdpOdc() {
                   <div><label className="form-label">Site <span style={{ color: 'var(--danger)' }}>*</span></label><select className="form-input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}>{SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
                   <div>
                     <label className="form-label">Jenis Perangkat <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <select className="form-input" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, jenis_box: '', kapasitas: '' }))}>
-                      <option value="ODP">ODP (Optical Distribution Point)</option>
-                      <option value="ODC">ODC (Optical Distribution Cabinet)</option>
+                    <select className="form-input" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, jenis_box: '', kapasitas: '', parent_odc: '' }))}>
+                      {DEVICE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </div>
+                  {form.type === 'ODP' && (
+                    <div>
+                      <label className="form-label">Induk ODC (Opsional)</label>
+                      <select className="form-input" value={form.parent_odc} onChange={e => setForm(f => ({ ...f, parent_odc: e.target.value }))}>
+                        <option value="">Tidak ada induk / Standar</option>
+                        {devices.filter(d => d.type === 'ODC' && d.desa?.toUpperCase() === form.desa?.toUpperCase() && d.site === form.site).map(odc => (
+                          <option key={odc.id} value={odc.device_id}>{odc.device_id}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="form-label">Jenis Box</label>
                     <select className="form-input" value={form.jenis_box} onChange={e => setForm(f => ({ ...f, jenis_box: e.target.value }))}>
