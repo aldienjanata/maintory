@@ -820,14 +820,16 @@ export default function DataOdpOdc() {
           // Cek proximity dengan ODP/ODC lain (mencegah duplikat gila-gilaan)
           let proximityWarning = null
           if (isValid && lat && lon) {
-            const veryClose = devices.filter(d => getDistanceFromLatLonInm(d.latitude, d.longitude, lat, lon) < 1)
-            if (veryClose.length > 0) proximityWarning = `Jarak < 1 meter dengan ${veryClose.length} ODP/ODC yang sudah ada`
+            const veryCloseDb = devices.filter(d => getDistanceFromLatLonInm(d.latitude, d.longitude, lat, lon) < 1)
+            const veryCloseExcel = mapped.filter(m => m.latitude && m.longitude && getDistanceFromLatLonInm(m.latitude, m.longitude, lat, lon) < 1)
+            const totalClose = veryCloseDb.length + veryCloseExcel.length
+            if (totalClose > 0) proximityWarning = `Jarak < 1 meter dengan ${totalClose} ODP/ODC lain (duplikat lokasi)`
           }
 
           mapped.push({
             _rowNo: i + 2,
             _valid: isValid,
-            _selected: isValid,
+            _selected: isValid && !proximityWarning,
             _proximityWarning: proximityWarning,
             site: siteVal,
             type,
