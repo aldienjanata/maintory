@@ -204,7 +204,7 @@ export default function DataOdpOdc() {
   const { showProgress, hideProgress } = useProgress()
   const importRef = useRef(null)
 
-  const [devices, setPoles] = useState([])
+  const [devices, setDevices] = useState([])
   const [users, setUsers] = useState([])
   const [idFormat, setIdFormat] = useState(DEFAULT_FORMAT)
   const [loading, setLoading] = useState(true)
@@ -294,7 +294,7 @@ export default function DataOdpOdc() {
         supabase.from('app_settings').select('device_id_format').maybeSingle()
       ])
       
-      setPoles(allPoles)
+      setDevices(allPoles)
       if (usersRes.data) setUsers(usersRes.data)
       if (settingsRes.data?.device_id_format) {
         setIdFormat(settingsRes.data.device_id_format)
@@ -399,7 +399,7 @@ export default function DataOdpOdc() {
         if (error) throw error
         toast.success('Data odpOdc diperbarui!')
       } else {
-        const deviceId = generateDeviceId(form.site, form.desa, devices, idFormat)
+        const deviceId = generateDeviceId(form.site, form.desa, form.type, devices, idFormat)
         const { error } = await supabase.from('network_odp_odc').insert({ ...payload, device_id: deviceId, created_by: profile.id })
         if (error) throw error
         toast.success(`ODP/ODC ${deviceId} ditambahkan!`)
@@ -948,8 +948,8 @@ export default function DataOdpOdc() {
     }
   }
 
-  const deviceIdPreview = !editingId && form.desa ? generateDeviceId(form.site, form.desa, devices, idFormat) : null
-  const dummyPreview = generateDeviceId('banyumas', 'Tanjung', [], formatForm)
+  const deviceIdPreview = !editingId && form.desa ? generateDeviceId(form.site, form.desa, form.type, devices, idFormat) : null
+  const dummyPreview = generateDeviceId('banyumas', 'Tanjung', 'ODP', [], formatForm)
 
   return (
     <div className="page-container">
