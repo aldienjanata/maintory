@@ -8,7 +8,7 @@ import {
   Plus, X, Edit2, Trash2, MapPin, Search, Download,
   ChevronDown, ChevronUp, ExternalLink, Antenna, Upload,
   FileSpreadsheet, Map, Settings as SettingsIcon, AlertTriangle,
-  CheckSquare, Square, Eraser, Scissors, RotateCcw
+  CheckSquare, Square, Eraser, Scissors, RotateCcw, RefreshCw
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { id as localeId } from 'date-fns/locale'
@@ -281,6 +281,7 @@ export default function DataOdpOdc() {
   const [cabutNotes, setCabutNotes] = useState('')
   const [cabutDate, setCabutDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [cabutSaving, setCabutSaving] = useState(false)
+  const [syncingPoles, setSyncingPoles] = useState(false)
 
   // Pagination
   const [page, setPage] = useState(1)
@@ -486,6 +487,60 @@ export default function DataOdpOdc() {
     } catch (e) { toast.error(e.message || 'Terjadi kesalahan') }
     finally { 
       setSaving(false)
+      hideProgress()
+    }
+  }
+
+  const handleSyncPoles = async () => {
+    const orphaned = devices.filter(d => !d.pole_id && d.latitude && d.longitude)
+    if (orphaned.length === 0) return toast.info('Tidak ada ODP/ODC yang perlu disinkronisasi.')
+    
+    setSyncingPoles(true)
+    showProgress('Sinkronisasi Tiang', 'Mencari tiang terdekat untuk semua ODP/ODC tanpa tiang...', 10)
+    
+    let updates = []
+    
+    for (const d of orphaned) {
+      const nearest = findNearestPole(Number(d.latitude), Number(d.longitude))
+      if (nearest) {
+        updates.push({
+          id: d.id,
+          pole_id: nearest.id,
+          latitude: nearest.latitude, // align with pole
+          longitude: nearest.longitude // align with pole
+        })
+      }
+    }
+    
+    if (updates.length === 0) {
+      setSyncingPoles(false)
+      hideProgress()
+      return toast.info('Sudah dicari, tapi tidak ditemukan satupun tiang baru di radius 10m.')
+    }
+    
+    showProgress('Sinkronisasi Tiang', `Menyimpan ${updates.length} penyesuaian titik...`, 50)
+    
+    try {
+      // Chunk updates into batches of 10 for safety
+      const chunkSize = 10
+      for (let i = 0; i < updates.length; i += chunkSize) {
+        const chunk = updates.slice(i, i + chunkSize)
+        await Promise.all(chunk.map(u => 
+          supabase.from('network_odp_odc').update({
+            pole_id: u.pole_id,
+            latitude: u.latitude,
+            longitude: u.longitude,
+            updated_by: profile.id
+          }).eq('id', u.id)
+        ))
+      }
+      toast.success(`Berhasil mensinkronkan ${updates.length} ODP/ODC dengan tiang baru! Titik koordinat telah disamakan.`)
+      fetchData()
+    } catch (err) {
+      toast.error('Gagal melakukan sinkronisasi massal')
+      console.error(err)
+    } finally {
+      setSyncingPoles(false)
       hideProgress()
     }
   }
@@ -1113,6 +1168,9 @@ export default function DataOdpOdc() {
               </button>
               <button className="btn btn-secondary btn-sm" onClick={() => setIsFormatModalOpen(true)} title="Pengaturan Format ID ODP/ODC">
                 <SettingsIcon size={14} /> Format ID
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={handleSyncPoles} disabled={syncingPoles} title="Sinkronisasikan ulang ODP/ODC tanpa tiang dengan tiang terdekat">
+                <RefreshCw size={14} className={syncingPoles ? 'spin' : ''} /> Sinkron Tiang
               </button>
               <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate} title="Unduh template Excel untuk import">
                 <FileSpreadsheet size={14} /> Template
