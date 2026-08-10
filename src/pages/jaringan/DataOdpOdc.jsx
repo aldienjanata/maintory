@@ -39,7 +39,7 @@ const ODC_CAPACITIES = [
   { value: '288 Port', label: '288 Port' },
 ]
 const EMPTY_FORM = {
-  site: 'banyumas', type: 'ODP', kapasitas: '',
+  site: 'banyumas', type: 'ODP', jenis_box: '', kapasitas: '',
   pole_id: '', divisi: '',
   jenis_kabel_power: '', core_power: '', jarak_ke_olt: '',
   provinsi: 'Jawa Tengah', kabupaten: 'Banyumas',
@@ -812,7 +812,7 @@ export default function DataOdpOdc() {
     // Row 3: Contoh Maps URL saja (koordinat dikosongkan → auto-isi)
     const template = [
       {
-        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODP', 'Kapasitas': '8 Port',
+        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODP', 'Jenis Box': 'Box 8', 'Kapasitas': '8 Port',
         'Jenis Kabel Power': '1C', 'Core Power': 'Core 1-8', 'Jarak ke OLT/Server (m)': '1.500',
         'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'CILACAP',
         'Kecamatan': 'KROYA', 'Desa/Kelurahan': 'MUJUR', 'Jalan/Gang/Dusun': 'Gg. BIMA',
@@ -824,7 +824,7 @@ export default function DataOdpOdc() {
         'Keterangan': 'Contoh: isi DMS saja, Decimal & Maps URL otomatis terisi'
       },
       {
-        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODC', 'Kapasitas': '144 Port',
+        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODC', 'Jenis Box': 'Box 144', 'Kapasitas': '144 Port',
         'Jenis Kabel Power': 'PE 24C', 'Core Power': 'Core 1-12', 'Jarak ke OLT/Server (m)': '2.000',
         'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'BANYUMAS',
         'Kecamatan': 'PURWOKERTO SELATAN', 'Desa/Kelurahan': 'TANJUNG', 'Jalan/Gang/Dusun': 'Jl. Pahlawan',
@@ -905,6 +905,7 @@ export default function DataOdpOdc() {
           let desa = String(r['Desa/Kelurahan'] || r['DESA/KELURAHAN'] || r['Desa'] || r['desa'] || '').toUpperCase()
           let kecamatan = String(r['Kecamatan'] || r['kecamatan'] || '').toUpperCase()
           let divisi = String(r['DEIVISI'] || r['DIVISI'] || '')
+          let jenis_box = String(r['Jenis Box'] || r['JENIS BOX'] || r['Box'] || r['BOX'] || '')
           let kapasitas = String(r['Kapasitas'] || r['KAPASITAS'] || '')
           let jenis_kabel_power = String(r['Jenis Kabel Power'] || r['JENIS KABEL POWER'] || '')
           let core_power = String(r['Core Power'] || r['CORE POWER'] || '')
@@ -963,6 +964,7 @@ export default function DataOdpOdc() {
             type,
             device_id,
             divisi,
+            jenis_box,
             kapasitas,
             jenis_kabel_power,
             core_power,
@@ -1036,7 +1038,7 @@ export default function DataOdpOdc() {
 
         return {
           site: row.site, type: row.type, device_id: deviceId, provinsi: row.provinsi,
-          kapasitas: row.kapasitas || null, divisi: row.divisi || null,
+          kapasitas: row.kapasitas || null, divisi: row.divisi || null, jenis_box: row.jenis_box || null,
           jenis_kabel_power: row.jenis_kabel_power || null, core_power: row.core_power || null, jarak_ke_olt: row.jarak_ke_olt || null,
           pole_id: row.pole_id || null,
           kabupaten: row.kabupaten, kecamatan: row.kecamatan, desa: row.desa, maps_url: row.maps_url,
@@ -1415,9 +1417,19 @@ export default function DataOdpOdc() {
                   <div><label className="form-label">Site <span style={{ color: 'var(--danger)' }}>*</span></label><select className="form-input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}>{SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
                   <div>
                     <label className="form-label">Jenis Perangkat <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <select className="form-input" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, kapasitas: '' }))}>
+                    <select className="form-input" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value, jenis_box: '', kapasitas: '' }))}>
                       <option value="ODP">ODP (Optical Distribution Point)</option>
                       <option value="ODC">ODC (Optical Distribution Cabinet)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label">Jenis Box</label>
+                    <select className="form-input" value={form.jenis_box} onChange={e => setForm(f => ({ ...f, jenis_box: e.target.value }))}>
+                      <option value="">-- Pilih Jenis Box --</option>
+                      {(form.type === 'ODC'
+                        ? ['Box 16', 'Box 24', 'Box 48', 'Box 96', 'Box 144', 'Box 288']
+                        : ['Box 8', 'Box 16', 'Box 24']
+                      ).map(b => <option key={b} value={b}>{b}</option>)}
                     </select>
                   </div>
                   <div>
