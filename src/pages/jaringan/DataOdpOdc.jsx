@@ -41,6 +41,7 @@ const ODC_CAPACITIES = [
 const EMPTY_FORM = {
   site: 'banyumas', type: 'ODP', kapasitas: '',
   pole_id: '', olt: '', divisi: '',
+  jenis_kabel_power: '', core_power: '', jarak_ke_olt: '',
   provinsi: 'Jawa Tengah', kabupaten: 'Banyumas',
   kecamatan: '', desa: '', maps_url: '',
   longitude: '', latitude: '', keterangan: '',
@@ -155,7 +156,12 @@ async function generateKMZ(devices, users) {
         <name>${p.device_id || 'ODP/ODC'}</name>
         <description><![CDATA[
           <b>Site:</b> ${SITES.find(s => s.value === p.site)?.label || p.site}<br/>
-          <b>Jenis:</b> ${DEVICE_TYPES.find(t => t.value === p.type)?.label || p.type}<br/>
+          <b>Jenis:</b> ${p.type || '-'}<br/>
+          <b>Kapasitas:</b> ${p.kapasitas || '-'}<br/>
+          <b>OLT:</b> ${p.olt || '-'}<br/>
+          <b>Jenis Kabel Power:</b> ${p.jenis_kabel_power || '-'}<br/>
+          <b>Core Power:</b> ${p.core_power || '-'}<br/>
+          <b>Jarak ke OLT/Server:</b> ${p.jarak_ke_olt ? p.jarak_ke_olt + ' meter' : '-'}<br/>
           <b>Kecamatan:</b> ${p.kecamatan || '-'}<br/>
           <b>Desa:</b> ${p.desa || '-'}<br/>
           <b>Jalan/Gang:</b> ${p.jalan || '-'}<br/>
@@ -163,7 +169,7 @@ async function generateKMZ(devices, users) {
           <b>Diinput Oleh:</b> ${getUserName(p.created_by)}<br/>
           ${p.maps_url ? `<a href="${p.maps_url}">Lihat di Google Maps</a>` : ''}
         ]]></description>
-        <styleUrl>#odpOdc_icon</styleUrl>
+        <styleUrl>#${p.type === 'ODC' ? 'odc_icon' : 'odp_icon'}</styleUrl>
         <Point><coordinates>${lon},${lat},0</coordinates></Point>
       </Placemark>`
   }
@@ -183,9 +189,13 @@ async function generateKMZ(devices, users) {
   <Document>
     <name>Data ODP & ODC Maintory - ${format(new Date(), 'dd MMM yyyy')}</name>
     <description>Export Data ODP & ODC Jaringan Fiber — ${devices.length} titik</description>
-    <Style id="odpOdc_icon">
+    <Style id="odp_icon">
       <IconStyle><scale>1.2</scale><Icon><href>files/icon_odp.png</href></Icon><hotSpot x="0.5" y="0" xunits="fraction" yunits="fraction"/></IconStyle>
-      <LabelStyle><color>ffffffff</color><scale>0.8</scale></LabelStyle>
+      <LabelStyle><color>ffccff00</color><scale>0.8</scale></LabelStyle>
+    </Style>
+    <Style id="odc_icon">
+      <IconStyle><scale>1.4</scale><Icon><href>files/icon_odc.png</href></Icon><hotSpot x="0.5" y="0" xunits="fraction" yunits="fraction"/></IconStyle>
+      <LabelStyle><color>ffff6600</color><scale>0.9</scale></LabelStyle>
     </Style>
     ${folders}
   </Document>
@@ -194,9 +204,14 @@ async function generateKMZ(devices, users) {
   const zip = new JSZip()
   zip.file('doc.kml', kml)
   try {
-    const iconResp = await fetch('/icon_odp.png')
-    const iconBlob = await iconResp.blob()
-    zip.folder('files').file('icon_odp.png', iconBlob)
+    const iconRespOdp = await fetch('/icon_odp.png')
+    const iconBlobOdp = await iconRespOdp.blob()
+    zip.folder('files').file('icon_odp.png', iconBlobOdp)
+  } catch {}
+  try {
+    const iconRespOdc = await fetch('/icon_odc.png')
+    const iconBlobOdc = await iconRespOdc.blob()
+    zip.folder('files').file('icon_odc.png', iconBlobOdc)
   } catch {}
 
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
@@ -638,6 +653,8 @@ export default function DataOdpOdc() {
         return {
           'No': i + 1, 'Site': SITES.find(s => s.value === p.site)?.label || p.site,
           'ID ODP/ODC': p.device_id || '', 'Jenis ODP/ODC': DEVICE_TYPES.find(t => t.value === p.type)?.label || p.type,
+          'Kapasitas': p.kapasitas || '', 'OLT': p.olt || '',
+          'Jenis Kabel Power': p.jenis_kabel_power || '', 'Core Power': p.core_power || '', 'Jarak ke OLT/Server (m)': p.jarak_ke_olt || '',
           'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
           'Desa/Kelurahan': p.desa || '', 'Jalan/Gang/Dusun': p.jalan || '', 'Maps URL': p.maps_url || '',
           'Latitude ( Decimal )': lat || '', 'Longitude ( Decimal )': lon || '',
@@ -756,6 +773,10 @@ export default function DataOdpOdc() {
           let kecamatan = String(r['Kecamatan'] || r['kecamatan'] || '').toUpperCase()
           let olt = String(r['OLT'] || '')
           let divisi = String(r['DEIVISI'] || r['DIVISI'] || '')
+          let kapasitas = String(r['Kapasitas'] || r['KAPASITAS'] || '')
+          let jenis_kabel_power = String(r['Jenis Kabel Power'] || r['JENIS KABEL POWER'] || '')
+          let core_power = String(r['Core Power'] || r['CORE POWER'] || '')
+          let jarak_ke_olt = r['Jarak ke OLT/Server (m)'] || r['Jarak ke OLT'] || ''
 
           // Cari Tiang Terdekat
           let linked_pole_id = null
@@ -785,6 +806,10 @@ export default function DataOdpOdc() {
             device_id,
             olt,
             divisi,
+            kapasitas,
+            jenis_kabel_power,
+            core_power,
+            jarak_ke_olt,
             desa,
             kecamatan,
             latitude: lat,
@@ -848,6 +873,9 @@ export default function DataOdpOdc() {
 
         return {
           site: row.site, type: row.type, device_id: deviceId, provinsi: row.provinsi,
+          kapasitas: row.kapasitas || null, olt: row.olt || null, divisi: row.divisi || null,
+          jenis_kabel_power: row.jenis_kabel_power || null, core_power: row.core_power || null, jarak_ke_olt: row.jarak_ke_olt ? Number(row.jarak_ke_olt) : null,
+          pole_id: row.pole_id || null,
           kabupaten: row.kabupaten, kecamatan: row.kecamatan, desa: row.desa, jalan: row.jalan, maps_url: row.maps_url,
           longitude: row.longitude, latitude: row.latitude, keterangan: row.keterangan,
           created_by: profile.id, updated_by: profile.id,
@@ -1267,6 +1295,22 @@ export default function DataOdpOdc() {
                     options={desaOpts}
                     placeholder="Cari/ketik desa..."
                   />
+                </div>
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2px' }}><span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>🔌 Detail Jaringan Kabel</span></div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
+                  <div>
+                    <label className="form-label">Jenis Kabel Power</label>
+                    <select className="form-input" value={form.jenis_kabel_power} onChange={e => setForm(f => ({ ...f, jenis_kabel_power: e.target.value }))}>
+                      <option value="">-- Pilih --</option>
+                      <option value="Single Mode">Single Mode</option>
+                      <option value="Multi Mode">Multi Mode</option>
+                      <option value="ADSS">ADSS</option>
+                      <option value="SST">SST</option>
+                      <option value="OPGW">OPGW</option>
+                    </select>
+                  </div>
+                  <div><label className="form-label">Core Power</label><input className="form-input" value={form.core_power} onChange={e => setForm(f => ({ ...f, core_power: e.target.value }))} placeholder="Contoh: Core 1-8" /></div>
+                  <div><label className="form-label">Jarak ke OLT/Server (meter)</label><input className="form-input" type="number" min="0" value={form.jarak_ke_olt} onChange={e => setForm(f => ({ ...f, jarak_ke_olt: e.target.value }))} placeholder="Contoh: 1500" /></div>
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2px' }}><span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>🗺️ Koordinat GPS</span></div>
                 <div>
