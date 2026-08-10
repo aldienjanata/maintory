@@ -40,7 +40,7 @@ const ODC_CAPACITIES = [
 ]
 const EMPTY_FORM = {
   site: 'banyumas', type: 'ODP', kapasitas: '',
-  pole_id: '', olt: '', divisi: '',
+  pole_id: '', divisi: '',
   jenis_kabel_power: '', core_power: '', jarak_ke_olt: '',
   provinsi: 'Jawa Tengah', kabupaten: 'Banyumas',
   kecamatan: '', desa: '', maps_url: '',
@@ -158,7 +158,6 @@ async function generateKMZ(devices, users) {
           <b>Site:</b> ${SITES.find(s => s.value === p.site)?.label || p.site}<br/>
           <b>Jenis:</b> ${p.type || '-'}<br/>
           <b>Kapasitas:</b> ${p.kapasitas || '-'}<br/>
-          <b>OLT:</b> ${p.olt || '-'}<br/>
           <b>Jenis Kabel Power:</b> ${p.jenis_kabel_power || '-'}<br/>
           <b>Core Power:</b> ${p.core_power || '-'}<br/>
           <b>Jarak ke OLT/Server:</b> ${p.jarak_ke_olt ? p.jarak_ke_olt + ' meter' : '-'}<br/>
@@ -653,7 +652,7 @@ export default function DataOdpOdc() {
         return {
           'No': i + 1, 'Site': SITES.find(s => s.value === p.site)?.label || p.site,
           'ID ODP/ODC': p.device_id || '', 'Jenis ODP/ODC': DEVICE_TYPES.find(t => t.value === p.type)?.label || p.type,
-          'Kapasitas': p.kapasitas || '', 'OLT': p.olt || '',
+          'Kapasitas': p.kapasitas || '',
           'Jenis Kabel Power': p.jenis_kabel_power || '', 'Core Power': p.core_power || '', 'Jarak ke OLT/Server (m)': p.jarak_ke_olt || '',
           'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
           'Desa/Kelurahan': p.desa || '', 'Jalan/Gang/Dusun': p.jalan || '', 'Maps URL': p.maps_url || '',
@@ -707,8 +706,8 @@ export default function DataOdpOdc() {
     // Row 3: Contoh Maps URL saja (koordinat dikosongkan → auto-isi)
     const template = [
       {
-        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODP', 'Kapasitas': '8 Port', 'OLT': 'ZTE-01',
-        'Jenis Kabel Power': 'Single Mode', 'Core Power': 'Core 1-8', 'Jarak ke OLT/Server (m)': 1500,
+        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODP', 'Kapasitas': '8 Port',
+        'Jenis Kabel Power': '1C', 'Core Power': 'Core 1-8', 'Jarak ke OLT/Server (m)': '1.500',
         'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'CILACAP',
         'Kecamatan': 'KROYA', 'Desa/Kelurahan': 'MUJUR', 'Jalan/Gang/Dusun': 'Gg. BIMA',
         'Maps URL': '', // kosong → otomatis dibuat dari koordinat
@@ -719,8 +718,8 @@ export default function DataOdpOdc() {
         'Keterangan': 'Contoh: isi DMS saja, Decimal & Maps URL otomatis terisi'
       },
       {
-        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODC', 'Kapasitas': '144 Port', 'OLT': 'HUAWEI-02',
-        'Jenis Kabel Power': 'Multi Mode', 'Core Power': 'Core 1-12', 'Jarak ke OLT/Server (m)': 2000,
+        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODC', 'Kapasitas': '144 Port',
+        'Jenis Kabel Power': 'PE 24C', 'Core Power': 'Core 1-12', 'Jarak ke OLT/Server (m)': '2.000',
         'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'BANYUMAS',
         'Kecamatan': 'PURWOKERTO SELATAN', 'Desa/Kelurahan': 'TANJUNG', 'Jalan/Gang/Dusun': 'Jl. Pahlawan',
         'Maps URL': '',
@@ -732,7 +731,7 @@ export default function DataOdpOdc() {
       },
     ]
     const ws = XLSX.utils.json_to_sheet(template)
-    ws['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 15 }, { wch: 18 }, { wch: 12 }, { wch: 22 }, { wch: 14 }, { wch: 16 }, { wch: 22 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 50 }]
+    ws['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 12 }, { wch: 22 }, { wch: 14 }, { wch: 16 }, { wch: 22 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 50 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Template')
     XLSX.writeFile(wb, `Template Import ODP/ODC ${format(new Date(), 'dd-MM-yyyy')}.xlsx`)
@@ -775,12 +774,11 @@ export default function DataOdpOdc() {
 
           let desa = String(r['DESA/KELURAHAN'] || r['Desa'] || r['desa'] || '').toUpperCase()
           let kecamatan = String(r['Kecamatan'] || r['kecamatan'] || '').toUpperCase()
-          let olt = String(r['OLT'] || '')
           let divisi = String(r['DEIVISI'] || r['DIVISI'] || '')
           let kapasitas = String(r['Kapasitas'] || r['KAPASITAS'] || '')
           let jenis_kabel_power = String(r['Jenis Kabel Power'] || r['JENIS KABEL POWER'] || '')
           let core_power = String(r['Core Power'] || r['CORE POWER'] || '')
-          let jarak_ke_olt = r['Jarak ke OLT/Server (m)'] || r['Jarak ke OLT'] || ''
+          let jarak_ke_olt = String(r['Jarak ke OLT/Server (m)'] || r['Jarak ke OLT'] || '')
 
           // Cari Tiang Terdekat
           let linked_pole_id = null
@@ -808,7 +806,6 @@ export default function DataOdpOdc() {
             site: siteVal,
             type,
             device_id,
-            olt,
             divisi,
             kapasitas,
             jenis_kabel_power,
@@ -877,8 +874,8 @@ export default function DataOdpOdc() {
 
         return {
           site: row.site, type: row.type, device_id: deviceId, provinsi: row.provinsi,
-          kapasitas: row.kapasitas || null, olt: row.olt || null, divisi: row.divisi || null,
-          jenis_kabel_power: row.jenis_kabel_power || null, core_power: row.core_power || null, jarak_ke_olt: row.jarak_ke_olt ? Number(row.jarak_ke_olt) : null,
+          kapasitas: row.kapasitas || null, divisi: row.divisi || null,
+          jenis_kabel_power: row.jenis_kabel_power || null, core_power: row.core_power || null, jarak_ke_olt: row.jarak_ke_olt || null,
           pole_id: row.pole_id || null,
           kabupaten: row.kabupaten, kecamatan: row.kecamatan, desa: row.desa, jalan: row.jalan, maps_url: row.maps_url,
           longitude: row.longitude, latitude: row.latitude, keterangan: row.keterangan,
@@ -1306,15 +1303,22 @@ export default function DataOdpOdc() {
                     <label className="form-label">Jenis Kabel Power</label>
                     <select className="form-input" value={form.jenis_kabel_power} onChange={e => setForm(f => ({ ...f, jenis_kabel_power: e.target.value }))}>
                       <option value="">-- Pilih --</option>
-                      <option value="Single Mode">Single Mode</option>
-                      <option value="Multi Mode">Multi Mode</option>
-                      <option value="ADSS">ADSS</option>
-                      <option value="SST">SST</option>
-                      <option value="OPGW">OPGW</option>
+                      <option value="1C">1C</option>
+                      <option value="4C">4C</option>
+                      <option value="PE 12C">PE 12C</option>
+                      <option value="PE 24C">PE 24C</option>
+                      <option value="ADSS 24C">ADSS 24C</option>
+                      <option value="ADSS 48C">ADSS 48C</option>
                     </select>
                   </div>
                   <div><label className="form-label">Core Power</label><input className="form-input" value={form.core_power} onChange={e => setForm(f => ({ ...f, core_power: e.target.value }))} placeholder="Contoh: Core 1-8" /></div>
-                  <div><label className="form-label">Jarak ke OLT/Server (meter)</label><input className="form-input" type="number" min="0" value={form.jarak_ke_olt} onChange={e => setForm(f => ({ ...f, jarak_ke_olt: e.target.value }))} placeholder="Contoh: 1500" /></div>
+                  <div>
+                    <label className="form-label">Jarak ke OLT/Server (meter)</label>
+                    <input className="form-input" type="text" value={form.jarak_ke_olt} onChange={e => {
+                      const num = e.target.value.replace(/\D/g, '');
+                      setForm(f => ({ ...f, jarak_ke_olt: num ? Number(num).toLocaleString('id-ID') : '' }))
+                    }} placeholder="Contoh: 1.500" />
+                  </div>
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2px' }}><span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>🗺️ Koordinat GPS</span></div>
                 <div>
