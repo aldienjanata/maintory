@@ -315,10 +315,30 @@ export default function DataOdpOdc() {
         }
       }
 
-      const [usersRes, settingsRes, polesRes] = await Promise.all([
+      let allNetworkPoles = []
+      let poleFrom = 0
+      while (true) {
+        const { data, error } = await supabase
+          .from('network_poles')
+          .select('id, pole_id, latitude, longitude, desa, kecamatan')
+          .not('latitude', 'is', null)
+          .not('longitude', 'is', null)
+          .order('id', { ascending: true })
+          .range(poleFrom, poleFrom + step - 1)
+          
+        if (error) throw error
+        if (data && data.length > 0) {
+          allNetworkPoles = [...allNetworkPoles, ...data]
+          if (data.length < step) break
+          poleFrom += step
+        } else {
+          break
+        }
+      }
+
+      const [usersRes, settingsRes] = await Promise.all([
         supabase.from('users').select('id, full_name'),
-        supabase.from('app_settings').select('device_id_format').maybeSingle(),
-        supabase.from('network_poles').select('id, pole_id, latitude, longitude, desa, kecamatan').not('latitude', 'is', null).not('longitude', 'is', null)
+        supabase.from('app_settings').select('device_id_format').maybeSingle()
       ])
       
       setDevices(allPoles)
@@ -327,7 +347,7 @@ export default function DataOdpOdc() {
         setIdFormat(settingsRes.data.device_id_format)
         setFormatForm(settingsRes.data.device_id_format)
       }
-      if (polesRes.data) setNetworkPoles(polesRes.data)
+      setNetworkPoles(allNetworkPoles)
     } catch { toast.error('Gagal memuat data') }
     finally { setLoading(false) }
   }
