@@ -134,6 +134,16 @@ function parseDMS(dmsStr) {
 // ─── KMZ GENERATION ──────────────────────────────────────────────────────────
 async function generateKMZ(devices, users) {
   const getUserName = (uid) => users.find(u => u.id === uid)?.full_name || 'Unknown'
+  const escapeXml = (unsafe) => String(unsafe || '').replace(/[<>&'"]/g, c => {
+    switch (c) {
+      case '<': return '&lt;'
+      case '>': return '&gt;'
+      case '&': return '&amp;'
+      case '\'': return '&apos;'
+      case '"': return '&quot;'
+      default: return c
+    }
+  })
 
   // Kelompokkan odpOdc per desa
   const byDesa = {}
@@ -153,7 +163,7 @@ async function generateKMZ(devices, users) {
     }
     return `
       <Placemark>
-        <name>${p.device_id || 'ODP/ODC'}</name>
+        <name>${escapeXml(p.device_id || 'ODP/ODC')}</name>
         <description><![CDATA[
           <b>Site:</b> ${SITES.find(s => s.value === p.site)?.label || p.site}<br/>
           <b>Jenis:</b> ${p.type || '-'}<br/>
@@ -178,7 +188,7 @@ async function generateKMZ(devices, users) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([desa, odpOdcList]) => `
     <Folder>
-      <name>Desa ${desa}</name>
+      <name>Desa ${escapeXml(desa)}</name>
       <open>0</open>
       ${odpOdcList.map(p => makePlacemark(p)).join('\n')}
     </Folder>`).join('\n')
@@ -186,8 +196,8 @@ async function generateKMZ(devices, users) {
   const kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
-    <name>Data ODP & ODC Maintory - ${format(new Date(), 'dd MMM yyyy')}</name>
-    <description>Export Data ODP & ODC Jaringan Fiber — ${devices.length} titik</description>
+    <name>Data ODP &amp; ODC Maintory - ${format(new Date(), 'dd MMM yyyy')}</name>
+    <description>Export Data ODP &amp; ODC Jaringan Fiber — ${devices.length} titik</description>
     <Style id="odp_icon">
       <IconStyle><scale>1.2</scale><Icon><href>files/icon_odp.png</href></Icon><hotSpot x="0.5" y="0" xunits="fraction" yunits="fraction"/></IconStyle>
       <LabelStyle><color>ffccff00</color><scale>0.8</scale></LabelStyle>
