@@ -46,7 +46,7 @@ const EMPTY_FORM = {
   kecamatan: '', desa: '', maps_url: '',
   longitude: '', latitude: '', keterangan: '',
 }
-const DEFAULT_FORMAT = 'NAT/{SITE_CODE}/{DESA}/{TYPE} {NO}'
+const DEFAULT_FORMAT = 'NAT/{SITE_CODE}/{DESA}/{TYPE}/{NO}'
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function generateDeviceId(site, desa, type, existingDevices, formatTemplate = DEFAULT_FORMAT) {
@@ -74,7 +74,7 @@ function generateDeviceId(site, desa, type, existingDevices, formatTemplate = DE
   }
 
   if (maxNo === 0) maxNo = sameDevices.length
-  const no = String(maxNo + 1)
+  const no = String(maxNo + 1).padStart(3, '0')
   
   return formatTemplate
     .replace(/{SITE_CODE}/g, siteCode)
@@ -1010,7 +1010,7 @@ export default function DataOdpOdc() {
       while (true) {
         const { data, error } = await supabase
           .from('network_odp_odc')
-          .select('site, desa')
+          .select('site, desa, type')
           .order('id', { ascending: true }) // Deterministik
           .range(from, from + step - 1)
         if (error) throw error
@@ -1023,18 +1023,18 @@ export default function DataOdpOdc() {
       const counts = {}
       for (const p of freshPoles) {
         if (!p.desa) continue
-        const key = `${p.site}_${p.desa.toUpperCase().trim()}`
+        const key = `${p.site}_${p.desa.toUpperCase().trim()}_${p.type || 'ODP'}`
         counts[key] = (counts[key] || 0) + 1
       }
 
       showProgress('Menyiapkan ID', `Database punya ${freshPoles.length} odpOdc. Membuat device ID...`, 15)
       const payloads = valid.map(row => {
-        const key = `${row.site}_${row.desa.toUpperCase().trim()}`
+        const key = `${row.site}_${row.desa.toUpperCase().trim()}_${row.type}`
         counts[key] = (counts[key] || 0) + 1
         
         const siteCode = SITE_CODE[row.site] || 'BMS'
         const desaSlug = row.desa.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '').substring(0, 15)
-        const deviceId = idFormat.replace(/{SITE_CODE}/g, siteCode).replace(/{DESA}/g, desaSlug).replace(/{NO}/g, String(counts[key]).padStart(3, '0'))
+        const deviceId = row.device_id || idFormat.replace(/{SITE_CODE}/g, siteCode).replace(/{DESA}/g, desaSlug).replace(/{TYPE}/g, row.type).replace(/{NO}/g, String(counts[key]).padStart(3, '0'))
 
         return {
           site: row.site, type: row.type, device_id: deviceId, provinsi: row.provinsi,
