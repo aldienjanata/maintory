@@ -792,13 +792,19 @@ export default function DataOdpOdc() {
           let siteStr = String(r['site'] || r['Site'] || 'Banyumas').toLowerCase()
           let siteVal = SITES.find(s => s.label.toLowerCase() === siteStr || s.value === siteStr)?.value || 'banyumas'
 
-          let desa = String(r['DESA/KELURAHAN'] || r['Desa'] || r['desa'] || '').toUpperCase()
+          let desa = String(r['Desa/Kelurahan'] || r['DESA/KELURAHAN'] || r['Desa'] || r['desa'] || '').toUpperCase()
           let kecamatan = String(r['Kecamatan'] || r['kecamatan'] || '').toUpperCase()
           let divisi = String(r['DEIVISI'] || r['DIVISI'] || '')
           let kapasitas = String(r['Kapasitas'] || r['KAPASITAS'] || '')
           let jenis_kabel_power = String(r['Jenis Kabel Power'] || r['JENIS KABEL POWER'] || '')
           let core_power = String(r['Core Power'] || r['CORE POWER'] || '')
           let jarak_ke_olt = String(r['Jarak ke OLT/Server (m)'] || r['Jarak ke OLT'] || '')
+          
+          let provinsi = String(r['Provinsi'] || r['PROVINSI'] || '')
+          let kabupaten = String(r['Kabupaten/Kota'] || r['Kabupaten'] || r['KABUPATEN'] || '')
+          let jalan = String(r['Jalan/Gang/Dusun'] || r['Jalan'] || r['JALAN'] || '')
+          let mapsUrlFallback = String(r['Maps URL'] || r['Maps'] || r['URL Google Maps'] || '')
+          let keterangan = String(r['Keterangan'] || r['KETERANGAN'] || '')
 
           // Cari Tiang Terdekat
           let linked_pole_id = null
@@ -831,10 +837,15 @@ export default function DataOdpOdc() {
             jenis_kabel_power,
             core_power,
             jarak_ke_olt,
-            desa,
+            provinsi,
+            kabupaten,
             kecamatan,
+            desa,
+            jalan,
+            maps_url: mapsUrlFallback,
             latitude: lat,
             longitude: lon,
+            keterangan,
             pole_id: linked_pole_id
           })
         }
