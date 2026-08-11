@@ -48,7 +48,7 @@ export default function Dropcore() {
   }
 
   const generateNextCode = (typeToGenerate, currentHaspels = haspels) => {
-    const typePrefix = typeToGenerate === '1c' ? 'H1C-' : 'H4C-'
+    const typePrefix = typeToGenerate === '1c' ? 'H1C-' : typeToGenerate === '2c' ? 'H2C-' : 'H4C-'
     const existingNums = currentHaspels
       .filter(h => h.haspel_code && h.haspel_code.toUpperCase().startsWith(typePrefix))
       .map(h => {
@@ -97,9 +97,39 @@ export default function Dropcore() {
         let finalHaspelId = null
 
         if (codeExists) {
-          toast.error('Kode haspel sudah digunakan. Harap gunakan kode yang unik!')
-          setSaving(false)
-          return
+          const existing = haspels.find(h => h.haspel_code.toLowerCase() === form.haspel_code.toLowerCase())
+          if (existing && existing.status === 'habis') {
+            const { error } = await supabase.from('dropcore_haspels').update({
+              initial_meters: form.initial_meters,
+              used_meters: 0,
+              status: 'tersedia',
+              updated_at: new Date().toISOString()
+            }).eq('id', existing.id)
+            if (error) throw error
+            finalHaspelId = existing.id
+            
+            await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dropcore', action: 'Isi Ulang Haspel', detail: `Haspel: ${form.haspel_code}` })
+            toast.success('Haspel berhasil diisi ulang!')
+            
+            await supabase.from('inventory_log').insert({
+              log_date: form.date_in,
+              item_type: 'dropcore',
+              item_id: finalHaspelId,
+              quantity: form.initial_meters,
+              action: 'isi_ulang_dropcore',
+              module: 'dropcore',
+              user_id: profile.id,
+              notes: form.note || 'Isi Ulang Haspel (Refill)'
+            })
+            setSaving(false)
+            setIsModalOpen(false)
+            fetchHaspels()
+            return
+          } else {
+            toast.error('Kode haspel sudah digunakan dan stok belum kosong. Harap gunakan kode yang unik!')
+            setSaving(false)
+            return
+          }
         }
         
         const { data: insertedData, error } = await supabase.from('dropcore_haspels').insert({ ...form, status, created_by: profile.id }).select().single()
@@ -310,6 +340,7 @@ export default function Dropcore() {
       // Fetch all transactions
       const { data: allExpItems } = await supabase.from('expense_items').select('*, haspel:dropcore_haspels(haspel_code, type), expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type', 'dropcore').order('created_at', { ascending: true })
       const { data: usersData } = await supabase.from('users').select('id, full_name')
+      const { data: allInLogs } = await supabase.from('inventory_log').select('*').eq('item_type', 'dropcore').in('action', ['masuk', 'isi_ulang_dropcore']).order('created_at', { ascending: true })
       
       const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
       const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3', 'maintenance': 'Maintenance', 'odc_odp': 'Instalasi ODC/ODP' }
@@ -317,23 +348,27 @@ export default function Dropcore() {
 
       const transactionsByHaspelId = {}
 
-      // Inisialisasi setiap haspel dengan 1 transaksi 'Masuk' (Stok Awal) agar akurat sesuai database utama
       haspels.forEach(h => {
-        transactionsByHaspelId[h.id] = [{
-          date: h.date_in,
-          created_at: h.created_at,
-          code: h.haspel_code,
-          type: h.type === '1c' ? 'DROPCORE 1C' : 'DROPCORE 4C',
-          jenis: 'Masuk',
-          sortPriority: 0,
-          work: '-',
-          tech: '-',
-          stok_awal: 0,
-          keluar: 0,
-          masuk: Number(h.initial_meters),
-          stok_akhir: 0,
-          note: h.note || 'Stok Awal Haspel'
-        }]
+        const inLogs = (allInLogs || []).filter(l => l.item_id === h.id)
+        if (inLogs.length > 0) {
+           inLogs.forEach(l => {
+              transactionsByHaspelId[h.id] = transactionsByHaspelId[h.id] || []
+              transactionsByHaspelId[h.id].push({
+                 date: l.log_date, created_at: l.created_at, code: h.haspel_code,
+                 type: h.type === '1c' ? 'DROPCORE 1C' : h.type === '2c' ? 'DROPCORE 2C' : 'DROPCORE 4C',
+                 jenis: l.action === 'isi_ulang_dropcore' ? 'Masuk (Refill)' : 'Masuk', 
+                 sortPriority: 0, work: '-', tech: '-', stok_awal: 0, keluar: 0,
+                 masuk: Number(l.quantity || 0), stok_akhir: 0, note: l.notes || 'Stok Masuk/Refill'
+              })
+           })
+        } else {
+           transactionsByHaspelId[h.id] = [{
+             date: h.date_in, created_at: h.created_at, code: h.haspel_code,
+             type: h.type === '1c' ? 'DROPCORE 1C' : h.type === '2c' ? 'DROPCORE 2C' : 'DROPCORE 4C',
+             jenis: 'Masuk', sortPriority: 0, work: '-', tech: '-', stok_awal: 0, keluar: 0,
+             masuk: Number(h.initial_meters), stok_akhir: 0, note: h.note || 'Stok Awal Haspel (Legacy)'
+           }]
+        }
       })
 
       ;(allExpItems || []).forEach(ei => {
@@ -342,7 +377,7 @@ export default function Dropcore() {
         if (!transactionsByHaspelId[hId]) transactionsByHaspelId[hId] = []
 
         const haspelCode = ei.haspel?.haspel_code || haspelMap[hId]?.haspel_code || '-'
-        const haspelType = (ei.haspel?.type || haspelMap[hId]?.type) === '1c' ? 'DROPCORE 1C' : 'DROPCORE 4C'
+        const haspelType = (ei.haspel?.type || haspelMap[hId]?.type) === '1c' ? 'DROPCORE 1C' : (ei.haspel?.type || haspelMap[hId]?.type) === '2c' ? 'DROPCORE 2C' : 'DROPCORE 4C'
         const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
         const wType = ei.expense?.work_type
 
@@ -436,11 +471,10 @@ export default function Dropcore() {
         </div>
       </div>
 
-      <div className="stats-grid mb-4">
+      <div className="stats-grid mb-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
         {[
           { key: 'total', label: 'Total Haspel Utuh', value: haspels.filter(h => (Number(h.initial_meters || 0) - Number(h.used_meters || 0)) === 1000).length, color: 'var(--accent)' },
-          { key: 'meters', label: 'Meter Tersisa', value: `${remainingMeter.toLocaleString()} m`, color: 'var(--success)' },
-          { key: 'used', label: 'Meter Terpakai', value: `${usedMeter.toLocaleString()} m`, color: 'var(--warning)' },
+          { key: 'sisa_potongan', label: 'Sisa/Potongan', value: haspels.filter(h => { const s = Number(h.initial_meters || 0) - Number(h.used_meters || 0); return s > 0 && s < 1000 }).length, color: 'var(--warning)' },
           { key: 'habis', label: 'Haspel Habis', value: haspels.filter(h => h.status === 'habis').length, color: 'var(--danger)' },
           { 
             key: '1c', 
@@ -454,6 +488,19 @@ export default function Dropcore() {
               </div>
             ), 
             color: 'var(--purple)' 
+          },
+          { 
+            key: '2c', 
+            label: 'Haspel 2C Utuh', 
+            value: (
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span>{haspels.filter(h => h.type === '2c' && (Number(h.initial_meters || 0) - Number(h.used_meters || 0)) === 1000).length}</span>
+                <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  {haspels.filter(h => h.type === '2c').reduce((s, h) => s + Number(h.initial_meters || 0) - Number(h.used_meters || 0), 0).toLocaleString()} m tersisa
+                </span>
+              </div>
+            ), 
+            color: '#10b981' 
           },
           { 
             key: '4c', 
@@ -487,10 +534,11 @@ export default function Dropcore() {
             <Search size={16} className="search-icon" />
             <input type="text" placeholder="Cari kode..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
-          <select className="filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+          <select className="form-input" style={{ width: '150px' }} value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
             <option value="all">Semua Tipe</option>
-            <option value="1c">1C</option>
-            <option value="4c">4C</option>
+            <option value="1c">1 Core (1C)</option>
+            <option value="2c">2 Core (2C)</option>
+            <option value="4c">4 Core (4C)</option>
           </select>
           <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="all">Semua Status</option>
@@ -532,7 +580,11 @@ export default function Dropcore() {
                     return (
                       <tr key={h.id}>
                         <td><span className="font-semibold text-accent">{h.haspel_code}</span></td>
-                        <td><span className={`badge ${h.type === '1c' ? 'badge-purple' : 'badge-orange'}`}>{h.type?.toUpperCase()}</span></td>
+                        <td className="text-center">
+                          <span className="badge" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', fontWeight: 600 }}>
+                            {h.type === '1c' ? '1C' : h.type === '2c' ? '2C' : '4C'}
+                          </span>
+                        </td>
                         <td className="text-secondary">{format(new Date(h.date_in), 'dd MMM yyyy', { locale: id })}</td>
                         <td>{Number(h.initial_meters).toLocaleString()} m</td>
                         <td style={{ color: 'var(--warning)' }}>{Number(h.used_meters).toLocaleString()} m</td>
@@ -639,27 +691,24 @@ export default function Dropcore() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h3>{editItem ? 'Edit Haspel' : 'Tambah Haspel Dropcore'}</h3>
+              <h3>{editItem ? (editItem.status === 'habis' ? 'Isi Ulang Haspel' : 'Edit Haspel') : 'Tambah Haspel Dropcore'}</h3>
               <button className="btn-icon" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div className="grid-2">
                 <div className="form-group">
                   <label className="form-label">Kode Haspel <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input className="form-input" placeholder="H-001" value={form.haspel_code} onChange={e => setForm(f => ({ ...f, haspel_code: e.target.value }))} />
+                  <input className="form-input" placeholder="H-001" value={form.haspel_code} onChange={e => setForm(f => ({ ...f, haspel_code: e.target.value }))} disabled={editItem && editItem.status === 'habis'} />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Tipe</label>
-                  <select className="form-input" style={{ height: 'auto' }} value={form.type} onChange={e => {
+                <div>
+                  <label className="form-label">Tipe Kabel</label>
+                  <select className="form-input" value={form.type} onChange={e => {
                     const newType = e.target.value
-                    if (!editItem) {
-                      setForm(f => ({ ...f, type: newType, haspel_code: generateNextCode(newType) }))
-                    } else {
-                      setForm(f => ({ ...f, type: newType }))
-                    }
-                  }}>
-                    <option value="1c">Dropcore 1C</option>
-                    <option value="4c">Dropcore 4C</option>
+                    setForm(f => ({ ...f, type: newType, haspel_code: generateNextCode(newType) }))
+                  }} disabled={editItem}>
+                    <option value="1c">Dropcore 1 Core (1C)</option>
+                    <option value="2c">Dropcore 2 Core (2C)</option>
+                    <option value="4c">Dropcore 4 Core (4C)</option>
                   </select>
                 </div>
               </div>
