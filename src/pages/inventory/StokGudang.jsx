@@ -17,6 +17,7 @@ const UNITS = ['unit', 'buah', 'pcs', 'meter', 'roll', 'set', 'dus', 'kg', 'hasp
 const ITEM_TYPES = [
   { value: 'ont', label: 'ONT / Modem' },
   { value: 'dropcore_1c', label: 'Dropcore 1C' },
+  { value: 'dropcore_2c', label: 'Dropcore 2C' },
   { value: 'dropcore_4c', label: 'Dropcore 4C' },
   { value: 'other', label: 'Lainnya' },
 ]
@@ -70,6 +71,12 @@ export default function StokGudang() {
       const dc1cHaspelsOut = dc1cHaspelsTotal - dc1cHaspelsCurrent
       const dc1cRemainingMeters = dc1cList.reduce((acc, h) => acc + (Number(h.initial_meters || 0) - Number(h.used_meters || 0)), 0)
       
+      const dc2cList = haspels.filter(h => h.type === '2c')
+      const dc2cHaspelsTotal = dc2cList.length
+      const dc2cHaspelsCurrent = dc2cList.filter(h => (Number(h.initial_meters || 0) - Number(h.used_meters || 0)) === 1000).length
+      const dc2cHaspelsOut = dc2cHaspelsTotal - dc2cHaspelsCurrent
+      const dc2cRemainingMeters = dc2cList.reduce((acc, h) => acc + (Number(h.initial_meters || 0) - Number(h.used_meters || 0)), 0)
+
       const dc4cList = haspels.filter(h => h.type === '4c')
       const dc4cHaspelsTotal = dc4cList.length
       const dc4cHaspelsCurrent = dc4cList.filter(h => (Number(h.initial_meters || 0) - Number(h.used_meters || 0)) === 1000).length
@@ -84,6 +91,7 @@ export default function StokGudang() {
 
         const isOnt = item.item_type === 'ont'
         const isDc1c = item.item_type === 'dropcore_1c'
+        const isDc2c = item.item_type === 'dropcore_2c'
         const isDc4c = item.item_type === 'dropcore_4c'
 
         if (isOnt) {
@@ -95,6 +103,11 @@ export default function StokGudang() {
           out = dc1cHaspelsOut
           current = dc1cHaspelsCurrent
           remaining_meters = dc1cRemainingMeters
+        } else if (isDc2c) {
+          initial = dc2cHaspelsTotal
+          out = dc2cHaspelsOut
+          current = dc2cHaspelsCurrent
+          remaining_meters = dc2cRemainingMeters
         } else if (isDc4c) {
           initial = dc4cHaspelsTotal
           out = dc4cHaspelsOut
@@ -225,7 +238,7 @@ export default function StokGudang() {
   }
 
   const getTypeBadge = (type) => {
-    const map = { ont: 'badge-accent', dropcore_1c: 'badge-purple', dropcore_4c: 'badge-orange', other: 'badge-muted' }
+    const map = { ont: 'badge-accent', dropcore_1c: 'badge-purple', dropcore_2c: 'badge-success', dropcore_4c: 'badge-orange', other: 'badge-muted' }
     const label = ITEM_TYPES.find(t => t.value === type)?.label || type
     return <span className={`badge ${map[type] || 'badge-muted'}`}>{label}</span>
   }
@@ -314,6 +327,7 @@ export default function StokGudang() {
       applyHeaderStyle(ws, headers)
       ws.addRow(['ONT ZTE F670L', 'ont', 0, 'unit'])
       ws.addRow(['Dropcore 1C Haspel A', 'dropcore_1c', 0, 'haspel'])
+      ws.addRow(['Dropcore 2C Haspel X', 'dropcore_2c', 0, 'haspel'])
       ws.addRow(['Dropcore 4C Haspel B', 'dropcore_4c', 0, 'haspel'])
       ws.addRow(['Kabel UTP CAT6', 'other', 10, 'roll'])
       await downloadWorkbook(workbook, 'Template Import Stok Gudang.xlsx')
@@ -333,12 +347,12 @@ export default function StokGudang() {
         const ws = wb.Sheets[wb.SheetNames[0]]
         const data = XLSX.utils.sheet_to_json(ws)
         if (!data.length) { toast.error('File kosong atau format tidak sesuai'); hideProgress(); return }
-        const VALID_TYPES = ['ont', 'dropcore_1c', 'dropcore_4c', 'other']
+        const VALID_TYPES = ['ont', 'dropcore_1c', 'dropcore_2c', 'dropcore_4c', 'other']
         showProgress('Memvalidasi Data', 'Mencocokkan kolom...', 20)
         const toInsert = data.map(row => {
           const rawType = (
+            row['Tipe (ont/dropcore_1c/dropcore_2c/dropcore_4c/other)'] || 
             row['Tipe'] ||
-            row['Tipe (ont/dropcore_1c/dropcore_4c/other)'] ||
             row['tipe'] ||
             'other'
           ).toString().trim().toLowerCase()
