@@ -187,6 +187,7 @@ async function generateKMZ(devices, users) {
         <description><![CDATA[
           <b>Site:</b> ${SITES.find(s => s.value === p.site)?.label || p.site}<br/>
           <b>Jenis:</b> ${p.type || '-'}<br/>
+          <b>Jenis Box:</b> ${p.jenis_box || '-'}<br/>
           <b>Kapasitas:</b> ${p.kapasitas || '-'}<br/>
           <b>Jenis Kabel Power:</b> ${p.jenis_kabel_power || '-'}<br/>
           <b>Core Power:</b> ${p.core_power || '-'}<br/>
@@ -812,6 +813,7 @@ export default function DataOdpOdc() {
         return {
           'No': i + 1, 'Site': SITES.find(s => s.value === p.site)?.label || p.site,
           'ID ODP/ODC': p.device_id || '', 'Jenis ODP/ODC': DEVICE_TYPES.find(t => t.value === p.type)?.label || p.type,
+          'Jenis Box': p.jenis_box || '',
           'Kapasitas': p.kapasitas || '',
           'Jenis Kabel Power': p.jenis_kabel_power || '', 'Core Power': p.core_power || '', 'PON': p.pon || '', 'Jarak ke OLT/Server (m)': p.jarak_ke_olt || '',
           'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
@@ -1400,7 +1402,7 @@ export default function DataOdpOdc() {
                     {isDismantled && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 6px', borderRadius: '20px', background: 'rgba(239,68,68,0.15)', color: 'var(--danger)', fontWeight: 700, border: '1px solid rgba(239,68,68,0.3)' }}>DICABUT</span>}
                     {isDismantled && device.dismantled_at && <div style={{ fontSize: '10px', color: 'var(--danger)', opacity: 0.7, marginTop: '1px' }}>{format(new Date(device.dismantled_at), 'dd MMM yyyy', { locale: localeId })}</div>}
                   </td>
-                  <td><span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '20px', fontWeight: 600, background: device.type === 'ODC' ? 'rgba(99,102,241,0.15)' : 'rgba(16,185,129,0.12)', color: device.type === 'ODC' ? '#6366f1' : 'var(--success)' }}>{device.type || '-'}{device.kapasitas ? ` · ${device.kapasitas}` : ''}</span></td>
+                  <td><span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '20px', fontWeight: 600, background: device.type === 'ODC' ? 'rgba(99,102,241,0.15)' : 'rgba(16,185,129,0.12)', color: device.type === 'ODC' ? '#6366f1' : 'var(--success)' }}>{device.type || '-'}{device.jenis_box ? ` · ${device.jenis_box}` : ''}{device.kapasitas ? ` · ${device.kapasitas}` : ''}</span></td>
                   <td style={{ fontSize: '12px' }}>{device.kecamatan || '-'}</td>
                   <td style={{ fontSize: '12px' }}>{device.desa || '-'}</td>
                   <td>{device.latitude && device.longitude ? <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontFamily: 'monospace', lineHeight: '1.4' }}><div>Lat: {Number(device.latitude).toFixed(5)}</div><div>Lon: {Number(device.longitude).toFixed(5)}</div></div> : <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>-</span>}</td>
@@ -1447,7 +1449,7 @@ export default function DataOdpOdc() {
                 <div>
                   <div style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--accent)', fontWeight: 700 }}>{device.device_id || '-'}</div>
                   {device.parent_odc && <div style={{ fontSize: '10px', color: '#6366f1', marginTop: '1px' }}>Induk: {device.parent_odc}</div>}
-                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{SITES.find(s => s.value === device.site)?.label} · <span style={{ color: device.type === 'ODC' ? '#6366f1' : 'var(--success)', fontWeight: 600 }}>{device.type}{device.kapasitas ? ` · ${device.kapasitas}` : ''}</span></div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{SITES.find(s => s.value === device.site)?.label} · <span style={{ color: device.type === 'ODC' ? '#6366f1' : 'var(--success)', fontWeight: 600 }}>{device.type}{device.jenis_box ? ` · ${device.jenis_box}` : ''}{device.kapasitas ? ` · ${device.kapasitas}` : ''}</span></div>
                 </div>
                 {['admin', 'superadmin'].includes(role) && (
                   <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}><button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => openEdit(device)}><Edit2 size={12} /></button><button className="btn btn-sm" style={{ padding: '4px 8px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.25)' }} onClick={() => setConfirmDelete(device)}><Trash2 size={12} /></button></div>
