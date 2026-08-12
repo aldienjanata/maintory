@@ -815,7 +815,7 @@ export default function DataOdpOdc() {
           'ID ODP/ODC': p.device_id || '', 'Jenis ODP/ODC': DEVICE_TYPES.find(t => t.value === p.type)?.label || p.type,
           'Jenis Box': p.jenis_box || '',
           'Kapasitas': p.kapasitas || '',
-          'Jenis Kabel Power': p.jenis_kabel_power || '', 'Core Power': p.core_power || '', 'PON': p.pon || '', 'Jarak ke OLT/Server (m)': p.jarak_ke_olt || '',
+          'Jenis Kabel Power': p.jenis_kabel_power || '', 'Core Power': p.core_power || '', 'PON': p.pon || '', 'Jarak ke OLT/Server (m)': p.jarak_ke_olt ? new Intl.NumberFormat('id-ID').format(parseInt(String(p.jarak_ke_olt).replace(/\\D/g, ''), 10) || 0) : '',
           'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
           'Desa/Kelurahan': p.desa || '', 'Jalan/Gang/Dusun': p.jalan || '', 'Maps URL': p.maps_url || '',
           'Latitude ( Decimal )': lat || '', 'Longitude ( Decimal )': lon || '',
@@ -1479,6 +1479,7 @@ export default function DataOdpOdc() {
                 {device.longitude && <div><span style={{ color: 'var(--text-secondary)' }}>Lon: </span>{Number(device.longitude).toFixed(5)}</div>}
                 {device.maps_url && <div style={{ gridColumn: '1/-1' }}><a href={device.maps_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><MapPin size={12} /> Lihat Maps <ExternalLink size={11} /></a></div>}
                 {device.pon && <div style={{ gridColumn: '1/-1' }}><span style={{ color: 'var(--text-secondary)' }}>PON: </span><span style={{ color: '#c084fc', fontWeight: 600 }}>{device.pon}</span></div>}
+                {device.jarak_ke_olt && <div style={{ gridColumn: '1/-1' }}><span style={{ color: 'var(--text-secondary)' }}>Jarak OLT: </span><span style={{ color: '#eab308', fontWeight: 600 }}>{new Intl.NumberFormat('id-ID').format(parseInt(String(device.jarak_ke_olt).replace(/\D/g, ''), 10) || 0)} m</span></div>}
                 {device.keterangan && <div style={{ gridColumn: '1/-1', color: 'var(--text-secondary)' }}>{device.keterangan}</div>}
               </div>
             </div>
@@ -1529,6 +1530,7 @@ export default function DataOdpOdc() {
                       </select>
                     </div>
                   )}
+
                   <div>
                     <label className="form-label">Jenis Box</label>
                     <select className="form-input" value={form.jenis_box} onChange={e => setForm(f => ({ ...f, jenis_box: e.target.value }))}>
