@@ -775,46 +775,97 @@ export default function KonversiTiang() {
           }
         }
         
-        allOdpOdc.forEach((p, idx) => {
-          const desa = p.desa || 'Tanpa Desa'
-          if (desa !== currentDesaOdp) {
-            if (currentDesaOdp !== null) finalizeDesaOdp(rowIndexOdp - 1)
-            currentDesaOdp = desa
-            desaStartRowOdp = rowIndexOdp
+        // ── Kelompokkan per ODC → ODP ──────────────────────────────────────
+        const odcList = allOdpOdc.filter(p => p.type === 'ODC')
+        const odpList = allOdpOdc.filter(p => p.type === 'ODP')
+
+        // Buat map: device_id ODC → objek ODC
+        const odcById = new Map(odcList.map(o => [o.device_id, o]))
+
+        // Buat grup: { odc (bisa null jika ODC tidak ada di data), odps[], desa }
+        const groups = []
+        const matchedOdpSet = new Set()
+
+        // Grup berdasarkan ODC yang ada di data
+        odcList.forEach(odc => {
+          const odps = odpList.filter(o => o.induk_odc === odc.device_id)
+          odps.forEach(o => matchedOdpSet.add(o.id))
+          groups.push({ odc, odps, desa: odc.desa || 'Tanpa Desa' })
+        })
+
+        // ODPs yang tidak punya ODC cocok → kelompokkan berdasarkan induk_odc string
+        const orphanOdps = odpList.filter(o => !matchedOdpSet.has(o.id))
+        const orphanByInduk = new Map()
+        orphanOdps.forEach(o => {
+          const key = o.induk_odc || `__solo_${o.id}`
+          if (!orphanByInduk.has(key)) {
+            orphanByInduk.set(key, { odc: null, indukId: o.induk_odc || '', odps: [], desa: o.desa || 'Tanpa Desa' })
           }
-          
+          orphanByInduk.get(key).odps.push(o)
+        })
+        orphanByInduk.forEach(g => groups.push(g))
+
+        // Sort grup: desa dulu, lalu ID ODC
+        groups.sort((a, b) => {
+          const dA = (a.desa || '').localeCompare(b.desa || '')
+          if (dA !== 0) return dA
+          const idA = a.odc ? (a.odc.device_id || '') : (a.indukId || '')
+          const idB = b.odc ? (b.odc.device_id || '') : (b.indukId || '')
+          return idA.localeCompare(idB)
+        })
+
+        const getSiteLabel = (site) =>
+          site === 'cilacap' ? 'CILACAP' : site === 'cilacap_herman' ? 'CILACAP (HERMAN)' : 'BANYUMAS'
+
+        const writeRow = (p, nourut, overrideJenis) => {
           const lat = p.latitude ? Number(p.latitude) : ''
           const lon = p.longitude ? Number(p.longitude) : ''
           const isOdc = p.type === 'ODC'
-          const isOdp = p.type === 'ODP'
-          const siteLabel = p.site === 'cilacap' ? 'CILACAP' : p.site === 'cilacap_herman' ? 'CILACAP (HERMAN)' : 'BANYUMAS'
-          
           const row = wsSebaran.getRow(rowIndexOdp)
           row.height = dataRowHeightOdp
-          for (let c = 1; c <= 13; c++) {
-            row.getCell(c).style = dataStyleOdp[c]
-          }
-          
-          row.getCell(1).value = idx + 1
-          row.getCell(2).value = p.type || ''
-          row.getCell(3).value = desa
-          row.getCell(4).value = siteLabel
-          row.getCell(5).value = p.divisi || ''
+          for (let c = 1; c <= 13; c++) row.getCell(c).style = dataStyleOdp[c]
+          row.getCell(1).value = nourut
+          row.getCell(2).value = overrideJenis !== undefined ? overrideJenis : (p.device_id || '')
+          row.getCell(3).value = p.desa || 'Tanpa Desa'
+          row.getCell(4).value = getSiteLabel(p.site)
+          row.getCell(5).value = 'WIFIAN'
           row.getCell(6).value = lon
           row.getCell(7).value = lat
           row.getCell(8).value = isOdc ? 1 : null
-          row.getCell(9).value = isOdp ? 1 : null
-          row.getCell(10).value = null // QTY J
-          row.getCell(11).value = null // QTY K
-          row.getCell(12).value = null // PELANGGAN
-          row.getCell(13).value = null // MARKETING
+          row.getCell(9).value = isOdc ? null : 1
+          row.getCell(10).value = null
+          row.getCell(11).value = null
+          row.getCell(12).value = null
+          row.getCell(13).value = null
           row.getCell(10).fill = { type: 'pattern', pattern: 'none' }
           row.getCell(11).fill = { type: 'pattern', pattern: 'none' }
-          
           lastDataRowOdp = rowIndexOdp
           rowIndexOdp++
+        }
+
+        let noUrut = 1
+        groups.forEach(g => {
+          const desa = g.desa
+          if (desa !== currentDesaOdp) {
+            if (currentDesaOdp !== null) finalizeDesaOdp(lastDataRowOdp)
+            currentDesaOdp = desa
+            desaStartRowOdp = rowIndexOdp
+          }
+
+          // Tulis baris ODC (jika ada)
+          if (g.odc) {
+            writeRow(g.odc, noUrut++, g.odc.device_id || g.odc.type || 'ODC')
+          }
+
+          // Tulis baris setiap ODP dalam grup
+          g.odps.forEach(odp => {
+            writeRow(odp, noUrut++, odp.device_id || odp.type || 'ODP')
+          })
+
+          // Baris kosong sebagai pemisah antar grup ODC
+          rowIndexOdp++
         })
-        
+
         if (currentDesaOdp !== null) finalizeDesaOdp(lastDataRowOdp)
       }
 
