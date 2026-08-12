@@ -353,7 +353,7 @@ export default function DataOdpOdc() {
       while (true) {
         const { data, error } = await supabase
           .from('network_poles')
-          .select('id, pole_id, latitude, longitude, desa, kecamatan')
+          .select('id, pole_id, latitude, longitude, provinsi, kabupaten, kecamatan, desa, jalan')
           .not('latitude', 'is', null)
           .not('longitude', 'is', null)
           .order('id', { ascending: true })
