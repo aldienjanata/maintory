@@ -494,6 +494,29 @@ export default function KonversiTiang() {
         return (a.pole_id || '').localeCompare(b.pole_id || '')
       })
 
+      toast.loading('Mengambil data ODP & ODC...', { id: 'exportFO' })
+      let allOdpOdc = []
+      let fromOdp = 0
+      while (true) {
+        const { data, error } = await supabase
+          .from('network_odp_odc')
+          .select('*')
+          .range(fromOdp, fromOdp + step - 1)
+        if (error) throw error
+        if (data && data.length > 0) {
+          allOdpOdc = [...allOdpOdc, ...data]
+          if (data.length < step) break
+          fromOdp += step
+        } else { break }
+      }
+
+      // Sort ODP/ODC by Desa then ID
+      allOdpOdc.sort((a, b) => {
+        const dA = (a.desa || '').localeCompare(b.desa || '')
+        if (dA !== 0) return dA
+        return (a.device_id || '').localeCompare(b.device_id || '')
+      })
+
       toast.loading('Memproses Excel...', { id: 'exportFO' })
       const ExcelJS = (await import('exceljs')).default
       const response = await fetch('/Template_FO.xlsx')
@@ -674,13 +697,122 @@ export default function KonversiTiang() {
           wsKabel.getRow(i).eachCell(c => { c.value = null })
         }
       }
+      
       const wsSebaran = workbook.getWorksheet('Data Sebaran ODP DAN ODC')
       if (wsSebaran) {
-        for (let i = 6; i <= wsSebaran.rowCount; i++) {
-          wsSebaran.getRow(i).eachCell(c => { c.value = null })
+        // 1. Simpan style baris 6 (data row)
+        const dataStyleOdp = {}
+        for (let c = 1; c <= 13; c++) {
+          dataStyleOdp[c] = JSON.parse(JSON.stringify(wsSebaran.getRow(6).getCell(c).style || {}))
         }
-        // Pindahkan autoFilter dari baris 3 ke baris 4 (baris header yang benar)
-        wsSebaran.autoFilter = `A4:L4`
+        const dataRowHeightOdp = wsSebaran.getRow(6).height || 15
+        
+        // 2. Simpan style & value baris 4 & 5 (header)
+        const headerStylesOdp = { 4: {}, 5: {} }
+        const headerValuesOdp = { 4: {}, 5: {} }
+        const headerHeightsOdp = { 4: wsSebaran.getRow(4).height, 5: wsSebaran.getRow(5).height }
+        ;[4, 5].forEach(r => {
+          for (let c = 1; c <= 13; c++) {
+            const cell = wsSebaran.getRow(r).getCell(c)
+            headerStylesOdp[r][c] = JSON.parse(JSON.stringify(cell.style || {}))
+            headerValuesOdp[r][c] = cell.value
+          }
+        })
+        
+        // 3. Unmerge baris >= 6
+        const existingMergesOdp = [...(wsSebaran.model.merges || [])]
+        existingMergesOdp.forEach(mergeStr => {
+          const match = mergeStr.match(/\D+(\d+):\D+(\d+)/)
+          if (match && parseInt(match[2], 10) >= 6) {
+            wsSebaran.unMergeCells(mergeStr)
+          }
+        })
+        
+        // 4. Hapus baris >= 6
+        if (wsSebaran.rowCount >= 6) {
+          wsSebaran.spliceRows(6, wsSebaran.rowCount - 5)
+        }
+        
+        // 5. Restore headers 4 & 5
+        ;[4, 5].forEach(r => {
+          const row = wsSebaran.getRow(r)
+          row.height = headerHeightsOdp[r]
+          for (let c = 1; c <= 13; c++) {
+            const cell = row.getCell(c)
+            cell.style = headerStylesOdp[r][c]
+            if (headerValuesOdp[r][c] !== null && headerValuesOdp[r][c] !== undefined) {
+              cell.value = headerValuesOdp[r][c]
+            }
+          }
+        })
+        
+        // 6. AutoFilter
+        wsSebaran.autoFilter = `A5:M5`
+        
+        // 7. Tulis data
+        let rowIndexOdp = 6
+        let currentDesaOdp = null
+        let desaStartRowOdp = 6
+        let lastDataRowOdp = 6
+        
+        const finalizeDesaOdp = (endRow) => {
+          if (endRow >= desaStartRowOdp) {
+            if (endRow > desaStartRowOdp) {
+              wsSebaran.mergeCells(`J${desaStartRowOdp}:J${endRow}`)
+              wsSebaran.mergeCells(`K${desaStartRowOdp}:K${endRow}`)
+            }
+            const cellJ = wsSebaran.getCell(`J${desaStartRowOdp}`)
+            const cellK = wsSebaran.getCell(`K${desaStartRowOdp}`)
+            cellJ.value = { formula: `SUM(H${desaStartRowOdp}:H${endRow})` }
+            cellK.value = { formula: `SUM(I${desaStartRowOdp}:I${endRow})` }
+            ;[cellJ, cellK].forEach(cell => {
+              cell.alignment = { vertical: 'middle', horizontal: 'center' }
+              cell.fill = { type: 'pattern', pattern: 'none' }
+            })
+          }
+        }
+        
+        allOdpOdc.forEach((p, idx) => {
+          const desa = p.desa || 'Tanpa Desa'
+          if (desa !== currentDesaOdp) {
+            if (currentDesaOdp !== null) finalizeDesaOdp(rowIndexOdp - 1)
+            currentDesaOdp = desa
+            desaStartRowOdp = rowIndexOdp
+          }
+          
+          const lat = p.latitude ? Number(p.latitude) : ''
+          const lon = p.longitude ? Number(p.longitude) : ''
+          const isOdc = p.type === 'ODC'
+          const isOdp = p.type === 'ODP'
+          const siteLabel = p.site === 'cilacap' ? 'CILACAP' : p.site === 'cilacap_herman' ? 'CILACAP (HERMAN)' : 'BANYUMAS'
+          
+          const row = wsSebaran.getRow(rowIndexOdp)
+          row.height = dataRowHeightOdp
+          for (let c = 1; c <= 13; c++) {
+            row.getCell(c).style = dataStyleOdp[c]
+          }
+          
+          row.getCell(1).value = idx + 1
+          row.getCell(2).value = p.type || ''
+          row.getCell(3).value = desa
+          row.getCell(4).value = siteLabel
+          row.getCell(5).value = p.divisi || ''
+          row.getCell(6).value = lon
+          row.getCell(7).value = lat
+          row.getCell(8).value = isOdc ? 1 : null
+          row.getCell(9).value = isOdp ? 1 : null
+          row.getCell(10).value = null // QTY J
+          row.getCell(11).value = null // QTY K
+          row.getCell(12).value = null // PELANGGAN
+          row.getCell(13).value = null // MARKETING
+          row.getCell(10).fill = { type: 'pattern', pattern: 'none' }
+          row.getCell(11).fill = { type: 'pattern', pattern: 'none' }
+          
+          lastDataRowOdp = rowIndexOdp
+          rowIndexOdp++
+        })
+        
+        if (currentDesaOdp !== null) finalizeDesaOdp(lastDataRowOdp)
       }
 
       toast.loading('Menyimpan file...', { id: 'exportFO' })
