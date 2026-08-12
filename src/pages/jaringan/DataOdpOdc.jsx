@@ -974,7 +974,7 @@ export default function DataOdpOdc() {
           
           let provinsi = String(r['Provinsi'] || r['PROVINSI'] || '')
           let kabupaten = String(r['Kabupaten/Kota'] || r['Kabupaten'] || r['KABUPATEN'] || '')
-          let jalan = String(r['Jalan/Gang/Dusun'] || r['Jalan'] || r['JALAN'] || '')
+          let jalan = String(r['Jalan/Gang/Dusun'] || r['Jalan'] || r['JALAN'] || '').trim()
           let mapsUrlFallback = String(r['Maps URL'] || r['Maps'] || r['URL Google Maps'] || '')
           let keterangan = String(r['Keterangan'] || r['KETERANGAN'] || '')
 
@@ -1006,7 +1006,7 @@ export default function DataOdpOdc() {
           }
 
           // Jika masih ada lokasi yang kosong dan ada koordinat, cari tiang terdekat dalam radius 500m
-          const missingLocation = !provinsi || !kabupaten || !kecamatan || !desa
+          const missingLocation = !provinsi || !kabupaten || !kecamatan || !desa || !jalan
           if (missingLocation && lat && lon && networkPoles.length > 0) {
             let nearestForLoc = null
             let nearestDistForLoc = Infinity
