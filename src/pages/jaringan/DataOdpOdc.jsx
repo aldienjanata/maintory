@@ -996,6 +996,35 @@ export default function DataOdpOdc() {
               linked_pole_label = `${nearestPole.pole_id || nearestPole.id} (~${Math.round(nearestDist)}m)`
               lat = Number(nearestPole.latitude)
               lon = Number(nearestPole.longitude)
+              // Auto-fill lokasi dari tiang yang terhubung (jika kolom Excel kosong)
+              if (!provinsi && nearestPole.provinsi) provinsi = nearestPole.provinsi
+              if (!kabupaten && nearestPole.kabupaten) kabupaten = nearestPole.kabupaten
+              if (!kecamatan && nearestPole.kecamatan) kecamatan = nearestPole.kecamatan.toUpperCase()
+              if (!desa && nearestPole.desa) desa = nearestPole.desa.toUpperCase()
+              if (!jalan && nearestPole.jalan) jalan = nearestPole.jalan
+            }
+          }
+
+          // Jika masih ada lokasi yang kosong dan ada koordinat, cari tiang terdekat dalam radius 500m
+          const missingLocation = !provinsi || !kabupaten || !kecamatan || !desa
+          if (missingLocation && lat && lon && networkPoles.length > 0) {
+            let nearestForLoc = null
+            let nearestDistForLoc = Infinity
+            for (const p of networkPoles) {
+              if (!p.latitude || !p.longitude) continue
+              if (!p.kecamatan && !p.desa) continue // tiang tanpa lokasi, skip
+              const dist = getDistanceFromLatLonInm(Number(p.latitude), Number(p.longitude), lat, lon)
+              if (dist < nearestDistForLoc) {
+                nearestDistForLoc = dist
+                nearestForLoc = p
+              }
+            }
+            if (nearestForLoc && nearestDistForLoc <= 500) {
+              if (!provinsi && nearestForLoc.provinsi) provinsi = nearestForLoc.provinsi
+              if (!kabupaten && nearestForLoc.kabupaten) kabupaten = nearestForLoc.kabupaten
+              if (!kecamatan && nearestForLoc.kecamatan) kecamatan = nearestForLoc.kecamatan.toUpperCase()
+              if (!desa && nearestForLoc.desa) desa = nearestForLoc.desa.toUpperCase()
+              if (!jalan && nearestForLoc.jalan) jalan = nearestForLoc.jalan
             }
           }
 
