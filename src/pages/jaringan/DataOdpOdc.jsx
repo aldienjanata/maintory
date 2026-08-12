@@ -1440,7 +1440,14 @@ export default function DataOdpOdc() {
                         </span>
                       </div>
                     )}
-                    <span title={device.keterangan} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{device.keterangan || (!device.pole_id && !device.pon ? '-' : '')}</span>
+                    <span title={device.keterangan} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {device.jarak_ke_olt && (
+                    <span style={{ fontSize: '10px', padding: '1px 5px', borderRadius: '20px', background: 'rgba(234,179,8,0.12)', color: '#eab308', border: '1px solid rgba(234,179,8,0.3)', fontWeight: 600, whiteSpace: 'nowrap', marginRight: '4px' }}>
+                      📏 {new Intl.NumberFormat('id-ID').format(parseInt(String(device.jarak_ke_olt).replace(/\D/g, ''), 10) || 0)} m
+                    </span>
+                  )}
+                  {device.keterangan || (!device.pole_id && !device.pon && !device.jarak_ke_olt ? '-' : '')}
+                </span>
                     {isDismantled && device.dismantled_notes && <span title={device.dismantled_notes} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--danger)', fontStyle: 'italic', fontSize: '10px' }}>Cabut: {device.dismantled_notes}</span>}
                   </td>
                   <td style={{ fontSize: '11px' }}><div style={{ fontWeight: 500 }}>{getUserName(device.created_by)}</div>{device.updated_by && device.updated_by !== device.created_by && <div style={{ color: 'var(--text-secondary)', fontSize: '10px' }}>Edit: {getUserName(device.updated_by)}</div>}</td>
