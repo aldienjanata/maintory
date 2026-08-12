@@ -1159,7 +1159,7 @@ export default function DataOdpOdc() {
           jenis_box: row.jenis_box || null, jenis_kabel_power: row.jenis_kabel_power || null, 
           core_power: row.core_power || null, pon: row.pon || null, jarak_ke_olt: row.jarak_ke_olt || null,
           pole_id: row.pole_id || null, kabupaten: row.kabupaten, kecamatan: row.kecamatan, 
-          desa: row.desa, maps_url: row.maps_url, longitude: row.longitude, latitude: row.latitude, 
+          desa: row.desa, jalan: row.jalan || null, maps_url: row.maps_url, longitude: row.longitude, latitude: row.latitude, 
           keterangan: row.keterangan, created_by: profile.id, updated_by: profile.id,
         }
       })
