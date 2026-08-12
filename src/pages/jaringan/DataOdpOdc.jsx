@@ -996,6 +996,8 @@ export default function DataOdpOdc() {
           const isValid = !!(desa && lat && lon)
 
           let proximityWarning = null
+          let proximityNearbyRows = [] // baris Excel yang berdekatan
+          let proximityNearbyDb = []   // ID dari database yang berdekatan
           if (isValid && lat && lon) {
             const veryCloseDb = devices.filter(d =>
               d.type === type &&
@@ -1007,7 +1009,11 @@ export default function DataOdpOdc() {
               getDistanceFromLatLonInm(m.latitude, m.longitude, lat, lon) < 1
             )
             const totalClose = veryCloseDb.length + veryCloseExcel.length
-            if (totalClose > 0) proximityWarning = `Jarak < 1m dengan ${totalClose} ${type} lain (duplikat lokasi)`
+            if (totalClose > 0) {
+              proximityWarning = `Jarak < 1m dengan ${totalClose} ${type} lain (duplikat lokasi)`
+              proximityNearbyRows = veryCloseExcel.map(m => `Baris ${m._rowNo}${m.device_id ? ` (${m.device_id})` : ''}`)
+              proximityNearbyDb = veryCloseDb.map(d => d.device_id || d.id)
+            }
           }
 
           mapped.push({
@@ -1015,6 +1021,8 @@ export default function DataOdpOdc() {
             _valid: isValid,
             _selected: isValid && !proximityWarning,
             _proximityWarning: proximityWarning,
+            _proximityNearbyRows: proximityNearbyRows,
+            _proximityNearbyDb: proximityNearbyDb,
             site: siteVal,
             type,
             device_id,
@@ -1738,6 +1746,17 @@ export default function DataOdpOdc() {
                                 <AlertTriangle size={16} style={{ flexShrink: 0 }} />
                                 <div>
                                   <strong style={{ fontSize: '13px' }}>DUPLIKAT / BERDEKATAN:</strong> {row._proximityWarning}.<br/>
+                                  {(row._proximityNearbyRows?.length > 0 || row._proximityNearbyDb?.length > 0) && (
+                                    <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                      Berdekatan dengan:
+                                      {row._proximityNearbyRows?.length > 0 && (
+                                        <span style={{ color: 'var(--warning)', fontWeight: 600 }}> {row._proximityNearbyRows.join(', ')}</span>
+                                      )}
+                                      {row._proximityNearbyDb?.length > 0 && (
+                                        <span> | <span style={{ color: '#60a5fa', fontWeight: 600 }}>DB: {row._proximityNearbyDb.join(', ')}</span></span>
+                                      )}
+                                    </div>
+                                  )}
                                   <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Jika ini memang 2 odpOdc fisik yang berbeda tapi berdekatan posisinya, silakan <strong>Centang</strong> kotak di sebelah kiri untuk tetap mengimportnya.</span>
                                 </div>
                               </div>
