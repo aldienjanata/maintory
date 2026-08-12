@@ -48,6 +48,7 @@ const EMPTY_FORM = {
   parent_odc: '', // ID induk ODC jika ini ODP
 }
 const DEFAULT_FORMAT = 'NAT/{SITE_CODE}/{DESA}/{TYPE}/{NO}'
+const AUTO_LINK_RADIUS_M = 50
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function generateDeviceId(site, desa, type, existingDevices, formatTemplate = DEFAULT_FORMAT, parentOdcId = null) {
@@ -477,7 +478,7 @@ export default function DataOdpOdc() {
       }
     }
     // Only link if the nearest pole is within 10m radius
-    return nearestPole && nearestDist <= 10 ? nearestPole : null
+    return nearestPole && nearestDist <= AUTO_LINK_RADIUS_M ? nearestPole : null
   }
 
   const executeSave = async () => {
@@ -533,7 +534,7 @@ export default function DataOdpOdc() {
     showProgress('Sinkronisasi Tiang', `Mencari tiang terdekat (radius 50m) untuk ${needsSync.length} ODP/ODC...`, 10)
     
     let updates = []
-    const SYNC_RADIUS_M = 50  // radius lebih longgar untuk sinkronisasi manual
+    // using AUTO_LINK_RADIUS_M (50) untuk radius sinkronisasi
     
     for (const d of needsSync) {
       const lat = Number(d.latitude)
@@ -548,7 +549,7 @@ export default function DataOdpOdc() {
           nearestPole = p
         }
       }
-      if (nearestPole && nearestDist <= SYNC_RADIUS_M) {
+      if (nearestPole && nearestDist <= AUTO_LINK_RADIUS_M) {
         updates.push({
           id: d.id,
           device_id: d.device_id,
@@ -564,7 +565,7 @@ export default function DataOdpOdc() {
     if (updates.length === 0) {
       setSyncingPoles(false)
       hideProgress()
-      return toast.info(`Tidak ada tiang ditemukan dalam radius ${SYNC_RADIUS_M}m dari ODP/ODC manapun.`)
+      return toast.info(`Tidak ada tiang ditemukan dalam radius ${AUTO_LINK_RADIUS_M}m dari ODP/ODC manapun.`)
     }
     
     showProgress('Sinkronisasi Tiang', `Menyimpan ${updates.length} sinkronisasi...`, 50)
@@ -982,7 +983,7 @@ export default function DataOdpOdc() {
                 nearestPole = p
               }
             }
-            if (nearestPole && nearestDist <= 10) {
+            if (nearestPole && nearestDist <= AUTO_LINK_RADIUS_M) {
               linked_pole_id = nearestPole.id
               linked_pole_label = `${nearestPole.pole_id || nearestPole.id} (~${Math.round(nearestDist)}m)`
               lat = Number(nearestPole.latitude)
