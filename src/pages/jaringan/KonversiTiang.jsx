@@ -746,6 +746,9 @@ export default function KonversiTiang() {
           }
         })
         
+        // Koreksi typo dari template: K5 seharusnya 'ODP' bukan 'ODC'
+        wsSebaran.getCell('K5').value = 'ODP'
+
         // 6. AutoFilter
         wsSebaran.autoFilter = `A5:M5`
         
