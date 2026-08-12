@@ -718,7 +718,11 @@ export default function DataOdpOdc() {
       if (!filterKecamatan) return toast.error('Pilih filter Kecamatan terlebih dahulu!')
       setBulkDeleteModal({ mode, label: `semua odpOdc Kecamatan "${filterKecamatan}"`, filter: { col: 'kecamatan', val: filterKecamatan } })
     } else if (mode === 'all') {
-      setBulkDeleteModal({ mode, label: `SELURUH DATA ODP/ODC`, filter: null })
+      setBulkDeleteModal({ mode, label: `SELURUH DATA ODP & ODC`, filter: null })
+    } else if (mode === 'all_odp') {
+      setBulkDeleteModal({ mode, label: `SELURUH DATA ODP`, filter: { col: 'type', val: 'ODP' } })
+    } else if (mode === 'all_odc') {
+      setBulkDeleteModal({ mode, label: `SELURUH DATA ODC`, filter: { col: 'type', val: 'ODC' } })
     }
     setBulkDeleteConfirmText('')
   }
@@ -726,7 +730,7 @@ export default function DataOdpOdc() {
   const handleBulkDelete = async () => {
     if (!bulkDeleteModal) return
     const { mode, filter } = bulkDeleteModal
-    const required = mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS'
+    const required = mode.startsWith('all') ? 'HAPUS SEMUA' : 'HAPUS'
     if (bulkDeleteConfirmText.trim().toUpperCase() !== required) {
       return toast.error(`Ketik "${required}" untuk konfirmasi!`)
     }
@@ -770,15 +774,17 @@ export default function DataOdpOdc() {
         if (error) throw error
       }
 
-      if (mode === 'all') {
+      if (mode.startsWith('all')) {
         showProgress('Memverifikasi', 'Memeriksa hasil penghapusan...', 92)
-        const { count: remaining } = await supabase.from('network_odp_odc').select('id', { count: 'exact', head: true })
-        
+        let countQuery = supabase.from('network_odp_odc').select('id', { count: 'exact', head: true })
+        if (filter) countQuery = countQuery.eq(filter.col, filter.val)
+        const { count: remaining } = await countQuery
+
         hideProgress()
         if (remaining && remaining > 0) {
-          toast.error(`⚠️ Penghapusan TIDAK LENGKAP! Masih ada ${remaining} odpOdc tersisa di database. Ulangi Hapus Semua sekali lagi.`, { duration: 8000 })
+          toast.error(`⚠️ Penghapusan TIDAK LENGKAP! Masih ada ${remaining} data tersisa di database. Ulangi Hapus Semua sekali lagi.`, { duration: 8000 })
         } else {
-          toast.success(`Seluruh data odpOdc berhasil dikosongkan (0 odpOdc tersisa)!`)
+          toast.success(`${bulkDeleteModal.label} berhasil dikosongkan!`)
         }
       } else {
         hideProgress()
@@ -1361,7 +1367,15 @@ export default function DataOdpOdc() {
                 <div style={{ height: '1px', background: 'var(--border)', margin: '2px 0' }} />
                 <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'rgba(239,68,68,0.08)', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--danger)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}
                   onClick={() => { setBulkMenuOpen(false); openBulkDeleteModal('all') }}>
-                  <Trash2 size={14} /> Hapus SEMUA Data ODP & ODC
+                  <Trash2 size={14} /> Hapus SEMUA Data (ODP & ODC)
+              </button>
+              <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'rgba(239,68,68,0.05)', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--danger)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}
+                onClick={() => { setBulkMenuOpen(false); openBulkDeleteModal('all_odp') }}>
+                <Trash2 size={14} /> Hapus SEMUA Data ODP Saja
+              </button>
+              <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'rgba(239,68,68,0.05)', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--danger)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}
+                onClick={() => { setBulkMenuOpen(false); openBulkDeleteModal('all_odc') }}>
+                <Trash2 size={14} /> Hapus SEMUA Data ODC Saja
                 </button>
               </div>
             </>
@@ -1927,7 +1941,7 @@ export default function DataOdpOdc() {
                 <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Tindakan ini <strong>tidak dapat dibatalkan</strong>. Semua data yang dihapus akan hilang permanen.</p>
               </div>
               <label className="form-label" style={{ color: 'var(--danger)' }}>
-                Ketik <strong>{bulkDeleteModal.mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS'}</strong> untuk konfirmasi:
+                Ketik <strong>{bulkDeleteModal.mode?.startsWith('all') ? 'HAPUS SEMUA' : 'HAPUS'}</strong> untuk konfirmasi:
               </label>
               <input
                 className="form-input"
@@ -1935,7 +1949,7 @@ export default function DataOdpOdc() {
                 value={bulkDeleteConfirmText}
                 onChange={e => setBulkDeleteConfirmText(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleBulkDelete()}
-                placeholder={bulkDeleteModal.mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS'}
+                placeholder={bulkDeleteModal.mode?.startsWith('all') ? 'HAPUS SEMUA' : 'HAPUS'}
                 autoFocus
               />
             </div>
@@ -1943,9 +1957,9 @@ export default function DataOdpOdc() {
               <button className="btn btn-secondary" onClick={() => setBulkDeleteModal(null)}>Batal</button>
               <button
                 style={{
-                  background: bulkDeleteConfirmText.trim().toUpperCase() === (bulkDeleteModal.mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS') ? 'var(--danger)' : 'rgba(239,68,68,0.3)',
+                  background: bulkDeleteConfirmText.trim().toUpperCase() === (bulkDeleteModal.mode?.startsWith('all') ? 'HAPUS SEMUA' : 'HAPUS') ? 'var(--danger)' : 'rgba(239,68,68,0.3)',
                   color: '#fff', border: 'none', padding: '8px 18px', borderRadius: 'var(--radius-md)', fontWeight: 600,
-                  cursor: bulkDeleteConfirmText.trim().toUpperCase() === (bulkDeleteModal.mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS') ? 'pointer' : 'not-allowed'
+                  cursor: bulkDeleteConfirmText.trim().toUpperCase() === (bulkDeleteModal.mode?.startsWith('all') ? 'HAPUS SEMUA' : 'HAPUS') ? 'pointer' : 'not-allowed'
                 }}
                 onClick={handleBulkDelete}
               >
