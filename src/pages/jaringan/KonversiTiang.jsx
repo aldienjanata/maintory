@@ -852,14 +852,40 @@ export default function KonversiTiang() {
             desaStartRowOdp = rowIndexOdp
           }
 
-          // Tulis baris ODC (jika ada)
+          // Tulis baris ODC
           if (g.odc) {
-            writeRow(g.odc, noUrut++, g.odc.device_id || g.odc.type || 'ODC')
+            // ODC record ada di database
+            writeRow(g.odc, noUrut++, g.odc.device_id || 'ODC')
+          } else if (g.indukId && g.odps.length > 0) {
+            // ODC tidak ada di DB → buat baris sintetis dari induk_odc ODP
+            const ref = g.odps[0]
+            const lat = ref.latitude ? Number(ref.latitude) : ''
+            const lon = ref.longitude ? Number(ref.longitude) : ''
+            const rowOdc = wsSebaran.getRow(rowIndexOdp)
+            rowOdc.height = dataRowHeightOdp
+            for (let c = 1; c <= 13; c++) rowOdc.getCell(c).style = dataStyleOdp[c]
+            rowOdc.getCell(1).value = noUrut++
+            rowOdc.getCell(2).value = g.indukId          // ID ODC dari field induk_odc
+            rowOdc.getCell(3).value = ref.desa || 'Tanpa Desa'
+            rowOdc.getCell(4).value = getSiteLabel(ref.site)
+            rowOdc.getCell(5).value = 'WIFIAN'
+            rowOdc.getCell(6).value = lon
+            rowOdc.getCell(7).value = lat
+            rowOdc.getCell(8).value = 1                  // ODC qty = 1
+            rowOdc.getCell(9).value = null
+            rowOdc.getCell(10).value = null
+            rowOdc.getCell(11).value = null
+            rowOdc.getCell(12).value = null
+            rowOdc.getCell(13).value = null
+            rowOdc.getCell(10).fill = { type: 'pattern', pattern: 'none' }
+            rowOdc.getCell(11).fill = { type: 'pattern', pattern: 'none' }
+            lastDataRowOdp = rowIndexOdp
+            rowIndexOdp++
           }
 
           // Tulis baris setiap ODP dalam grup
           g.odps.forEach(odp => {
-            writeRow(odp, noUrut++, odp.device_id || odp.type || 'ODP')
+            writeRow(odp, noUrut++, odp.device_id || 'ODP')
           })
 
           // Baris kosong sebagai pemisah antar grup ODC
