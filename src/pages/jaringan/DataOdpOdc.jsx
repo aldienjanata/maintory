@@ -954,6 +954,7 @@ export default function DataOdpOdc() {
 
           let desa = String(r['Desa/Kelurahan'] || r['DESA/KELURAHAN'] || r['Desa'] || r['desa'] || '').toUpperCase()
           let kecamatan = String(r['Kecamatan'] || r['kecamatan'] || '').toUpperCase()
+          let induk_odc = String(r['Induk ODC'] || r['INDUK ODC'] || '')
           let divisi = String(r['DEIVISI'] || r['DIVISI'] || '')
           let jenis_box = String(r['Jenis Box'] || r['JENIS BOX'] || r['Box'] || r['BOX'] || '')
           let kapasitas = String(r['Kapasitas'] || r['KAPASITAS'] || '')
