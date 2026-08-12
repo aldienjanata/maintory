@@ -865,7 +865,7 @@ export default function DataOdpOdc() {
   const handleDownloadTemplate = () => {
     const template = [
       {
-        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODP', 'Induk ODC': '1', 'Jenis Box': 'Box 8', 'Kapasitas': '8 Port',
+        'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODP', 'Induk ODC': 'NAT/BMS/MUJUR/ODC/001', 'Jenis Box': 'Box 8', 'Kapasitas': '8 Port',
         'Jenis Kabel Power': '1C', 'Core Power': 'Core 1-8', 'PON': 'PON 1/3', 'Jarak ke OLT/Server (m)': '1.500',
         'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'CILACAP',
         'Kecamatan': 'KROYA', 'Desa/Kelurahan': 'MUJUR', 'Jalan/Gang/Dusun': 'Gg. BIMA',
@@ -874,7 +874,7 @@ export default function DataOdpOdc() {
         'Longitude ( Decimal )': '',
         'Latitude ( dms )': `7°36'52.20"S`,
         'Longitude ( dms )': `109°15'43.10"E`,
-        'Keterangan': 'Contoh ODP: Induk ODC diisi angka 1 (akan mencari ODC 001 di desa tsb)'
+        'Keterangan': 'Induk ODC diisi full ID ODC (mis: NAT/BMS/MUJUR/ODC/001) atau cukup angka 1 = otomatis cari ODC/001 di desa tsb'
       },
       {
         'Site': 'BANYUMAS', 'Jenis ODP/ODC': 'ODC', 'Induk ODC': '', 'Jenis Box': 'Box 144', 'Kapasitas': '144 Port',
@@ -1084,16 +1084,19 @@ export default function DataOdpOdc() {
         
         let deviceId = row.device_id
         if (!deviceId) {
-           let parentOdcId = null
-           if (row.type === 'ODP' && row.induk_odc) {
-              const odcNoStr = String(row.induk_odc).padStart(3, '0')
-              if (String(row.induk_odc).includes('/ODC/')) {
-                 parentOdcId = row.induk_odc
-              } else {
-                 parentOdcId = idFormat.replace(/{SITE_CODE}/g, siteCode).replace(/{DESA}/g, desaSlug).replace(/{TYPE}/g, 'ODC').replace(/{NO}/g, odcNoStr)
-              }
-           }
-           deviceId = generateDeviceId(row.site, row.desa, row.type, payloadDevices, idFormat, parentOdcId)
+          let parentOdcId = null
+          if (row.type === 'ODP' && row.induk_odc) {
+            const rawInduk = String(row.induk_odc).trim()
+            // Jika sudah berupa full ID (mengandung '/'), pakai langsung
+            if (rawInduk.includes('/')) {
+              parentOdcId = rawInduk
+            } else {
+              // Jika berupa angka saja, bangun full ID dari format
+              const odcNoStr = rawInduk.padStart(3, '0')
+              parentOdcId = idFormat.replace(/{SITE_CODE}/g, siteCode).replace(/{DESA}/g, desaSlug).replace(/{TYPE}/g, 'ODC').replace(/{NO}/g, odcNoStr)
+            }
+          }
+          deviceId = generateDeviceId(row.site, row.desa, row.type, payloadDevices, idFormat, parentOdcId)
         }
 
         payloadDevices.push({
@@ -1101,7 +1104,14 @@ export default function DataOdpOdc() {
         })
 
         return {
-          site: row.site, type: row.type, device_id: deviceId, parent_odc: row.induk_odc || null,
+          site: row.site, type: row.type, device_id: deviceId,
+          // Simpan full ID ODC sebagai parent_odc
+          parent_odc: row.induk_odc
+            ? (String(row.induk_odc).trim().includes('/')
+                ? String(row.induk_odc).trim()
+                : (() => { const siteCode2 = SITE_CODE[row.site]||'BMS'; const desaSlug2 = row.desa.toUpperCase().replace(/\s+/g,'_').replace(/[^A-Z0-9_]/g,'').substring(0,15); return idFormat.replace(/{SITE_CODE}/g,siteCode2).replace(/{DESA}/g,desaSlug2).replace(/{TYPE}/g,'ODC').replace(/{NO}/g,String(row.induk_odc).trim().padStart(3,'0')) })()
+              )
+            : null,
           provinsi: row.provinsi, kapasitas: row.kapasitas || null, divisi: row.divisi || null, 
           jenis_box: row.jenis_box || null, jenis_kabel_power: row.jenis_kabel_power || null, 
           core_power: row.core_power || null, pon: row.pon || null, jarak_ke_olt: row.jarak_ke_olt || null,
@@ -1502,11 +1512,11 @@ export default function DataOdpOdc() {
                   </div>
                   {form.type === 'ODP' && (
                     <div>
-                      <label className="form-label">Induk ODC (Opsional)</label>
+                      <label className="form-label">Induk ODC <span style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: 400 }}>(full ID ODC)</span></label>
                       <select className="form-input" value={form.parent_odc} onChange={e => setForm(f => ({ ...f, parent_odc: e.target.value }))}>
                         <option value="">Tidak ada induk / Standar</option>
-                        {devices.filter(d => d.type === 'ODC' && d.desa?.toUpperCase() === form.desa?.toUpperCase() && d.site === form.site).map(odc => (
-                          <option key={odc.id} value={odc.device_id}>{odc.device_id}</option>
+                        {devices.filter(d => d.type === 'ODC' && d.site === form.site).sort((a,b) => (a.desa||'').localeCompare(b.desa||'')).map(odc => (
+                          <option key={odc.id} value={odc.device_id}>{odc.device_id} — {odc.desa || '-'}{odc.kecamatan ? `, ${odc.kecamatan}` : ''}</option>
                         ))}
                       </select>
                     </div>
