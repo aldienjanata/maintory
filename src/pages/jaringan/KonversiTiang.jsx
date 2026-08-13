@@ -635,7 +635,11 @@ export default function KonversiTiang() {
 
         // Terapkan style dari template data row
         for (let c = 1; c <= 12; c++) {
-          row.getCell(c).style = dataStyle[c]
+          const cell = row.getCell(c)
+          cell.style = dataStyle[c] || {}
+          if (!dataStyle[c]?.fill) {
+            cell.fill = { type: 'pattern', pattern: 'none' }
+          }
         }
 
         row.getCell(1).value = idx + 1
@@ -832,7 +836,13 @@ export default function KonversiTiang() {
           const isOdc = p.type === 'ODC'
           const row = wsSebaran.getRow(rowIndexOdp)
           row.height = dataRowHeightOdp
-          for (let c = 1; c <= 13; c++) row.getCell(c).style = dataStyleOdp[c]
+          for (let c = 1; c <= 13; c++) {
+            const cell = row.getCell(c)
+            cell.style = dataStyleOdp[c] || {}
+            if (!dataStyleOdp[c]?.fill) {
+              cell.fill = { type: 'pattern', pattern: 'none' }
+            }
+          }
           row.getCell(1).value = nourut
           row.getCell(2).value = overrideJenis !== undefined ? overrideJenis : (p.device_id || '')
           row.getCell(3).value = p.desa || 'Tanpa Desa'
@@ -872,7 +882,13 @@ export default function KonversiTiang() {
             const lon = ref.longitude ? Number(ref.longitude) : ''
             const rowOdc = wsSebaran.getRow(rowIndexOdp)
             rowOdc.height = dataRowHeightOdp
-            for (let c = 1; c <= 13; c++) rowOdc.getCell(c).style = dataStyleOdp[c]
+            for (let c = 1; c <= 13; c++) {
+              const cell = rowOdc.getCell(c)
+              cell.style = dataStyleOdp[c] || {}
+              if (!dataStyleOdp[c]?.fill) {
+                cell.fill = { type: 'pattern', pattern: 'none' }
+              }
+            }
             rowOdc.getCell(1).value = noUrut++
             rowOdc.getCell(2).value = g.indukId          // ID ODC dari field induk_odc
             rowOdc.getCell(3).value = ref.desa || 'Tanpa Desa'
