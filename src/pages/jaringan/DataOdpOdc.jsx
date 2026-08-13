@@ -103,6 +103,21 @@ function generateDeviceId(site, desa, type, existingDevices, formatTemplate = DE
     .replace(/{NO}/g, no)
 }
 
+// ── PON sort helpers ────────────────────────────────────────────────────────
+function parsePon(pon) {
+  if (!pon) return [Infinity]
+  const nums = pon.replace(/[^0-9\/]/g, '').split('/').map(Number)
+  return nums.length > 0 ? nums : [Infinity]
+}
+function comparePon(a, b) {
+  const pA = parsePon(a.pon), pB = parsePon(b.pon)
+  for (let i = 0; i < Math.max(pA.length, pB.length); i++) {
+    const diff = (pA[i] ?? 0) - (pB[i] ?? 0)
+    if (diff !== 0) return diff
+  }
+  return 0
+}
+
 function extractCoordsFromUrl(url) {
   if (!url) return null
   const m = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
@@ -1119,6 +1134,17 @@ export default function DataOdpOdc() {
       }
 
       showProgress('Menyiapkan ID', `Database punya ${freshPoles.length} odpOdc. Membuat device ID...`, 15)
+
+      // Urutkan baris import: desa → ODC sebelum ODP → PON terkecil
+      // supaya ID 001 dimulai dari PON terkecil per desa
+      const typeOrder = { ODC: 0, ODP: 1 }
+      valid.sort((a, b) => {
+        const dA = (a.desa || '').localeCompare(b.desa || '')
+        if (dA !== 0) return dA
+        const tDiff = (typeOrder[a.type] ?? 2) - (typeOrder[b.type] ?? 2)
+        if (tDiff !== 0) return tDiff
+        return comparePon(a, b)
+      })
       
       const payloadDevices = [...freshPoles]
       const payloads = valid.map(row => {
@@ -1215,7 +1241,15 @@ export default function DataOdpOdc() {
     
     try {
       const counts = {}
-      const sortedPoles = [...devices].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      // Urutkan berdasarkan desa → ODC sebelum ODP → PON terkecil
+      const typeOrd = { ODC: 0, ODP: 1 }
+      const sortedPoles = [...devices].sort((a, b) => {
+        const dA = (a.desa || '').localeCompare(b.desa || '')
+        if (dA !== 0) return dA
+        const tDiff = (typeOrd[a.type] ?? 2) - (typeOrd[b.type] ?? 2)
+        if (tDiff !== 0) return tDiff
+        return comparePon(a, b)
+      })
       
       const payloads = sortedPoles.map(p => {
         const key = `${p.site}_${(p.desa || '').toUpperCase().trim()}_${p.type}`
