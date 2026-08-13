@@ -86,9 +86,14 @@ export function AuthProvider({ children }) {
   async function login(username, password) {
     const cleanUsername = username.trim().toLowerCase()
     const email = `${cleanUsername}@maintory.local`
+    
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
-    if (error) throw new Error(error.message || 'Username atau password salah')
+    if (error) {
+      // Delay 1.5 detik jika gagal untuk memitigasi brute-force dari UI
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      throw new Error(error.message || 'Username atau password salah')
+    }
 
     const { data: userData } = await supabase
       .from('users')
