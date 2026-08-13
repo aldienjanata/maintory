@@ -761,26 +761,7 @@ export default function KonversiTiang() {
         
         // 7. Tulis data
         let rowIndexOdp = 6
-        let currentDesaOdp = null
-        let desaStartRowOdp = 6
         let lastDataRowOdp = 6
-        
-        const finalizeDesaOdp = (endRow) => {
-          if (endRow >= desaStartRowOdp) {
-            if (endRow > desaStartRowOdp) {
-              wsSebaran.mergeCells(`J${desaStartRowOdp}:J${endRow}`)
-              wsSebaran.mergeCells(`K${desaStartRowOdp}:K${endRow}`)
-            }
-            const cellJ = wsSebaran.getCell(`J${desaStartRowOdp}`)
-            const cellK = wsSebaran.getCell(`K${desaStartRowOdp}`)
-            cellJ.value = { formula: `SUM(H${desaStartRowOdp}:H${endRow})` }
-            cellK.value = { formula: `SUM(I${desaStartRowOdp}:I${endRow})` }
-            ;[cellJ, cellK].forEach(cell => {
-              cell.alignment = { vertical: 'middle', horizontal: 'center' }
-              cell.fill = { type: 'pattern', pattern: 'none' }
-            })
-          }
-        }
         
         // ── Kelompokkan per ODC → ODP ──────────────────────────────────────
         const odcList = allOdpOdc.filter(p => p.type === 'ODC')
@@ -867,12 +848,7 @@ export default function KonversiTiang() {
 
         let noUrut = 1
         groups.forEach(g => {
-          const desa = g.desa
-          if (desa !== currentDesaOdp) {
-            if (currentDesaOdp !== null) finalizeDesaOdp(lastDataRowOdp)
-            currentDesaOdp = desa
-            desaStartRowOdp = rowIndexOdp
-          }
+          const groupStartRow = rowIndexOdp
 
           // Tulis baris ODC
           if (g.odc) {
@@ -916,14 +892,72 @@ export default function KonversiTiang() {
             writeRow(odp, noUrut++, odp.device_id || 'ODP')
           })
 
+          const groupEndRow = rowIndexOdp - 1
+          
+          // Merge J & K per grup ODC
+          if (groupEndRow >= groupStartRow) {
+            if (groupEndRow > groupStartRow) {
+              wsSebaran.mergeCells(`J${groupStartRow}:J${groupEndRow}`)
+              wsSebaran.mergeCells(`K${groupStartRow}:K${groupEndRow}`)
+            }
+            const cellJ = wsSebaran.getCell(`J${groupStartRow}`)
+            const cellK = wsSebaran.getCell(`K${groupStartRow}`)
+            cellJ.value = { formula: `SUM(H${groupStartRow}:H${groupEndRow})` }
+            cellK.value = { formula: `SUM(I${groupStartRow}:I${groupEndRow})` }
+            ;[cellJ, cellK].forEach(cell => {
+              cell.alignment = { vertical: 'middle', horizontal: 'center' }
+              cell.fill = { type: 'pattern', pattern: 'none' }
+            })
+          }
+
           // Baris kosong sebagai pemisah antar grup ODC
+          const emptyRow = wsSebaran.getRow(rowIndexOdp)
+          emptyRow.height = dataRowHeightOdp
+          for (let c = 1; c <= 13; c++) {
+            const cell = emptyRow.getCell(c)
+            cell.value = null
+            cell.border = {} // Hilangkan border di baris kosong
+            cell.fill = { type: 'pattern', pattern: 'none' }
+          }
           rowIndexOdp++
         })
 
-        if (currentDesaOdp !== null) finalizeDesaOdp(lastDataRowOdp)
+        // 8. Tambahkan baris TOTAL di akhir data ODP/ODC
+        const tr1 = rowIndexOdp
+        const tr2 = rowIndexOdp + 1
+        ;[tr1, tr2].forEach(r => {
+          const row = wsSebaran.getRow(r)
+          row.height = dataRowHeightOdp // atau tinggi khusus total
+          for (let c = 1; c <= 13; c++) {
+            row.getCell(c).style = dataStyleOdp[c] || {} // bisa pakai style baris terakhir
+            row.getCell(c).fill = { type: 'pattern', pattern: 'none' }
+          }
+        })
+        wsSebaran.mergeCells(`A${tr1}:G${tr2}`)
+        wsSebaran.getCell(`A${tr1}`).value = 'TOTAL'
+        wsSebaran.getCell(`A${tr1}`).alignment = { horizontal: 'center', vertical: 'middle' }
+        wsSebaran.getCell(`A${tr1}`).font = { bold: true, italic: true, size: 11 }
+
+        wsSebaran.mergeCells(`H${tr1}:H${tr2}`)
+        wsSebaran.getCell(`H${tr1}`).value = { formula: `SUM(H6:H${lastDataRowOdp})` }
+        wsSebaran.getCell(`H${tr1}`).alignment = { horizontal: 'center', vertical: 'middle' }
+
+        wsSebaran.mergeCells(`I${tr1}:I${tr2}`)
+        wsSebaran.getCell(`I${tr1}`).value = { formula: `SUM(I6:I${lastDataRowOdp})` }
+        wsSebaran.getCell(`I${tr1}`).alignment = { horizontal: 'center', vertical: 'middle' }
+
+        wsSebaran.mergeCells(`J${tr1}:J${tr2}`)
+        wsSebaran.getCell(`J${tr1}`).value = { formula: `SUM(J6:J${lastDataRowOdp})` }
+        wsSebaran.getCell(`J${tr1}`).alignment = { horizontal: 'center', vertical: 'middle' }
+
+        wsSebaran.mergeCells(`K${tr1}:K${tr2}`)
+        wsSebaran.getCell(`K${tr1}`).value = { formula: `SUM(K6:K${lastDataRowOdp})` }
+        wsSebaran.getCell(`K${tr1}`).alignment = { horizontal: 'center', vertical: 'middle' }
+
+        wsSebaran.mergeCells(`L${tr1}:M${tr2}`) // Kolom sisanya dikosongkan/merge jika perlu
 
         if (!wsSebaran.pageSetup) wsSebaran.pageSetup = {}
-        wsSebaran.pageSetup.printArea = `A1:M${lastDataRowOdp}`
+        wsSebaran.pageSetup.printArea = `A1:M${tr2}`
       }
 
       toast.loading('Menyimpan file...', { id: 'exportFO' })
