@@ -1671,7 +1671,7 @@ export default function DataOdpOdc() {
                   />
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2px' }}><span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>🔌 Detail Jaringan Kabel</span></div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '14px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <div>
                     <label className="form-label">Jenis Kabel Power</label>
                     <select className="form-input" value={form.jenis_kabel_power} onChange={e => setForm(f => ({ ...f, jenis_kabel_power: e.target.value }))}>
