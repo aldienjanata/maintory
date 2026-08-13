@@ -796,10 +796,18 @@ export default function KonversiTiang() {
         // ODPs yang tidak punya ODC cocok → kelompokkan berdasarkan induk_odc string
         const orphanOdps = odpList.filter(o => !matchedOdpSet.has(o.id))
         const orphanByInduk = new Map()
+        
+        const extractInduk = (id) => {
+          if (!id) return ''
+          const match = id.match(/(.*\/ODC\/\d+)\/ODP/)
+          return match ? match[1] : ''
+        }
+
         orphanOdps.forEach(o => {
-          const key = o.induk_odc || `__solo_${o.id}`
+          const inferredInduk = o.induk_odc || extractInduk(o.device_id)
+          const key = inferredInduk || `__solo_${o.id}`
           if (!orphanByInduk.has(key)) {
-            orphanByInduk.set(key, { odc: null, indukId: o.induk_odc || '', odps: [], desa: o.desa || 'Tanpa Desa' })
+            orphanByInduk.set(key, { odc: null, indukId: inferredInduk, odps: [], desa: o.desa || 'Tanpa Desa' })
           }
           orphanByInduk.get(key).odps.push(o)
         })
