@@ -694,6 +694,9 @@ export default function KonversiTiang() {
       ws.getCell(`L${tr1}`).value = { formula: `SUM(L6:L${lastDataRow})` }
       ws.getCell(`L${tr1}`).alignment = { horizontal: 'center', vertical: 'middle' }
 
+      if (!ws.pageSetup) ws.pageSetup = {}
+      ws.pageSetup.printArea = `A1:L${tr2}`
+
       // 7. Bersihkan ISI (bukan struktur) sheet lain — mulai dari baris 6 agar header baris 4 & 5 tidak terhapus
       const wsKabel = workbook.getWorksheet('Data Jaringan Kabel Fiber Optik')
       if (wsKabel) {
@@ -918,6 +921,9 @@ export default function KonversiTiang() {
         })
 
         if (currentDesaOdp !== null) finalizeDesaOdp(lastDataRowOdp)
+
+        if (!wsSebaran.pageSetup) wsSebaran.pageSetup = {}
+        wsSebaran.pageSetup.printArea = `A1:M${lastDataRowOdp}`
       }
 
       toast.loading('Menyimpan file...', { id: 'exportFO' })
