@@ -1057,8 +1057,8 @@ export default function KonversiTiang() {
           <div style={{ display: 'flex', gap: '10px', padding: '14px 16px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 'var(--radius-md)' }}>
             <Info size={18} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '1px' }} />
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.7' }}>
-              Ambil seluruh data tiang aktif dari database dan masukkan otomatis ke dalam format file Excel <strong>DATA JARINGAN FIBER OPTIK</strong> untuk dikirim ke pusat.
-              Kolom Total T7 dan T9 akan dihitung otomatis per desa.
+              Ambil seluruh data aset jaringan aktif (Tiang, ODP, dan ODC) dari database dan masukkan otomatis ke dalam format file Excel <strong>DATA JARINGAN FIBER OPTIK</strong> untuk dikirim ke pusat.
+              Kolom perhitungan total akan dikalkulasi secara otomatis per grup.
             </div>
           </div>
 
@@ -1066,7 +1066,7 @@ export default function KonversiTiang() {
             <div style={{ textAlign: 'center' }}>
               <Download size={48} style={{ color: 'var(--accent)', opacity: 0.2, marginBottom: '16px' }} />
               <h3 style={{ margin: '0 0 8px', fontSize: '16px' }}>Export ke Format Pusat</h3>
-              <p style={{ margin: '0 0 24px', fontSize: '13px', color: 'var(--text-secondary)' }}>Download seluruh data tiang dalam format standarisasi Excel.</p>
+              <p style={{ margin: '0 0 24px', fontSize: '13px', color: 'var(--text-secondary)' }}>Download seluruh data jaringan dalam format standarisasi Excel.</p>
               
               <button
                 className="btn btn-primary"
