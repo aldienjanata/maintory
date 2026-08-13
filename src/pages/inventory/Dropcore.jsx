@@ -42,7 +42,7 @@ export default function Dropcore() {
 
   const fetchHaspels = async () => {
     setLoading(true)
-    const { data, error } = await supabase.from('dropcore_haspels').select('*').order('date_in', { ascending: false })
+    const { data, error } = await supabase.from('dropcore_haspels').select('*').order('date_in', { ascending: false }).limit(1000)
     if (!error) setHaspels(data || [])
     setLoading(false)
   }

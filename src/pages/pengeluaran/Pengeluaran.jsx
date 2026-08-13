@@ -116,12 +116,12 @@ export default function Pengeluaran() {
   const fetchAll = async () => {
     setLoading(true)
     const [expRes, techRes, snRes, haspelRes, adssRes, schedRes, whRes] = await Promise.all([
-      supabase.from('daily_expenses').select('*, items:expense_items(*, warehouse_item:warehouses(item_name), haspel:dropcore_haspels(haspel_code, remaining_meters, used_meters), adss:adss_haspels(haspel_code, type, used_meters), sn:serial_numbers(serial_number))').order('expense_date', { ascending: false }),
+      supabase.from('daily_expenses').select('*, items:expense_items(*, warehouse_item:warehouses(item_name), haspel:dropcore_haspels(haspel_code, remaining_meters, used_meters), adss:adss_haspels(haspel_code, type, used_meters), sn:serial_numbers(serial_number))').order('expense_date', { ascending: false }).limit(1000),
       supabase.from('users').select('id, full_name, username').in('role', ['admin', 'teknisi']).eq('is_active', true),
       supabase.from('serial_numbers').select('id, serial_number, brand:ont_brands(brand_name), type:ont_types(type_name)').eq('status', 'tersedia'),
       supabase.from('dropcore_haspels').select('id, haspel_code, type, initial_meters, used_meters').eq('status', 'tersedia'),
       supabase.from('adss_haspels').select('id, haspel_code, type, tube_type, brand, initial_meters, used_meters').eq('status', 'tersedia'),
-      supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }),
+      supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }).limit(500),
       supabase.from('warehouses').select('id, item_name, initial_stock').eq('item_type', 'other')
     ])
     if (!expRes.error) setExpenses(expRes.data || [])

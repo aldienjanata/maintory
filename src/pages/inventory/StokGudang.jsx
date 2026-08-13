@@ -49,7 +49,7 @@ export default function StokGudang() {
   const fetchItems = async () => {
     setLoading(true)
     const [whRes, snRes, dcRes, expItemRes] = await Promise.all([
-      supabase.from('warehouses').select('*').order('item_name'),
+      supabase.from('warehouses').select('*').order('item_name').limit(1000),
       supabase.from('serial_numbers').select('status'),
       supabase.from('dropcore_haspels').select('type, status, initial_meters, used_meters, remaining_meters'),
       supabase.from('expense_items').select('warehouse_item_id, quantity').eq('item_type', 'other')

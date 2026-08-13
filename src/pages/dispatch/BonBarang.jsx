@@ -148,8 +148,9 @@ export default function BonBarang() {
         supabase
           .from('dispatches')
           .select('*, items:dispatch_items(*, sn:serial_numbers(serial_number), haspel:dropcore_haspels(*), adss:adss_haspels(*), warehouse_item:warehouses(item_name))')
-          .order('created_at', { ascending: false }),
-        supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .limit(1000),
+        supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }).limit(500),
         supabase.from('users').select('id, full_name, role').in('role', ['admin', 'teknisi', 'backbone']).eq('is_active', true),
         supabase.from('serial_numbers').select('id, serial_number').eq('status', 'tersedia'),
         supabase.from('dropcore_haspels').select('id, haspel_code, initial_meters, used_meters, type').in('status', ['tersedia']),

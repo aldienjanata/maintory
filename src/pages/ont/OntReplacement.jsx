@@ -119,7 +119,7 @@ export default function OntReplacement() {
   const fetchAll = async () => {
     setLoading(true)
     const [res, techRes] = await Promise.all([
-      supabase.from('ont_replacements').select('*, new_sn:serial_numbers(serial_number, brand:ont_brands(brand_name), type:ont_types(type_name))').order('replacement_date', { ascending: false }),
+      supabase.from('ont_replacements').select('*, new_sn:serial_numbers(serial_number, brand:ont_brands(brand_name), type:ont_types(type_name))').order('replacement_date', { ascending: false }).limit(1000),
       supabase.from('users').select('id, full_name').in('role', ['admin', 'teknisi']).eq('is_active', true)
     ])
     if (!res.error) setItems(res.data || [])

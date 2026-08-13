@@ -42,10 +42,11 @@ export default function Adss() {
 
   const fetchHaspels = async () => {
     setLoading(true)
-    const { data, error } = await supabase.from('adss_haspels').select('*').order('date_in', { ascending: false })
+    const { data, error } = await supabase.from('adss_haspels').select('*').order('date_in', { ascending: false }).limit(1000)
     if (!error) setHaspels(data || [])
     setLoading(false)
   }
+
 
   const generateNextCode = (typeToGenerate, currentHaspels = haspels) => {
     const typePrefix = `A${typeToGenerate.toUpperCase()}-`

@@ -170,9 +170,9 @@ export default function Dismantle() {
     setLoading(true)
     setLoadingPickups(true)
     const [res, techRes, pickupRes] = await Promise.all([
-      supabase.from('dismantles').select('*').order('date_input', { ascending: false }),
+      supabase.from('dismantles').select('*').order('date_input', { ascending: false }).limit(1000),
       supabase.from('users').select('id, full_name').in('role', ['admin', 'teknisi']).eq('is_active', true),
-      supabase.from('dismantle_pickups').select('*').order('pickup_date', { ascending: false }),
+      supabase.from('dismantle_pickups').select('*').order('pickup_date', { ascending: false }).limit(1000),
     ])
     if (!res.error) setItems(res.data || [])
     if (!techRes.error) setTechnicians(techRes.data || [])
@@ -971,7 +971,7 @@ export default function Dismantle() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">No HP</label>
-                  <input className="form-input" placeholder="08xx" value={form.phone_number} onChange={e => setForm(f => ({ ...f, phone_number: e.target.value }))} />
+                  <input type="tel" className="form-input" placeholder="08xx" value={form.phone_number} onChange={e => setForm(f => ({ ...f, phone_number: e.target.value }))} />
                 </div>
               </div>
               <div className="form-group">

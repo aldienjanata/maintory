@@ -60,6 +60,7 @@ export default function Maintenance() {
       .from('maintenance_tickets')
       .select('*')
       .order('created_at', { ascending: false })
+      .limit(1000)
       
     if (error) {
       toast.error('Gagal mengambil data maintenance')
@@ -68,6 +69,7 @@ export default function Maintenance() {
     }
     if (!isQuiet) setLoading(false)
   }
+
 
   const fetchTechnicians = async () => {
     const { data, error } = await supabase

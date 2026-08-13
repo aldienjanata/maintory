@@ -44,7 +44,7 @@ export default function SerialNumber() {
   const fetchAll = async () => {
     setLoading(true)
     const [snRes, brandRes] = await Promise.all([
-      supabase.from('serial_numbers').select('*, brand:ont_brands(brand_name), type:ont_types(type_name)').order('date_in', { ascending: false }),
+      supabase.from('serial_numbers').select('*, brand:ont_brands(brand_name), type:ont_types(type_name)').order('date_in', { ascending: false }).limit(2000),
       supabase.from('ont_brands').select('*').order('brand_name')
     ])
     if (!snRes.error) setItems(snRes.data || [])
