@@ -821,6 +821,13 @@ export default function KonversiTiang() {
         const getSiteLabel = (site) =>
           site === 'cilacap' ? 'CILACAP' : site === 'cilacap_herman' ? 'CILACAP (HERMAN)' : 'BANYUMAS'
 
+        const thinBorder = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        }
+
         const writeRow = (p, nourut, overrideJenis) => {
           const lat = p.latitude ? Number(p.latitude) : ''
           const lon = p.longitude ? Number(p.longitude) : ''
@@ -830,6 +837,7 @@ export default function KonversiTiang() {
           for (let c = 1; c <= 13; c++) {
             const cell = row.getCell(c)
             cell.style = dataStyleOdp[c] || {}
+            cell.border = thinBorder
             if (!dataStyleOdp[c]?.fill) {
               cell.fill = { type: 'pattern', pattern: 'none' }
             }
@@ -871,6 +879,7 @@ export default function KonversiTiang() {
             for (let c = 1; c <= 13; c++) {
               const cell = rowOdc.getCell(c)
               cell.style = dataStyleOdp[c] || {}
+              cell.border = thinBorder
               if (!dataStyleOdp[c]?.fill) {
                 cell.fill = { type: 'pattern', pattern: 'none' }
               }
@@ -923,6 +932,7 @@ export default function KonversiTiang() {
           for (let c = 1; c <= 13; c++) {
             const cell = emptyRow.getCell(c)
             cell.style = dataStyleOdp[c] || {}
+            cell.border = thinBorder
             cell.value = null
             if (!dataStyleOdp[c]?.fill) {
               cell.fill = { type: 'pattern', pattern: 'none' }
