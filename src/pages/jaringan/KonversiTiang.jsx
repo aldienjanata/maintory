@@ -788,7 +788,8 @@ export default function KonversiTiang() {
 
         // Grup berdasarkan ODC yang ada di data
         odcList.forEach(odc => {
-          const odps = odpList.filter(o => o.induk_odc === odc.device_id)
+          const odcId = String(odc.device_id || '').trim()
+          const odps = odpList.filter(o => String(o.parent_odc || '').trim() === odcId)
           odps.forEach(o => matchedOdpSet.add(o.id))
           groups.push({ odc, odps, desa: odc.desa || 'Tanpa Desa' })
         })
@@ -804,7 +805,7 @@ export default function KonversiTiang() {
         }
 
         orphanOdps.forEach(o => {
-          const inferredInduk = o.induk_odc || extractInduk(o.device_id)
+          const inferredInduk = o.parent_odc || extractInduk(o.device_id)
           const key = inferredInduk || `__solo_${o.id}`
           if (!orphanByInduk.has(key)) {
             orphanByInduk.set(key, { odc: null, indukId: inferredInduk, odps: [], desa: o.desa || 'Tanpa Desa' })
