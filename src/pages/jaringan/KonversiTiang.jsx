@@ -714,6 +714,13 @@ export default function KonversiTiang() {
         }
         const dataRowHeightOdp = wsSebaran.getRow(6).height || 15
         
+        // 1b. Simpan style baris TOTAL dari template (asumsi baris 414)
+        const totalStyleOdp = {}
+        for (let c = 1; c <= 13; c++) {
+          totalStyleOdp[c] = JSON.parse(JSON.stringify(wsSebaran.getRow(414).getCell(c).style || {}))
+        }
+        const totalRowHeightOdp = wsSebaran.getRow(414).height || 15
+        
         // 2. Simpan style & value baris 4 & 5 (header)
         const headerStylesOdp = { 4: {}, 5: {} }
         const headerValuesOdp = { 4: {}, 5: {} }
@@ -915,9 +922,11 @@ export default function KonversiTiang() {
           emptyRow.height = dataRowHeightOdp
           for (let c = 1; c <= 13; c++) {
             const cell = emptyRow.getCell(c)
+            cell.style = dataStyleOdp[c] || {}
             cell.value = null
-            cell.border = {} // Hilangkan border di baris kosong
-            cell.fill = { type: 'pattern', pattern: 'none' }
+            if (!dataStyleOdp[c]?.fill) {
+              cell.fill = { type: 'pattern', pattern: 'none' }
+            }
           }
           rowIndexOdp++
         })
@@ -927,10 +936,9 @@ export default function KonversiTiang() {
         const tr2 = rowIndexOdp + 1
         ;[tr1, tr2].forEach(r => {
           const row = wsSebaran.getRow(r)
-          row.height = dataRowHeightOdp // atau tinggi khusus total
+          row.height = totalRowHeightOdp
           for (let c = 1; c <= 13; c++) {
-            row.getCell(c).style = dataStyleOdp[c] || {} // bisa pakai style baris terakhir
-            row.getCell(c).fill = { type: 'pattern', pattern: 'none' }
+            row.getCell(c).style = totalStyleOdp[c] || {}
           }
         })
         wsSebaran.mergeCells(`A${tr1}:G${tr2}`)
