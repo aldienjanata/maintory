@@ -20,6 +20,7 @@ const PRESETS = {
     area: 'Kecamatan Sampang, Nusajati, Ketanggung dan sekitarnya.',
     etr: 'Estimasi maintenance memakan waktu kurang lebih 2–3 jam kerja.',
     cause: 'Pembaruan perangkat server sentral untuk meningkatkan kapasitas jaringan internet.',
+    footerText: 'MOHON MAAF ATAS KETIDAKNYAMANAN INI — TIM KAMI SEDANG BERUSAHA MELAKUKAN PERBAIKAN SECEPATNYA 🙏🏻',
   },
   gangguan: {
     titleTop: 'INFORMASI',
@@ -31,6 +32,7 @@ const PRESETS = {
     area: 'Kecamatan Sampang, Nusajati, Ketanggung dan sekitarnya.',
     etr: 'Estimasi perbaikan memakan waktu kurang lebih 2–3 jam kerja.',
     cause: 'Kabel fiber optik utama terputus akibat galian proyek perbaikan jalan raya.',
+    footerText: 'MOHON MAAF ATAS KETIDAKNYAMANAN INI — TIM KAMI SEDANG BERUSAHA MELAKUKAN PERBAIKAN SECEPATNYA 🙏🏻',
   },
   selesai: {
     titleTop: 'GANGGUAN',
@@ -42,6 +44,7 @@ const PRESETS = {
     area: 'Seluruh wilayah terdampak telah pulih.',
     etr: '',
     cause: '',
+    footerText: 'TERIMA KASIH ATAS KESABARAN DAN KEPERCAYAAN ANDA KEPADA LAYANAN KAMI 🙏🏻',
   },
 }
 
@@ -76,6 +79,7 @@ export default function BannerMaintenance() {
   const [area, setArea] = useState(PRESETS.maintenance.area)
   const [etr, setEtr] = useState(PRESETS.maintenance.etr)
   const [cause, setCause] = useState(PRESETS.maintenance.cause)
+  const [footerText, setFooterText] = useState(PRESETS.maintenance.footerText)
   const [date, setDate] = useState(() => {
     const d = new Date()
     return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -115,6 +119,7 @@ export default function BannerMaintenance() {
     setArea(p.area)
     setEtr(p.etr)
     setCause(p.cause)
+    setFooterText(p.footerText)
   }, [preset])
 
   const handlePhotoUpload = (e) => {
@@ -241,6 +246,9 @@ export default function BannerMaintenance() {
           </FormGroup>
           <FormGroup label="Estimasi Waktu">
             <input type="text" className="form-input" value={etr} onChange={e => setEtr(e.target.value)} placeholder="Kosongkan jika tidak ada" />
+          </FormGroup>
+          <FormGroup label="Teks Bawah Merah">
+            <textarea className="form-input" rows="2" value={footerText} onChange={e => setFooterText(e.target.value)} style={{ resize: 'vertical', minHeight: '54px' }} />
           </FormGroup>
         </div>
 
@@ -461,7 +469,7 @@ export default function BannerMaintenance() {
             <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 4, display: 'flex', height: '75px' }}>
               <div style={{ background: '#DC2626', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', fontSize: '17px', fontWeight: 800, padding: '0 20px', flex: 2, letterSpacing: '0.3px', textAlign: 'center', lineHeight: 1.3 }}>
                 <AlertTriangle size={24} fill="white" color="white" style={{ flexShrink: 0 }} />
-                <span>KAMI MOHON MAAF — TIM KAMI SEDANG BEKERJA SEMAKSIMAL MUNGKIN UNTUK ANDA 🙏🏻</span>
+                <span>{footerText}</span>
               </div>
               <div style={{ background: '#0EA5E9', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '18px', fontWeight: 700, padding: '0 20px', flex: 1 }}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
