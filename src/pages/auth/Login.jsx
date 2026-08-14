@@ -55,20 +55,7 @@ export default function Login() {
 
   return (
     <div className="login-page">
-      {/* Animated Background */}
-      <div className="login-bg-anim">
-        <div className="orb orb-1" />
-        <div className="orb orb-2" />
-        <div className="orb orb-3" />
-        <div className="grid-lines" />
-      </div>
-
-      {/* Floating particles */}
-      <div className="particles">
-        {[...Array(12)].map((_, i) => (
-          <div key={i} className={`particle particle-${i + 1}`} />
-        ))}
-      </div>
+      {/* Background is handled purely in CSS now */}
 
       {/* Login Card */}
       <div className="login-card">
