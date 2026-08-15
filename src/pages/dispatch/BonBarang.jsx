@@ -756,23 +756,65 @@ export default function BonBarang() {
       message: 'Yakin ingin membatalkan bon ini? Semua stok akan dikembalikan ke gudang.',
       onConfirm: async () => {
         setConfirmModal({ isOpen: false, onConfirm: null })
-        const ontR = [], dcR = [], adssR = [], whR = []
+        const ontR = [], whR = []
+        // Kelompokkan dropcore dan adss per haspel_id untuk mengembalikan meter
+        const dcMeterMap = {}, adssMeterMap = {}
+
         for (const it of dispatch.items) {
           if (it.item_type === 'ont') ontR.push(it.serial_number_id)
-          if (it.item_type === 'dropcore') dcR.push(it.haspel_id)
-          if (it.item_type === 'adss') adssR.push(it.adss_id)
+          if (it.item_type === 'dropcore') {
+            // Jika bon sudah selesai (sudah lapor pemakaian), kembalikan meter yang terpakai
+            // Jika bon masih sedang_dibawa, haspel belum dipotong meternya — cukup ubah status
+            if (dispatch.status === 'selesai') {
+              const metersUsed = Number(it.meters_used || 0)
+              if (!dcMeterMap[it.haspel_id]) dcMeterMap[it.haspel_id] = 0
+              dcMeterMap[it.haspel_id] += metersUsed
+            } else {
+              // Status masih sedang_dibawa → kembalikan status tersedia saja
+              if (!dcMeterMap[it.haspel_id]) dcMeterMap[it.haspel_id] = 0
+            }
+          }
+          if (it.item_type === 'adss') {
+            if (dispatch.status === 'selesai') {
+              const metersUsed = Number(it.meters_used || 0)
+              if (!adssMeterMap[it.adss_id]) adssMeterMap[it.adss_id] = 0
+              adssMeterMap[it.adss_id] += metersUsed
+            } else {
+              if (!adssMeterMap[it.adss_id]) adssMeterMap[it.adss_id] = 0
+            }
+          }
           if (it.item_type === 'other') whR.push({ id: it.warehouse_item_id, qty: it.quantity_dispatched })
         }
+
         if (ontR.length > 0) await supabase.from('serial_numbers').update({ status: 'tersedia' }).in('id', ontR)
-        if (dcR.length > 0) await supabase.from('dropcore_haspels').update({ status: 'tersedia' }).in('id', dcR)
-        if (adssR.length > 0) await supabase.from('adss_haspels').update({ status: 'tersedia' }).in('id', adssR)
+
+        // Kembalikan meter dropcore
+        for (const [haspelId, metersToReturn] of Object.entries(dcMeterMap)) {
+          const { data: hData } = await supabase.from('dropcore_haspels').select('initial_meters, used_meters').eq('id', haspelId).single()
+          if (hData) {
+            const newUsed = Math.max(0, Number(hData.used_meters || 0) - metersToReturn)
+            const newStatus = newUsed >= Number(hData.initial_meters) ? 'habis' : 'tersedia'
+            await supabase.from('dropcore_haspels').update({ used_meters: newUsed, status: newStatus }).eq('id', haspelId)
+          }
+        }
+
+        // Kembalikan meter adss
+        for (const [adssId, metersToReturn] of Object.entries(adssMeterMap)) {
+          const { data: hData } = await supabase.from('adss_haspels').select('initial_meters, used_meters').eq('id', adssId).single()
+          if (hData) {
+            const newUsed = Math.max(0, Number(hData.used_meters || 0) - metersToReturn)
+            const newStatus = newUsed >= Number(hData.initial_meters) ? 'habis' : 'tersedia'
+            await supabase.from('adss_haspels').update({ used_meters: newUsed, status: newStatus }).eq('id', adssId)
+          }
+        }
+
         for (const wh of whR) {
           const { data: wData } = await supabase.from('warehouses').select('initial_stock, stock_on_hold').eq('id', wh.id).single()
           if (wData) await supabase.from('warehouses').update({ initial_stock: Number(wData.initial_stock || 0) + Number(wh.qty), stock_on_hold: Math.max(0, Number(wData.stock_on_hold || 0) - Number(wh.qty)) }).eq('id', wh.id)
         }
         if (dispatch.schedule_id) await supabase.from('technician_schedules').update({ status: 'pending' }).eq('id', dispatch.schedule_id)
         await supabase.from('dispatches').delete().eq('id', dispatch.id)
-        toast.success('Bon berhasil dibatalkan')
+        toast.success('Bon berhasil dibatalkan dan stok dikembalikan')
         fetchData()
       }
     })

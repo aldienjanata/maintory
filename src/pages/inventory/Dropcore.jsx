@@ -115,8 +115,8 @@ export default function Dropcore() {
               log_date: form.date_in,
               item_type: 'dropcore',
               item_id: finalHaspelId,
-              quantity: form.initial_meters,
               action: 'isi_ulang_dropcore',
+              meters: Number(form.initial_meters),
               module: 'dropcore',
               user_id: profile.id,
               notes: form.note || 'Isi Ulang Haspel (Refill)'
