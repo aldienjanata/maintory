@@ -41,9 +41,11 @@ export default function Settings() {
 
   // Data Cleanup
   const [tableCounts, setTableCounts] = useState({})
+  const [tableSizes, setTableSizes] = useState({})
   const [dbSize, setDbSize] = useState(null)
   const [cleanupForm, setCleanupForm] = useState({ table: 'activity_logs', age: '3_months' })
   const [cleanupExecuting, setCleanupExecuting] = useState(false)
+  const [refreshingCounts, setRefreshingCounts] = useState(false)
 
   useEffect(() => {
     fetchUsers()
@@ -63,14 +65,47 @@ export default function Settings() {
     if (data) setBranchName(data.branch_name)
   }
 
+  // Perkiraan ukuran rata-rata per baris per tabel (dalam bytes)
+  const AVG_ROW_SIZE = {
+    activity_logs: 300,
+    dispatches: 600,
+    dispatch_items: 400,
+    daily_expenses: 400,
+    expense_items: 300,
+    maintenance_tickets: 800,
+    serial_numbers: 200,
+    dropcore_haspels: 250,
+    adss_haspels: 280,
+    dismantles: 600,
+    ont_replacements: 350,
+  }
+
+  const formatSize = (bytes) => {
+    if (bytes === undefined || bytes === null) return '...'
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+  }
+
   const fetchTableCounts = async () => {
-    const tables = ['activity_logs', 'dispatches', 'daily_expenses', 'serial_numbers', 'dropcore_haspels', 'adss_haspels']
+    setRefreshingCounts(true)
+    const tables = [
+      'activity_logs', 'dispatches', 'dispatch_items',
+      'daily_expenses', 'expense_items',
+      'maintenance_tickets',
+      'serial_numbers', 'dropcore_haspels', 'adss_haspels',
+      'dismantles', 'ont_replacements',
+    ]
     const counts = {}
+    const sizes = {}
     for (const table of tables) {
       const { count } = await supabase.from(table).select('*', { count: 'exact', head: true })
-      counts[table] = count || 0
+      const c = count || 0
+      counts[table] = c
+      sizes[table] = c * (AVG_ROW_SIZE[table] || 300)
     }
     setTableCounts(counts)
+    setTableSizes(sizes)
 
     try {
       const { data, error } = await supabase.rpc('get_db_size')
@@ -78,6 +113,7 @@ export default function Settings() {
     } catch (err) {
       console.log('get_db_size rpc might not exist yet')
     }
+    setRefreshingCounts(false)
   }
 
   const openAdd = () => { setEditUser(null); setForm(emptyForm); setIsModalOpen(true) }
@@ -213,11 +249,9 @@ export default function Settings() {
         if (error) throw error
         dataToExport = data
       } else if (cleanupForm.table === 'dispatches') {
-        const { data, error } = await supabase.from('dispatches').select('*, dispatch_items(*)').lt('dispatch_date', cutoffDate)
+        const { data, error } = await supabase.from('dispatches').select('*, dispatch_items(*)').lt('dispatch_date', cutoffDate).eq('status', 'selesai')
         if (error) throw error
         parentIds = data.map(d => d.id)
-        
-        // Flatten for excel
         dataToExport = data.flatMap(d => {
            if (!d.dispatch_items || d.dispatch_items.length === 0) return [d]
            return d.dispatch_items.map(item => ({ ...d, dispatch_items: undefined, item_id: item.id, item_type: item.item_type, qty: item.quantity, note: item.note }))
@@ -226,11 +260,22 @@ export default function Settings() {
         const { data, error } = await supabase.from('daily_expenses').select('*, expense_items(*)').lt('expense_date', cutoffDate)
         if (error) throw error
         parentIds = data.map(d => d.id)
-        
         dataToExport = data.flatMap(d => {
            if (!d.expense_items || d.expense_items.length === 0) return [d]
            return d.expense_items.map(item => ({ ...d, expense_items: undefined, item_id: item.id, item_type: item.item_type, qty: item.quantity, note: item.note }))
         })
+      } else if (cleanupForm.table === 'maintenance_tickets') {
+        const { data, error } = await supabase.from('maintenance_tickets').select('*').lt('date_input', cutoffDate).eq('status', 'close')
+        if (error) throw error
+        dataToExport = data
+      } else if (cleanupForm.table === 'dismantles') {
+        const { data, error } = await supabase.from('dismantles').select('*').lt('date_input', cutoffDate).eq('aksi', 'close')
+        if (error) throw error
+        dataToExport = data
+      } else if (cleanupForm.table === 'ont_replacements') {
+        const { data, error } = await supabase.from('ont_replacements').select('*').lt('replacement_date', cutoffDate)
+        if (error) throw error
+        dataToExport = data
       }
 
       if (dataToExport.length === 0) {
@@ -256,13 +301,24 @@ export default function Settings() {
         const { error } = await supabase.from('activity_logs').delete().lt('created_at', cutoffIso)
         delError = error
       } else if (cleanupForm.table === 'dispatches' && parentIds.length > 0) {
-        // Delete items first to prevent FK error
         await supabase.from('dispatch_items').delete().in('dispatch_id', parentIds)
         const { error } = await supabase.from('dispatches').delete().in('id', parentIds)
         delError = error
       } else if (cleanupForm.table === 'daily_expenses' && parentIds.length > 0) {
         await supabase.from('expense_items').delete().in('expense_id', parentIds)
         const { error } = await supabase.from('daily_expenses').delete().in('id', parentIds)
+        delError = error
+      } else if (cleanupForm.table === 'maintenance_tickets' && dataToExport.length > 0) {
+        const ids = dataToExport.map(d => d.id)
+        const { error } = await supabase.from('maintenance_tickets').delete().in('id', ids)
+        delError = error
+      } else if (cleanupForm.table === 'dismantles' && dataToExport.length > 0) {
+        const ids = dataToExport.map(d => d.id)
+        const { error } = await supabase.from('dismantles').delete().in('id', ids)
+        delError = error
+      } else if (cleanupForm.table === 'ont_replacements' && dataToExport.length > 0) {
+        const ids = dataToExport.map(d => d.id)
+        const { error } = await supabase.from('ont_replacements').delete().in('id', ids)
         delError = error
       }
 
@@ -480,25 +536,56 @@ export default function Settings() {
             <p className="text-secondary" style={{ fontSize: '13px', marginBottom: '16px' }}>
               Perkiraan jumlah baris pada tabel-tabel utama:
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {[
-                { key: 'activity_logs', label: 'Log Aktivitas' },
-                { key: 'dispatches', label: 'Bon Barang (Dispatches)' },
-                { key: 'daily_expenses', label: 'Pengeluaran Jadwal Tim' },
-                { key: 'serial_numbers', label: 'Serial Number (Data Master)' },
-                { key: 'dropcore_haspels', label: 'Haspel Dropcore (Data Master)' },
-                { key: 'adss_haspels', label: 'Haspel ADSS (Data Master)' },
-              ].map(t => (
-                <div key={t.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--bg-hover)', borderRadius: '6px', border: '1px solid var(--border)' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 500 }}>{t.label}</span>
-                  <span className={`badge ${tableCounts[t.key] > 5000 ? 'badge-danger' : tableCounts[t.key] > 1000 ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: '12px' }}>
-                    {tableCounts[t.key] !== undefined ? tableCounts[t.key].toLocaleString() : '...'} baris
-                  </span>
-                </div>
-              ))}
+                { key: 'activity_logs', label: 'Log Aktivitas', group: 'Log & Operasional' },
+                { key: 'dispatches', label: 'Bon Barang (Header)', group: 'Log & Operasional' },
+                { key: 'dispatch_items', label: '↳ Item Bon Barang', group: 'Log & Operasional' },
+                { key: 'daily_expenses', label: 'Pengeluaran Tim (Header)', group: 'Log & Operasional' },
+                { key: 'expense_items', label: '↳ Item Pengeluaran', group: 'Log & Operasional' },
+                { key: 'maintenance_tickets', label: 'Tiket Maintenance', group: 'Log & Operasional' },
+                { key: 'dismantles', label: 'Dismantle', group: 'Log & Operasional' },
+                { key: 'ont_replacements', label: 'Pergantian ONT', group: 'Log & Operasional' },
+                { key: 'serial_numbers', label: 'Serial Number ONT', group: 'Data Master' },
+                { key: 'dropcore_haspels', label: 'Haspel Dropcore', group: 'Data Master' },
+                { key: 'adss_haspels', label: 'Haspel ADSS', group: 'Data Master' },
+              ].map((t, i, arr) => {
+                const count = tableCounts[t.key]
+                const estBytes = tableSizes[t.key] || 0
+                const isHeader = i === 0 || arr[i - 1].group !== t.group
+                return (
+                  <div key={t.key}>
+                    {isHeader && (
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: i > 0 ? '8px' : '0', marginBottom: '6px' }}>
+                        {t.group}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', background: 'var(--bg-hover)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                      <span style={{ fontSize: '13px', fontWeight: t.key.startsWith('↳') || t.label.startsWith('↳') ? 400 : 500, color: t.label.startsWith('↳') ? 'var(--text-secondary)' : 'var(--text-primary)' }}>{t.label}</span>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          {refreshingCounts ? '...' : formatSize(estBytes)}
+                        </span>
+                        <span className={`badge ${count > 5000 ? 'badge-danger' : count > 1000 ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: '11px', minWidth: '70px', textAlign: 'center' }}>
+                          {refreshingCounts ? '...' : count !== undefined ? `${count.toLocaleString()} baris` : '...'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-            <button className="btn btn-secondary btn-sm" style={{ marginTop: '16px', width: '100%', justifyContent: 'center' }} onClick={fetchTableCounts}>
-              Refresh Data
+            <button
+              className="btn btn-secondary btn-sm"
+              style={{ marginTop: '16px', width: '100%', justifyContent: 'center' }}
+              onClick={fetchTableCounts}
+              disabled={refreshingCounts}
+            >
+              {refreshingCounts
+                ? <><span className="spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }} /> Memuat...
+                  </>
+                : '🔄 Refresh Data'
+              }
             </button>
           </div>
 
@@ -518,9 +605,14 @@ export default function Settings() {
               <div className="form-group">
                 <label className="form-label">Tabel yang Dibersihkan</label>
                 <select className="form-input" style={{ height: 'auto' }} value={cleanupForm.table} onChange={e => setCleanupForm({ ...cleanupForm, table: e.target.value })}>
-                  <option value="activity_logs">Log Aktivitas (Paling disarankan)</option>
-                  <option value="dispatches">Bon Barang (Termasuk Item)</option>
-                  <option value="daily_expenses">Pengeluaran Tim (Termasuk Item)</option>
+                  <optgroup label="── Log & Operasional ──">
+                    <option value="activity_logs">Log Aktivitas (Paling disarankan)</option>
+                    <option value="dispatches">Bon Barang — status Selesai (Termasuk Item)</option>
+                    <option value="daily_expenses">Pengeluaran Tim (Termasuk Item)</option>
+                    <option value="maintenance_tickets">Tiket Maintenance — status Close</option>
+                    <option value="dismantles">Dismantle — status Close</option>
+                    <option value="ont_replacements">Pergantian ONT</option>
+                  </optgroup>
                 </select>
               </div>
               
