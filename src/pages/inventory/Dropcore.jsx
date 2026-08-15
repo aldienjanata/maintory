@@ -221,10 +221,16 @@ export default function Dropcore() {
 
     const { data: expItems } = await supabase
       .from('expense_items')
-      .select('*, expense:daily_expenses(expense_date, site, technicians, work_type)')
+      .select('*, expense:daily_expenses(expense_date, site, technicians, work_type, note)')
       .eq('item_type', 'dropcore')
       .eq('haspel_id', haspel.id)
       .order('created_at', { ascending: true })
+
+    const { data: dispItems } = await supabase
+      .from('dispatch_items')
+      .select('*, dispatch:dispatches(dispatch_date, location, technician_ids, work_type, status)')
+      .eq('item_type', 'dropcore')
+      .eq('haspel_id', haspel.id)
 
     // Fetch all users to map technician IDs
     const { data: usersData } = await supabase.from('users').select('id, full_name')
@@ -248,21 +254,39 @@ export default function Dropcore() {
       type: 'in'
     }))
 
-    const outRows = (expItems || []).map(ei => {
-      const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
-      const wType = ei.expense?.work_type
-      return {
-        date: ei.expense?.expense_date,
-        action: 'Keluar',
-        qty: ei.meters_used,
-        note: ei.expense?.site,
-        technicianNames: techNames,
-        workType: workTypeLabels[wType] || wType,
-        type: 'out'
-      }
-    })
+    const outRowsExp = (expItems || [])
+      .filter(ei => !ei.expense?.note?.includes('Bon Barang'))
+      .map(ei => {
+        const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+        const wType = ei.expense?.work_type
+        return {
+          date: ei.expense?.expense_date,
+          action: 'Keluar',
+          qty: ei.meters_used,
+          note: ei.expense?.site,
+          technicianNames: techNames,
+          workType: workTypeLabels[wType] || wType,
+          type: 'out'
+        }
+      })
 
-    const combined = [...inRows, ...outRows].sort((a, b) => (a.date < b.date ? -1 : 1))
+    const outRowsDisp = (dispItems || [])
+      .filter(di => di.dispatch?.status === 'selesai' && Number(di.meters_used) > 0)
+      .map(di => {
+        const techNames = (di.dispatch?.technician_ids || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+        const wType = di.dispatch?.work_type
+        return {
+          date: di.dispatch?.dispatch_date,
+          action: 'Keluar',
+          qty: di.meters_used,
+          note: di.dispatch?.location,
+          technicianNames: techNames,
+          workType: workTypeLabels[wType] || wType,
+          type: 'out'
+        }
+      })
+
+    const combined = [...inRows, ...outRowsExp, ...outRowsDisp].sort((a, b) => (a.date < b.date ? -1 : 1))
     setHistoryData(combined)
     setHistoryLoading(false)
   }

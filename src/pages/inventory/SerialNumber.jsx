@@ -64,7 +64,8 @@ export default function SerialNumber() {
     setHistoryLoading(true)
     
     const { data: logs } = await supabase.from('inventory_log').select('*, user:users(full_name)').eq('item_type', 'sn').eq('item_id', item.id).order('log_date', { ascending: true })
-    const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type', 'ont').eq('serial_number_id', item.id).order('created_at', { ascending: true })
+    const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians, work_type, note)').eq('item_type', 'ont').eq('serial_number_id', item.id).order('created_at', { ascending: true })
+    const { data: dispItems } = await supabase.from('dispatch_items').select('*, dispatch:dispatches(dispatch_date, location, technician_ids, work_type, status)').eq('item_type', 'ont').eq('serial_number_id', item.id)
     
     const { data: usersData } = await supabase.from('users').select('id, full_name')
     const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
@@ -80,13 +81,24 @@ export default function SerialNumber() {
         qty: 1, 
         type: 'in' 
       })),
-      ...(expItems || []).map(ei => ({ 
-        date: ei.expense?.expense_date || '-', 
-        action: 'Keluar', 
-        note: `Lokasi: ${ei.expense?.site || '-'} | ${workTypeLabels[ei.expense?.work_type] || ei.expense?.work_type || '-'} | Teknisi: ${(ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')}`, 
-        qty: 1, 
-        type: 'out' 
-      }))
+      ...(expItems || [])
+        .filter(ei => !ei.expense?.note?.includes('Bon Barang'))
+        .map(ei => ({ 
+          date: ei.expense?.expense_date || '-', 
+          action: 'Keluar', 
+          note: `Lokasi: ${ei.expense?.site || '-'} | ${workTypeLabels[ei.expense?.work_type] || ei.expense?.work_type || '-'} | Teknisi: ${(ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')}`, 
+          qty: 1, 
+          type: 'out' 
+        })),
+      ...(dispItems || [])
+        .filter(di => di.dispatch?.status === 'selesai' && Number(di.quantity) > 0)
+        .map(di => ({
+          date: di.dispatch?.dispatch_date || '-',
+          action: 'Keluar',
+          note: `Lokasi: ${di.dispatch?.location || '-'} | ${workTypeLabels[di.dispatch?.work_type] || di.dispatch?.work_type || '-'} | Teknisi: ${(di.dispatch?.technician_ids || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')}`,
+          qty: 1,
+          type: 'out'
+        }))
     ]
     combined.sort((a, b) => (a.date < b.date ? -1 : 1))
     

@@ -145,7 +145,8 @@ export default function StokGudang() {
     setHistoryLoading(true)
 
     const { data: logs } = await supabase.from('inventory_log').select('*, user:users(full_name)').eq('item_type', 'stok_gudang').eq('item_id', item.id).order('log_date', { ascending: true })
-    const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type', 'other').eq('warehouse_item_id', item.id).order('created_at', { ascending: true })
+    const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians, work_type, note)').eq('item_type', 'other').eq('warehouse_item_id', item.id).order('created_at', { ascending: true })
+    const { data: dispItems } = await supabase.from('dispatch_items').select('*, dispatch:dispatches(dispatch_date, location, technician_ids, work_type, status)').eq('item_type', 'other').eq('warehouse_item_id', item.id)
 
     const { data: usersData } = await supabase.from('users').select('id, full_name')
     const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
@@ -155,19 +156,38 @@ export default function StokGudang() {
     ;(logs || []).forEach(l => {
       combined.push({ date: l.log_date, action: l.action === 'masuk' ? 'Masuk' : 'Koreksi', note: l.note || '', user: l.user?.full_name, qty: l.quantity, type: 'in' })
     })
-    ;(expItems || []).forEach(ei => {
-      const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
-      const wType = ei.expense?.work_type
-      combined.push({ 
-        date: ei.expense?.expense_date || '-', 
-        action: 'Keluar', 
-        note: ei.expense?.site || '-',
-        technicianNames: techNames,
-        workType: workTypeLabels[wType] || wType,
-        qty: ei.quantity, 
-        type: 'out' 
+    ;(expItems || [])
+      .filter(ei => !ei.expense?.note?.includes('Bon Barang'))
+      .forEach(ei => {
+        const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+        const wType = ei.expense?.work_type
+        combined.push({ 
+          date: ei.expense?.expense_date || '-', 
+          action: 'Keluar', 
+          note: ei.expense?.site || '-',
+          technicianNames: techNames,
+          workType: workTypeLabels[wType] || wType,
+          qty: ei.quantity, 
+          type: 'out' 
+        })
       })
-    })
+      
+    ;(dispItems || [])
+      .filter(di => di.dispatch?.status === 'selesai' && Number(di.quantity) > 0)
+      .forEach(di => {
+        const techNames = (di.dispatch?.technician_ids || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+        const wType = di.dispatch?.work_type
+        combined.push({
+          date: di.dispatch?.dispatch_date || '-',
+          action: 'Keluar',
+          note: di.dispatch?.location || '-',
+          technicianNames: techNames,
+          workType: workTypeLabels[wType] || wType,
+          qty: di.quantity,
+          type: 'out'
+        })
+      })
+      
     combined.sort((a, b) => (a.date < b.date ? -1 : 1))
 
     setHistoryData(combined)

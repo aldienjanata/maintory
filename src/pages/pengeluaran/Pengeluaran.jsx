@@ -902,7 +902,7 @@ export default function Pengeluaran() {
       </div>
 
       {/* Banner jadwal HARI INI untuk teknisi */}
-      {myTodaySchedule && myTodaySchedule.status !== 'completed' && (
+      {myTodaySchedule && (
         <div style={{ padding: '16px', background: 'var(--accent-dim)', border: '1px solid var(--accent)', borderRadius: '8px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
           <AlertCircle size={24} style={{ color: 'var(--accent)', flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
@@ -911,29 +911,10 @@ export default function Pengeluaran() {
               {SITES.find(s => s.value === myTodaySchedule.site)?.label || myTodaySchedule.site} — {WORK_TYPES.find(w => w.value === myTodaySchedule.work_type)?.label || myTodaySchedule.work_type}
             </p>
           </div>
-          <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(myTodaySchedule)}>
-            <Plus size={14} /> Isi Pengeluaran Hari Ini
-          </button>
         </div>
       )}
 
-      {/* Banner tunggakan pengeluaran (jadwal masa lalu belum diisi) */}
-      {myPendingSchedules.length > 0 && (
-        <div style={{ padding: '16px', background: 'var(--danger-dim)', border: '1px solid var(--danger)', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <AlertCircle size={24} style={{ color: 'var(--danger)', flexShrink: 0 }} />
-          <div style={{ flex: 1 }}>
-            <h4 style={{ color: 'var(--danger)', margin: '0 0 4px 0', fontSize: '15px' }}>Tunggakan Laporan Pengeluaran</h4>
-            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>Anda memiliki {myPendingSchedules.length} jadwal tugas yang belum diisi laporan pengeluarannya.</p>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
-            {myPendingSchedules.map(sched => (
-              <button key={sched.id} className="btn btn-sm" style={{ background: 'var(--danger)', color: 'white', border: 'none' }} onClick={() => handleOpenAddExpense(sched)}>
-                Isi Pengeluaran {format(new Date(sched.schedule_date), 'dd MMM')}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Banner tunggakan pengeluaran removed */}
 
       <div className="tabs">
         <button className={`tab-item ${activeTab === 'pengeluaran' ? 'active' : ''}`} onClick={() => setActiveTab('pengeluaran')}>
@@ -984,13 +965,6 @@ export default function Pengeluaran() {
                       {expandedId === `sched-${item.id}` && (
                         <div className="mobile-card-body">
                           <div className="mobile-info-row"><span className="mobile-info-label">Lokasi</span><span className="mobile-info-value">{SITES.find(s => s.value === item.site)?.label || item.site}</span></div>
-                          {(item.technicians?.includes(profile.id) || ['admin', 'superadmin'].includes(role)) && (
-                            <div className="mobile-card-actions">
-                              <button className="btn btn-primary btn-sm" onClick={() => handleOpenAddExpense(item)}>
-                                <Plus size={14} /> Isi Pengeluaran
-                              </button>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
@@ -1073,9 +1047,7 @@ export default function Pengeluaran() {
                 <option value="belum">Belum Isi</option>
                 <option value="terisi">Sudah Terisi</option>
               </select>
-              <button className="btn btn-primary btn-sm" onClick={() => { setScheduleForm({ schedule_date: format(new Date(), 'yyyy-MM-dd'), site: 'banyumas', work_type: 'ikr_psb', technicians: [], note: '' }); setIsScheduleModalOpen(true); }}>
-                <Plus size={14} /> Tambah Jadwal
-              </button>
+              {/* Banner tunggakan pengeluaran disabled */}
             </div>
           </div>
           <div className="mobile-card-list" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 400px), 1fr))', gap: '10px' }}>
