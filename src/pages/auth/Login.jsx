@@ -65,7 +65,11 @@ export default function Login() {
         {/* Logo area */}
         <div className="login-logo-wrap">
           <div className="login-logo-icon" style={{ background: 'transparent', boxShadow: 'none', padding: '0' }}>
-            <img src="/logo.png" alt="Maintory" style={{ width: '80px', height: '80px', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(0, 163, 255, 0.4))' }} />
+            <img src="/logo.png" alt="Maintory" style={{ 
+              width: '80px', height: '80px', objectFit: 'contain', 
+              filter: 'invert(1) hue-rotate(180deg) brightness(1.2) drop-shadow(0 4px 12px rgba(0, 163, 255, 0.4))',
+              mixBlendMode: 'screen'
+            }} />
           </div>
           <div>
             <h1 className="login-title">Maintory</h1>
