@@ -151,10 +151,12 @@ ul { list-style: none; }
 }
 
 .sidebar-logo img {
-  width: 52px;
-  height: 52px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: 0;
+  display: block;
+  flex-shrink: 0;
 }
 
 .sidebar-logo-text { flex: 1; overflow: hidden; }
