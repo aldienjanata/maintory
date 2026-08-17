@@ -22,8 +22,9 @@ export default defineConfig({
         background_color: '#0d1117',
         display: 'standalone',
         icons: [
-          { src: '/logo.png', sizes: '192x192', type: 'image/png' },
-          { src: '/logo.png', sizes: '512x512', type: 'image/png' },
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
     }),
