@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
+import { OwnerAuthProvider, useOwnerAuth } from './contexts/OwnerAuthContext'
 import Layout from './components/layout/Layout'
 
 // Pages
@@ -22,6 +23,8 @@ import BannerMaintenance from './pages/banner/BannerMaintenance'
 import DataTiang from './pages/jaringan/DataTiang'
 import DataOdpOdc from './pages/jaringan/DataOdpOdc'
 import KonversiTiang from './pages/jaringan/KonversiTiang'
+import OwnerLogin from './pages/owner/OwnerLogin'
+import OwnerPanel from './pages/owner/OwnerPanel'
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth()
@@ -66,32 +69,41 @@ const ProtectedRoute = ({ children }) => {
   return children
 }
 
+const OwnerRoute = ({ children }) => {
+  const { isOwner, loading } = useOwnerAuth()
+  if (loading) return null
+  return isOwner ? children : <OwnerLogin />
+}
+
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-          <Route index element={<Dashboard />} />
-          <Route path="maintenance" element={<Maintenance />} />
-          <Route path="inventory/stok" element={<StokGudang />} />
-          <Route path="inventory/sn" element={<SerialNumber />} />
-          <Route path="inventory/dropcore" element={<Dropcore />} />
-          <Route path="inventory/adss" element={<Adss />} />
-          <Route path="bon-barang" element={<BonBarang />} />
-          <Route path="pengeluaran" element={<Pengeluaran />} />
-          <Route path="dismantle" element={<Dismantle />} />
-          <Route path="ont" element={<OntReplacement />} />
-          <Route path="logs" element={<ActivityLogs />} />
-          <Route path="settings" element={<Settings />} />
-          <Route path="laporan-pemasangan" element={<LaporanPemasangan />} />
-          <Route path="banner-maintenance" element={<BannerMaintenance />} />
-          <Route path="jaringan/tiang" element={<DataTiang />} />
-          <Route path="jaringan/odp-odc" element={<DataOdpOdc />} />
-          <Route path="jaringan/konversi" element={<KonversiTiang />} />
-        </Route>
-      </Routes>
-    </Router>
+    <OwnerAuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/owner" element={<OwnerRoute><OwnerPanel /></OwnerRoute>} />
+          <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+            <Route index element={<Dashboard />} />
+            <Route path="maintenance" element={<Maintenance />} />
+            <Route path="inventory/stok" element={<StokGudang />} />
+            <Route path="inventory/sn" element={<SerialNumber />} />
+            <Route path="inventory/dropcore" element={<Dropcore />} />
+            <Route path="inventory/adss" element={<Adss />} />
+            <Route path="bon-barang" element={<BonBarang />} />
+            <Route path="pengeluaran" element={<Pengeluaran />} />
+            <Route path="dismantle" element={<Dismantle />} />
+            <Route path="ont" element={<OntReplacement />} />
+            <Route path="logs" element={<ActivityLogs />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="laporan-pemasangan" element={<LaporanPemasangan />} />
+            <Route path="banner-maintenance" element={<BannerMaintenance />} />
+            <Route path="jaringan/tiang" element={<DataTiang />} />
+            <Route path="jaringan/odp-odc" element={<DataOdpOdc />} />
+            <Route path="jaringan/konversi" element={<KonversiTiang />} />
+          </Route>
+        </Routes>
+      </Router>
+    </OwnerAuthProvider>
   )
 }
 

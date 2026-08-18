@@ -28,6 +28,29 @@ export default function Login() {
     }
   }, [user, navigate])
 
+  const logSecurityEvent = async (username, status) => {
+    try {
+      const { supabase } = await import('../../lib/supabase')
+      const ua = navigator.userAgent
+      // Simple device detection
+      const isMobile = /Mobile|Android|iPhone|iPad/i.test(ua)
+      const browser = /Chrome/i.test(ua) ? 'Chrome' : /Firefox/i.test(ua) ? 'Firefox' : /Safari/i.test(ua) ? 'Safari' : 'Other'
+      const os = /Windows/i.test(ua) ? 'Windows' : /Android/i.test(ua) ? 'Android' : /iPhone|iPad/i.test(ua) ? 'iOS' : /Mac/i.test(ua) ? 'macOS' : 'Linux'
+      const deviceInfo = `${browser} on ${os} (${isMobile ? 'Mobile' : 'Desktop'})`
+
+      await supabase.from('owner_security_logs').insert({
+        username,
+        status,
+        ip_address: null, // Will be 'N/A' without edge function
+        user_agent: ua,
+        device_info: deviceInfo,
+      })
+    } catch (err) {
+      // Silently fail - don't block login if logging fails
+      console.warn('Security log failed:', err.message)
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!username || !password) {
@@ -44,9 +67,11 @@ export default function Login() {
         localStorage.removeItem('maintory-saved-user')
         localStorage.removeItem('maintory-saved-pass')
       }
+      await logSecurityEvent(username, 'success')
       toast.success('Login berhasil')
       navigate('/')
     } catch (err) {
+      await logSecurityEvent(username, 'failed')
       toast.error(err.message || 'Gagal login, periksa username dan password')
     } finally {
       setIsSubmitting(false)
