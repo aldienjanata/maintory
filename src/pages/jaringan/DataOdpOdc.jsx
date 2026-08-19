@@ -305,6 +305,8 @@ export default function DataOdpOdc() {
   const [isKmzModalOpen, setIsKmzModalOpen] = useState(false)
   const [kmzFilterKecamatan, setKmzFilterKecamatan] = useState('')
   const [kmzFilterDesa, setKmzFilterDesa] = useState('')
+  const [kmzFilterType, setKmzFilterType] = useState('all')
+  const [excelMenuOpen, setExcelMenuOpen] = useState(false)
 
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [confirmRetroactive, setConfirmRetroactive] = useState(false)
@@ -824,11 +826,16 @@ export default function DataOdpOdc() {
   }
 
   // ── EXPORT EXCEL ──
-  const handleExportExcel = () => {
-    if (filtered.length === 0) return toast.error('Tidak ada data')
+  const handleExportExcel = (exportType = 'all') => {
+    setExcelMenuOpen(false);
+    let targetData = filtered;
+    if (exportType === 'ODP') targetData = filtered.filter(p => p.type === 'ODP');
+    if (exportType === 'ODC') targetData = filtered.filter(p => p.type === 'ODC');
+
+    if (targetData.length === 0) return toast.error('Tidak ada data')
     showProgress('Export Excel', 'Menyiapkan file...', 50)
     setTimeout(() => {
-      const rows = filtered.map((p, i) => {
+      const rows = targetData.map((p, i) => {
         const lat = p.latitude ? Number(p.latitude) : null
         const lon = p.longitude ? Number(p.longitude) : null
         return {
@@ -836,7 +843,7 @@ export default function DataOdpOdc() {
           'ID ODP/ODC': p.device_id || '', 'Jenis ODP/ODC': DEVICE_TYPES.find(t => t.value === p.type)?.label || p.type,
           'Jenis Box': p.jenis_box || '',
           'Kapasitas': p.kapasitas || '',
-          'Jenis Kabel Power': p.jenis_kabel_power || '', 'Core Power': p.core_power || '', 'PON': p.pon || '', 'Jarak ke OLT/Server (m)': p.jarak_ke_olt ? new Intl.NumberFormat('id-ID').format(parseInt(String(p.jarak_ke_olt).replace(/\\D/g, ''), 10) || 0) : '',
+          'Jenis Kabel Power': p.jenis_kabel_power || '', 'Core Power': p.core_power || '', 'PON': p.pon || '', 'Jarak ke OLT/Server (m)': p.jarak_ke_olt ? new Intl.NumberFormat('id-ID').format(parseInt(String(p.jarak_ke_olt).replace(/\D/g, ''), 10) || 0) : '',
           'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
           'Desa/Kelurahan': p.desa || '', 'Jalan/Gang/Dusun': p.jalan || '', 'Maps URL': p.maps_url || '',
           'Latitude ( Decimal )': lat || '', 'Longitude ( Decimal )': lon || '',
@@ -850,7 +857,7 @@ export default function DataOdpOdc() {
       const ws = XLSX.utils.json_to_sheet(rows)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Data ODP & ODC')
-      XLSX.writeFile(wb, `Data ODP & ODC ${format(new Date(), 'dd-MM-yyyy')}.xlsx`)
+      XLSX.writeFile(wb, `Data ODP & ODC ${exportType !== 'all' ? exportType : ''} ${format(new Date(), 'dd-MM-yyyy')}.xlsx`.replace('  ', ' '))
       hideProgress()
       toast.success('Export Excel berhasil!')
     }, 500)
@@ -859,6 +866,7 @@ export default function DataOdpOdc() {
   const openKmzModal = () => {
     setKmzFilterKecamatan('')
     setKmzFilterDesa('')
+    setKmzFilterType('all')
     setIsKmzModalOpen(true)
   }
 
@@ -866,6 +874,7 @@ export default function DataOdpOdc() {
     let targetData = [...devices]
     if (kmzFilterKecamatan) targetData = targetData.filter(p => p.kecamatan === kmzFilterKecamatan)
     if (kmzFilterDesa) targetData = targetData.filter(p => p.desa === kmzFilterDesa)
+    if (kmzFilterType !== 'all') targetData = targetData.filter(p => p.type === kmzFilterType)
 
     const withCoords = targetData.filter(p => p.latitude && p.longitude)
     if (withCoords.length === 0) return toast.error('Tidak ada data dengan koordinat GPS pada filter tersebut')
@@ -1337,9 +1346,21 @@ export default function DataOdpOdc() {
               <input ref={importRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleImportFile} />
             </>
           )}
-          <button className="btn btn-secondary btn-sm" onClick={handleExportExcel} title="Export ke Excel">
-            <Download size={14} /> Excel
-          </button>
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setExcelMenuOpen(o => !o)} title="Export ke Excel" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Download size={14} /> Excel <ChevronDown size={13} style={{ transform: excelMenuOpen ? 'rotate(180deg)' : 'none', transition: '0.15s' }} />
+            </button>
+            {excelMenuOpen && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setExcelMenuOpen(false)} />
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 100, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '180px', overflow: 'hidden' }}>
+                  <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }} onClick={() => handleExportExcel('all')}>Export Semua (ODP & ODC)</button>
+                  <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }} onClick={() => handleExportExcel('ODP')}>Export Hanya ODP</button>
+                  <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }} onClick={() => handleExportExcel('ODC')}>Export Hanya ODC</button>
+                </div>
+              </>
+            )}
+          </div>
           <button className="btn btn-secondary btn-sm" onClick={openKmzModal} disabled={kmzLoading} title="Export ke KMZ (Google Earth)" style={{ color: 'var(--accent)', borderColor: 'rgba(var(--accent-rgb, 59,130,246),0.4)' }}>
             <Map size={14} /> {kmzLoading ? 'Memproses...' : 'KMZ'}
           </button>
@@ -1462,7 +1483,7 @@ export default function DataOdpOdc() {
                 <th style={{ width: '40px', textAlign: 'center' }}>No</th>
                 <th style={{ cursor: 'pointer', width: '90px' }} onClick={() => handleSort('site')}><div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>Site <SortIcon col="site" /></div></th>
                 <th style={{ cursor: 'pointer', minWidth: '200px' }} onClick={() => handleSort('device_id')}><div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>ID ODP/ODC <SortIcon col="device_id" /></div></th>
-                <th style={{ width: '90px' }}>Jenis</th>
+                <th style={{ width: '110px' }}>Jenis</th>
                 <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kecamatan')}><div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>Kecamatan <SortIcon col="kecamatan" /></div></th>
                 <th>Desa</th>
                 <th style={{ width: '120px' }}>Koordinat</th>
@@ -1480,6 +1501,7 @@ export default function DataOdpOdc() {
                 <tr><td colSpan={12} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}><Antenna size={28} style={{ opacity: 0.25, marginBottom: '8px', display: 'block', margin: '0 auto 8px' }} />Belum ada data odpOdc</td></tr>
               ) : paginated.map((device, idx) => {
                 const isDismantled = device.status === 'dismantled'
+                const odpCount = device.type === 'ODC' ? devices.filter(d => d.type === 'ODP' && (d.parent_odc === device.device_id || (d.device_id && device.device_id && d.device_id.startsWith(device.device_id + '/')))).length : 0;
                 return (
                 <tr key={device.id} style={{ background: isDismantled ? 'rgba(239,68,68,0.06)' : selectedIds.has(device.id) ? 'rgba(239,68,68,0.06)' : undefined, opacity: isDismantled ? 0.85 : 1 }}>
                   {role === 'superadmin' && (
@@ -1493,6 +1515,7 @@ export default function DataOdpOdc() {
                   <td><span style={{ fontSize: '11px', padding: '2px 7px', borderRadius: '20px', background: 'var(--bg-primary)', border: '1px solid var(--border)', fontWeight: 600 }}>{SITES.find(s => s.value === device.site)?.label || device.site}</span></td>
                   <td>
                     <span style={{ fontFamily: 'monospace', fontSize: '12px', color: isDismantled ? 'var(--danger)' : 'var(--accent)', fontWeight: 600, textDecoration: isDismantled ? 'line-through' : 'none' }}>{device.device_id || '-'}</span>
+                    {device.type === 'ODC' && <div style={{ fontSize: '11px', color: '#6366f1', marginTop: '3px', fontWeight: 600, background: 'rgba(99,102,241,0.1)', display: 'inline-block', padding: '2px 6px', borderRadius: '4px' }}>🌟 Induk ({odpCount} ODP)</div>}
                     {device.parent_odc && <div style={{ fontSize: '10px', color: '#6366f1', marginTop: '1px' }}>Induk: {device.parent_odc}</div>}
                     {isDismantled && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 6px', borderRadius: '20px', background: 'rgba(239,68,68,0.15)', color: 'var(--danger)', fontWeight: 700, border: '1px solid rgba(239,68,68,0.3)' }}>DICABUT</span>}
                     {isDismantled && device.dismantled_at && <div style={{ fontSize: '10px', color: 'var(--danger)', opacity: 0.7, marginTop: '1px' }}>{format(new Date(device.dismantled_at), 'dd MMM yyyy', { locale: localeId })}</div>}
@@ -2079,6 +2102,15 @@ export default function DataOdpOdc() {
                 <select className="input" value={kmzFilterDesa} onChange={e => setKmzFilterDesa(e.target.value)} disabled={!kmzFilterKecamatan}>
                   <option value="">Semua Desa</option>
                   {kmzDesaList.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Jenis (Opsional)</label>
+                <select className="input" value={kmzFilterType} onChange={e => setKmzFilterType(e.target.value)}>
+                  <option value="all">Semua (ODP & ODC)</option>
+                  <option value="ODP">Hanya ODP</option>
+                  <option value="ODC">Hanya ODC</option>
                 </select>
               </div>
             </div>
