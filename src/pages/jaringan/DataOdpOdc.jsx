@@ -473,6 +473,9 @@ export default function DataOdpOdc() {
     setEditingId(device.id)
     setForm({
       site: device.site || 'banyumas', type: device.type || 'ODP',
+      jenis_box: device.jenis_box || '', kapasitas: device.kapasitas || '',
+      parent_odc: device.parent_odc || '', pole_id: device.pole_id || '',
+      divisi: device.divisi || '',
       provinsi: device.provinsi || '', kabupaten: device.kabupaten || '',
       kecamatan: device.kecamatan || '', desa: device.desa || '',
       maps_url: device.maps_url || '', longitude: device.longitude || '',
@@ -522,10 +525,24 @@ export default function DataOdpOdc() {
         updated_by: profile.id,
       }
       if (editingId) {
+        const existingDevice = devices.find(d => d.id === editingId)
+        let newDeviceId = null
+        if (existingDevice) {
+          const siteChanged = existingDevice.site !== form.site
+          const desaChanged = (existingDevice.desa || '').toUpperCase() !== (form.desa || '').toUpperCase()
+          const typeChanged = existingDevice.type !== form.type
+          const parentChanged = (existingDevice.parent_odc || '') !== (form.parent_odc || '')
+          
+          if (siteChanged || desaChanged || typeChanged || parentChanged) {
+            newDeviceId = generateDeviceId(form.site, form.desa, form.type, devices, idFormat, form.parent_odc)
+            payload.device_id = newDeviceId
+          }
+        }
+
         const { error } = await supabase.from('network_odp_odc').update(payload).eq('id', editingId)
         if (error) throw error
         const poleInfo = linked_pole_id ? ` (Tiang: ${networkPoles.find(p => p.id === linked_pole_id)?.pole_id || linked_pole_id})` : ''
-        toast.success(`Data ODP/ODC diperbarui!${poleInfo}`)
+        toast.success(`Data ODP/ODC diperbarui!${newDeviceId ? ` ID otomatis disesuaikan menjadi ${newDeviceId}` : ''}${poleInfo}`)
       } else {
         const deviceId = generateDeviceId(form.site, form.desa, form.type, devices, idFormat, form.parent_odc)
         const { error } = await supabase.from('network_odp_odc').insert({ ...payload, device_id: deviceId, created_by: profile.id })
