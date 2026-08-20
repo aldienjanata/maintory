@@ -749,6 +749,7 @@ export default function Dropcore() {
                     <option value="4c">Dropcore 4 Core (4C)</option>
                   </select>
                 </div>
+              </div>
               <div className="grid-2">
                 <div className="form-group">
                   <label className="form-label">Meter Awal</label>
