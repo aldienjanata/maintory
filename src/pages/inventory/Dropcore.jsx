@@ -24,7 +24,7 @@ export default function Dropcore() {
   const [sortFilter, setSortFilter] = useState('date_desc')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editItem, setEditItem] = useState(null)
-  const [form, setForm] = useState({ haspel_code: '', type: '1c', initial_meters: 1000, used_meters: 0, date_in: format(new Date(), 'yyyy-MM-dd'), note: '' })
+  const [form, setForm] = useState({ haspel_code: '', merk: '', type: '1c', initial_meters: 1000, used_meters: 0, date_in: format(new Date(), 'yyyy-MM-dd'), note: '' })
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
   const [page, setPage] = useState(1)
@@ -63,18 +63,19 @@ export default function Dropcore() {
 
   const openAdd = () => {
     setEditItem(null)
-    setForm({ haspel_code: generateNextCode('1c'), type: '1c', initial_meters: 1000, used_meters: 0, date_in: format(new Date(), 'yyyy-MM-dd'), note: '' })
+    setForm({ haspel_code: generateNextCode('1c'), merk: '', type: '1c', initial_meters: 1000, used_meters: 0, date_in: format(new Date(), 'yyyy-MM-dd'), note: '' })
     setIsModalOpen(true)
   }
 
   const openEdit = (h) => {
     setEditItem(h)
-    setForm({ haspel_code: h.haspel_code, type: h.type, initial_meters: h.initial_meters, used_meters: h.used_meters, date_in: h.date_in, note: h.note || '' })
+    setForm({ haspel_code: h.haspel_code, merk: h.merk || '', type: h.type, initial_meters: h.initial_meters, used_meters: h.used_meters, date_in: h.date_in, note: h.note || '' })
     setIsModalOpen(true)
   }
 
   const handleSave = async () => {
     if (!form.haspel_code) { toast.error('Kode Haspel wajib diisi'); return }
+    if (!form.merk) { toast.error('Merk Dropcore wajib diisi'); return }
     if (Number(form.used_meters) > Number(form.initial_meters)) { toast.error('Meter terpakai tidak boleh melebihi meter awal'); return }
     setSaving(true)
     const remaining = Number(form.initial_meters) - Number(form.used_meters)
@@ -102,6 +103,7 @@ export default function Dropcore() {
             const { error } = await supabase.from('dropcore_haspels').update({
               initial_meters: form.initial_meters,
               used_meters: 0,
+              merk: form.merk,
               status: 'tersedia',
               updated_at: new Date().toISOString()
             }).eq('id', existing.id)
@@ -119,7 +121,7 @@ export default function Dropcore() {
               meters: Number(form.initial_meters),
               module: 'dropcore',
               user_id: profile.id,
-              notes: form.note || 'Isi Ulang Haspel (Refill)'
+              notes: (form.note ? form.note + ' | ' : '') + `Refill Merk: ${form.merk}`
             })
             setSaving(false)
             setIsModalOpen(false)
@@ -146,7 +148,7 @@ export default function Dropcore() {
           item_id: finalHaspelId,
           action: 'masuk',
           meters: Number(form.initial_meters),
-          note: form.note || null,
+          note: (form.note ? form.note + ' | ' : '') + `Merk: ${form.merk}`,
           created_by: profile.id
         })
       }
@@ -333,14 +335,15 @@ export default function Dropcore() {
 
       // Sheet 1: Stok Haspel
       const ws1 = workbook.addWorksheet('Stok Haspel')
-      const headers1 = ['Kode Haspel', 'Tipe', 'Tanggal Masuk', 'Meter Awal', 'Meter Terpakai', 'Sisa Meter', 'Status', 'Catatan']
-      setColumnWidths(ws1, [16, 14, 16, 14, 16, 14, 12, 28])
+      const headers1 = ['Kode Haspel', 'Tipe', 'Merk', 'Tanggal Masuk', 'Meter Awal', 'Meter Terpakai', 'Sisa Meter', 'Status', 'Catatan']
+      setColumnWidths(ws1, [16, 14, 16, 16, 14, 16, 14, 12, 28])
       applyHeaderStyle(ws1, headers1)
       for (let i = 0; i < haspels.length; i++) {
         const h = haspels[i]
         ws1.addRow([
           h.haspel_code,
-          h.type === '1c' ? 'Dropcore 1C' : 'Dropcore 4C',
+          h.type === '1c' ? 'Dropcore 1C' : h.type === '2c' ? 'Dropcore 2C' : 'Dropcore 4C',
+          h.merk || '-',
           h.date_in,
           Number(h.initial_meters),
           Number(h.used_meters),
@@ -357,12 +360,12 @@ export default function Dropcore() {
 
       // Sheet 2: Riwayat Transaksi
       const ws2 = workbook.addWorksheet('Riwayat Transaksi')
-      const headers2 = ['Kode Haspel', 'Tipe', 'Tanggal', 'Jenis', 'Pekerjaan', 'Teknisi', 'Stok Awal (m)', 'Masuk (m)', 'Keluar (m)', 'Sisa Stok (m)', 'Lokasi/Note']
-      setColumnWidths(ws2, [16, 14, 16, 12, 18, 28, 14, 14, 14, 14, 30])
+      const headers2 = ['Kode Haspel', 'Merk', 'Tipe', 'Tanggal', 'Jenis', 'Pekerjaan', 'Teknisi', 'Stok Awal (m)', 'Masuk (m)', 'Keluar (m)', 'Sisa Stok (m)', 'Lokasi/Note']
+      setColumnWidths(ws2, [16, 16, 14, 16, 12, 18, 28, 14, 14, 14, 14, 30])
       applyHeaderStyle(ws2, headers2, '065F46')
 
       // Fetch all transactions
-      const { data: allExpItems } = await supabase.from('expense_items').select('*, haspel:dropcore_haspels(haspel_code, type), expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type', 'dropcore').order('created_at', { ascending: true })
+      const { data: allExpItems } = await supabase.from('expense_items').select('*, haspel:dropcore_haspels(haspel_code, type, merk), expense:daily_expenses(expense_date, site, technicians, work_type)').eq('item_type', 'dropcore').order('created_at', { ascending: true })
       const { data: usersData } = await supabase.from('users').select('id, full_name')
       const { data: allInLogs } = await supabase.from('inventory_log').select('*').eq('item_type', 'dropcore').in('action', ['masuk', 'isi_ulang_dropcore']).order('created_at', { ascending: true })
       
@@ -378,16 +381,16 @@ export default function Dropcore() {
            inLogs.forEach(l => {
               transactionsByHaspelId[h.id] = transactionsByHaspelId[h.id] || []
               transactionsByHaspelId[h.id].push({
-                 date: l.log_date, created_at: l.created_at, code: h.haspel_code,
+                 date: l.log_date, created_at: l.created_at, code: h.haspel_code, merk: h.merk || '-',
                  type: h.type === '1c' ? 'DROPCORE 1C' : h.type === '2c' ? 'DROPCORE 2C' : 'DROPCORE 4C',
                  jenis: l.action === 'isi_ulang_dropcore' ? 'Masuk (Refill)' : 'Masuk', 
                  sortPriority: 0, work: '-', tech: '-', stok_awal: 0, keluar: 0,
-                 masuk: Number(l.quantity || 0), stok_akhir: 0, note: l.notes || 'Stok Masuk/Refill'
+                 masuk: Number(l.quantity || 0), stok_akhir: 0, note: l.notes || l.note || 'Stok Masuk/Refill'
               })
            })
         } else {
            transactionsByHaspelId[h.id] = [{
-             date: h.date_in, created_at: h.created_at, code: h.haspel_code,
+             date: h.date_in, created_at: h.created_at, code: h.haspel_code, merk: h.merk || '-',
              type: h.type === '1c' ? 'DROPCORE 1C' : h.type === '2c' ? 'DROPCORE 2C' : 'DROPCORE 4C',
              jenis: 'Masuk', sortPriority: 0, work: '-', tech: '-', stok_awal: 0, keluar: 0,
              masuk: Number(h.initial_meters), stok_akhir: 0, note: h.note || 'Stok Awal Haspel (Legacy)'
@@ -401,6 +404,7 @@ export default function Dropcore() {
         if (!transactionsByHaspelId[hId]) transactionsByHaspelId[hId] = []
 
         const haspelCode = ei.haspel?.haspel_code || haspelMap[hId]?.haspel_code || '-'
+        const haspelMerk = ei.haspel?.merk || haspelMap[hId]?.merk || '-'
         const haspelType = (ei.haspel?.type || haspelMap[hId]?.type) === '1c' ? 'DROPCORE 1C' : (ei.haspel?.type || haspelMap[hId]?.type) === '2c' ? 'DROPCORE 2C' : 'DROPCORE 4C'
         const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
         const wType = ei.expense?.work_type
@@ -409,6 +413,7 @@ export default function Dropcore() {
           date: ei.expense?.expense_date || '-',
           created_at: ei.created_at,
           code: haspelCode,
+          merk: haspelMerk,
           type: haspelType,
           jenis: 'Keluar',
           sortPriority: 1, // Keluar setelah Masuk jika tanggal sama
@@ -439,7 +444,7 @@ export default function Dropcore() {
 
         txs.forEach(tx => {
           tx.stok_awal = currentStock
-          if (tx.jenis === 'Masuk') {
+          if (tx.jenis.includes('Masuk')) {
             currentStock += tx.masuk
           } else if (tx.jenis === 'Keluar') {
             currentStock = Math.max(0, currentStock - tx.keluar)
@@ -460,7 +465,7 @@ export default function Dropcore() {
       for (let i = 0; i < rows2.length; i++) {
         const r = rows2[i]
         // FIX: Gunakan 0 bukan '-' agar bisa di-SUM di Excel
-        ws2.addRow([r.code, r.type, r.date, r.jenis, r.work, r.tech, r.stok_awal, r.masuk, r.keluar, r.stok_akhir, r.note])
+        ws2.addRow([r.code, r.merk, r.type, r.date, r.jenis, r.work, r.tech, r.stok_awal, r.masuk, r.keluar, r.stok_akhir, r.note])
         if (i % 20 === 0) {
           showProgress('Mengekspor Data', `Memproses Riwayat Transaksi... (${i + 1}/${rows2.length})`, 50 + ((i + 1) / rows2.length) * 40)
           await new Promise(res => setTimeout(res, 0))
@@ -586,6 +591,7 @@ export default function Dropcore() {
                 <thead>
                   <tr>
                     <th>Kode Haspel</th>
+                    <th>Merk</th>
                     <th>Tipe</th>
                     <th>Tanggal Masuk</th>
                     <th>Meter Awal</th>
@@ -604,6 +610,7 @@ export default function Dropcore() {
                     return (
                       <tr key={h.id}>
                         <td><span className="font-semibold text-accent">{h.haspel_code}</span></td>
+                        <td>{h.merk || '-'}</td>
                         <td className="text-center">
                           <span className="badge" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', fontWeight: 600 }}>
                             {h.type === '1c' ? '1C' : h.type === '2c' ? '2C' : '4C'}
@@ -670,6 +677,7 @@ export default function Dropcore() {
                       </div>
                       {expandedId === h.id && (
                         <div className="mobile-card-body">
+                          <div className="mobile-info-row"><span className="mobile-info-label">Merk</span><span className="mobile-info-value">{h.merk || '-'}</span></div>
                           <div className="mobile-info-row"><span className="mobile-info-label">Tanggal Masuk</span><span className="mobile-info-value">{format(new Date(h.date_in), 'dd MMM yyyy', { locale: id })}</span></div>
                           <div className="mobile-info-row"><span className="mobile-info-label">Meter Awal</span><span className="mobile-info-value">{Number(h.initial_meters).toLocaleString()} m</span></div>
                           <div className="mobile-info-row"><span className="mobile-info-label">Terpakai</span><span className="mobile-info-value" style={{ color: 'var(--warning)' }}>{Number(h.used_meters).toLocaleString()} m</span></div>
@@ -724,6 +732,12 @@ export default function Dropcore() {
                   <label className="form-label">Kode Haspel <span style={{ color: 'var(--danger)' }}>*</span></label>
                   <input className="form-input" placeholder="H-001" value={form.haspel_code} onChange={e => setForm(f => ({ ...f, haspel_code: e.target.value }))} disabled={editItem && editItem.status === 'habis'} />
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Merk <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <input className="form-input" placeholder="Zimm Link" value={form.merk} onChange={e => setForm(f => ({ ...f, merk: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid-2">
                 <div>
                   <label className="form-label">Tipe Kabel</label>
                   <select className="form-input" value={form.type} onChange={e => {
@@ -735,7 +749,6 @@ export default function Dropcore() {
                     <option value="4c">Dropcore 4 Core (4C)</option>
                   </select>
                 </div>
-              </div>
               <div className="grid-2">
                 <div className="form-group">
                   <label className="form-label">Meter Awal</label>
@@ -774,7 +787,7 @@ export default function Dropcore() {
         item={historyItem}
         data={historyData}
         loading={historyLoading}
-        title={`Riwayat Haspel: ${historyItem?.haspel_code}`}
+        title={`Riwayat Haspel: ${historyItem?.haspel_code} (${historyItem?.merk || '-'})`}
         unit="m"
       />
 
