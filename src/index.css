@@ -625,7 +625,9 @@ tbody tr:hover td { background: var(--bg-hover); }
   width: 100%;
   max-width: 520px;
   max-height: calc(100vh - 48px);
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   box-shadow: var(--shadow-lg);
   animation: slideUp 0.2s ease;
   margin: auto;
@@ -640,6 +642,7 @@ tbody tr:hover td { background: var(--bg-hover); }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .modal-header h3 {
@@ -648,12 +651,13 @@ tbody tr:hover td { background: var(--bg-hover); }
   color: var(--text-primary);
 }
 
-.modal-body { padding: 20px 24px; }
+.modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
 .modal-footer {
   padding: 0 24px 20px;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 /* ========== ALERTS ========== */

@@ -1651,7 +1651,7 @@ export default function BonBarang() {
       {/* ===== MODAL BUAT BON ===== */}
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="modal modal-lg" style={{ display: 'flex', flexDirection: 'column', maxHeight: '93vh' }}>
+          <div className="modal modal-lg" style={{ maxHeight: '93vh' }}>
             <div className="modal-header">
               <div><h3 style={{ margin: 0 }}>{editingDispatchId ? 'Edit Bon Barang' : 'Buat Bon Barang'}{selectedScheduleId && !editingDispatchId ? ' (dari Jadwal)' : ''}</h3><p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Catat barang yang akan dibawa ke lapangan</p></div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1668,7 +1668,7 @@ export default function BonBarang() {
                 <button className="btn-close" onClick={() => setIsModalOpen(false)}><X size={20} /></button>
               </div>
             </div>
-            <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
+            <div className="modal-body">
               <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Tanggal</label>
