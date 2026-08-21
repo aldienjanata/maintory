@@ -609,10 +609,10 @@ tbody tr:hover td { background: var(--bg-hover); }
   inset: 0;
   background: rgba(0, 0, 0, 0.7);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 16px;
+  padding: 24px 16px;
   overflow-y: auto;
   backdrop-filter: blur(4px);
   animation: fadeIn 0.15s ease;
@@ -624,15 +624,16 @@ tbody tr:hover td { background: var(--bg-hover); }
   border-radius: var(--radius-lg);
   width: 100%;
   max-width: 520px;
-  max-height: unset;
-  overflow-y: visible;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
   box-shadow: var(--shadow-lg);
   animation: slideUp 0.2s ease;
   margin: auto;
+  flex-shrink: 0;
 }
 
-.modal-lg { max-width: 760px; }
-.modal-xl { max-width: 960px; }
+.modal-lg { max-width: 760px; max-height: calc(100vh - 48px); }
+.modal-xl { max-width: 960px; max-height: calc(100vh - 48px); }
 
 .modal-header {
   padding: 20px 24px 0;
