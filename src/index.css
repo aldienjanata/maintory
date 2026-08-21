@@ -651,7 +651,7 @@ tbody tr:hover td { background: var(--bg-hover); }
   color: var(--text-primary);
 }
 
-.modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+.modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; min-height: 0; }
 .modal-footer {
   padding: 0 24px 20px;
   display: flex;
