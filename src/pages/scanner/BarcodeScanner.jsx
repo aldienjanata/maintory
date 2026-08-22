@@ -201,7 +201,7 @@ export default function BarcodeScanner() {
     setCamScanCount(0)
     setCamLastBarcode('')
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } })
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
       streamRef.current = stream
       if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play() }
       startDetecting()
@@ -686,15 +686,17 @@ export default function BarcodeScanner() {
             )}
           </div>
 
-          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-            <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} playsInline muted />
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-              <div style={{ position: 'relative', width: '280px', height: '160px' }}>
-                <div style={{ position: 'absolute', inset: 0, boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)', borderRadius: '10px' }} />
-                <div style={{ position: 'absolute', inset: 0, border: `3px solid ${camStatus === 'detected' ? '#22c55e' : 'var(--accent)'}`, borderRadius: '10px', transition: 'border-color 0.3s', boxShadow: camStatus === 'detected' ? '0 0 16px rgba(34,197,94,0.6)' : '0 0 12px rgba(99,179,237,0.4)' }} />
-                {[{ top: -2, left: -2 }, { top: -2, right: -2 }, { bottom: -2, left: -2 }, { bottom: -2, right: -2 }].map((pos, i) => (
-                  <div key={i} style={{ position: 'absolute', width: '20px', height: '20px', borderColor: camStatus === 'detected' ? '#22c55e' : 'var(--accent)', borderStyle: 'solid', borderWidth: 0, ...(pos.top !== undefined ? { borderTopWidth: '3px' } : { borderBottomWidth: '3px' }), ...(pos.left !== undefined ? { borderLeftWidth: '3px' } : { borderRightWidth: '3px' }), ...pos, borderRadius: '2px' }} />
-                ))}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+            <div style={{ width: '100%', maxWidth: '420px', aspectRatio: '3/4', maxHeight: '60vh', position: 'relative', overflow: 'hidden', borderRadius: '16px', background: '#111', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+              <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} playsInline muted />
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                <div style={{ position: 'relative', width: '85%', height: '35%' }}>
+                  <div style={{ position: 'absolute', inset: 0, boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)', borderRadius: '10px' }} />
+                  <div style={{ position: 'absolute', inset: 0, border: `3px solid ${camStatus === 'detected' ? '#22c55e' : 'var(--accent)'}`, borderRadius: '10px', transition: 'border-color 0.3s', boxShadow: camStatus === 'detected' ? '0 0 16px rgba(34,197,94,0.6)' : '0 0 12px rgba(99,179,237,0.4)' }} />
+                  {[{ top: -2, left: -2 }, { top: -2, right: -2 }, { bottom: -2, left: -2 }, { bottom: -2, right: -2 }].map((pos, i) => (
+                    <div key={i} style={{ position: 'absolute', width: '20px', height: '20px', borderColor: camStatus === 'detected' ? '#22c55e' : 'var(--accent)', borderStyle: 'solid', borderWidth: 0, ...(pos.top !== undefined ? { borderTopWidth: '3px' } : { borderBottomWidth: '3px' }), ...(pos.left !== undefined ? { borderLeftWidth: '3px' } : { borderRightWidth: '3px' }), ...pos, borderRadius: '4px' }} />
+                  ))}
+                </div>
               </div>
             </div>
           </div>
