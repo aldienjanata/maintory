@@ -36,6 +36,15 @@ export default function BarcodeScanner() {
   const [bulkOntAsalDetail, setBulkOntAsalDetail] = useState('')
   const [bulkOntTujuan, setBulkOntTujuan] = useState('')
   const [bulkOntTujuanDetail, setBulkOntTujuanDetail] = useState('')
+  
+  // Create refs to avoid stale closures in camera detect loop
+  const bulkStateRef = useRef({ category: 'umum', note: '', ontKondisi: '', ontAsal: '', ontAsalDetail: '', ontTujuan: '', ontTujuanDetail: '' })
+  useEffect(() => {
+    bulkStateRef.current = { category: bulkCategory, note: bulkNote, ontKondisi: bulkOntKondisi, ontAsal: bulkOntAsal, ontAsalDetail: bulkOntAsalDetail, ontTujuan: bulkOntTujuan, ontTujuanDetail: bulkOntTujuanDetail }
+  }, [bulkCategory, bulkNote, bulkOntKondisi, bulkOntAsal, bulkOntAsalDetail, bulkOntTujuan, bulkOntTujuanDetail])
+
+  const activeTabRef = useRef(activeTab)
+  useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
 
   const [showFilters, setShowFilters] = useState(false)
 
@@ -80,8 +89,14 @@ export default function BarcodeScanner() {
 
   // ===== TAB 2 STATE =====
   const [tempScans, setTempScans] = useState([])
+  const tempScansRef = useRef([])
+  useEffect(() => { tempScansRef.current = tempScans }, [tempScans])
+  
   const [tempInput, setTempInput] = useState('')
   const tempInputRef = useRef(null)
+  
+  // Mobile Card Expansion State
+  const [expandedCards, setExpandedCards] = useState(new Set())
 
   useEffect(() => { fetchScans(); fetchUsers() }, [])
   useEffect(() => {
@@ -108,10 +123,12 @@ export default function BarcodeScanner() {
   // ===== PROCESS SCAN =====
   const processBarcode = useCallback(async (barcode) => {
     if (!barcode) return false
+    const bulk = bulkStateRef.current
+    const tab = activeTabRef.current
     
     // Check mode
-    if (activeTab === 'sementara') {
-      if (tempScans.find(s => s.barcode === barcode)) { 
+    if (tab === 'sementara') {
+      if (tempScansRef.current.find(s => s.barcode === barcode)) { 
         toast('Sudah ada dalam sesi', { icon: '⚠️' }); return false 
       }
       setTempScans(prev => [...prev, { id: crypto.randomUUID(), barcode, scanned_at: new Date().toISOString() }])
@@ -120,20 +137,20 @@ export default function BarcodeScanner() {
     }
 
     // Permanent Save Mode Validation
-    if (bulkCategory === 'ONT') {
-      if (!bulkOntKondisi) { toast.error('Kondisi ONT wajib dipilih!'); return false }
-      if (!bulkOntAsal) { toast.error('Asal Modem wajib dipilih!'); return false }
-      if (bulkOntAsal === 'Pembelian Di Luar' && !bulkOntAsalDetail.trim()) { toast.error('Nama toko wajib diisi!'); return false }
-      if (!bulkOntTujuan) { toast.error('Status / Tujuan ONT wajib dipilih!'); return false }
-      if (bulkOntTujuan === 'Akan Di Kirim Ke Site Lain' && !bulkOntTujuanDetail.trim()) { toast.error('Nama site wajib diisi!'); return false }
+    if (bulk.category === 'ONT') {
+      if (!bulk.ontKondisi) { toast.error('Kondisi ONT wajib dipilih!'); return false }
+      if (!bulk.ontAsal) { toast.error('Asal Modem wajib dipilih!'); return false }
+      if (bulk.ontAsal === 'Pembelian Di Luar' && !bulk.ontAsalDetail.trim()) { toast.error('Nama toko wajib diisi!'); return false }
+      if (!bulk.ontTujuan) { toast.error('Status / Tujuan ONT wajib dipilih!'); return false }
+      if (bulk.ontTujuan === 'Akan Di Kirim Ke Site Lain' && !bulk.ontTujuanDetail.trim()) { toast.error('Nama site wajib diisi!'); return false }
     }
 
-    const ontFields = bulkCategory === 'ONT' ? {
-      ont_kondisi: bulkOntKondisi,
-      ont_asal: bulkOntAsal,
-      ont_asal_detail: bulkOntAsalDetail.trim() || null,
-      ont_tujuan: bulkOntTujuan,
-      ont_tujuan_detail: bulkOntTujuanDetail.trim() || null
+    const ontFields = bulk.category === 'ONT' ? {
+      ont_kondisi: bulk.ontKondisi,
+      ont_asal: bulk.ontAsal,
+      ont_asal_detail: bulk.ontAsalDetail.trim() || null,
+      ont_tujuan: bulk.ontTujuan,
+      ont_tujuan_detail: bulk.ontTujuanDetail.trim() || null
     } : {
       ont_kondisi: null, ont_asal: null, ont_asal_detail: null, ont_tujuan: null, ont_tujuan_detail: null
     }
@@ -146,8 +163,8 @@ export default function BarcodeScanner() {
           last_scan: new Date().toISOString(), 
           scan_count: newCount, 
           updated_by: profile.id,
-          note: bulkNote.trim() || existing.note,
-          category: bulkCategory,
+          note: bulk.note.trim() || existing.note,
+          category: bulk.category,
           ...ontFields
         }).eq('id', existing.id)
       if (!error) { toast.success(`🔄 Diperbarui: "${barcode}" (${newCount}×)`, { duration: 2000 }); return true }
@@ -155,7 +172,7 @@ export default function BarcodeScanner() {
     } else {
       const now = new Date().toISOString()
       const { error } = await supabase.from('barcode_scans').insert({
-        barcode, note: bulkNote.trim() || null, category: bulkCategory,
+        barcode, note: bulk.note.trim() || null, category: bulk.category,
         scanned_by: profile.id, first_scan: now, last_scan: now, scan_count: 1,
         ...ontFields
       })
@@ -163,7 +180,7 @@ export default function BarcodeScanner() {
       if (error) { toast.error('Gagal simpan: ' + error.message); return false }
     }
     return false
-  }, [bulkNote, bulkCategory, profile, activeTab, tempScans, bulkOntKondisi, bulkOntAsal, bulkOntAsalDetail, bulkOntTujuan, bulkOntTujuanDetail])
+  }, [profile])
 
   const handleScan = async (e) => {
     if (e.key !== 'Enter') return
@@ -211,7 +228,7 @@ export default function BarcodeScanner() {
               const success = await processBarcode(barcode)
               if (success) {
                 setCamScanCount(prev => prev + 1)
-                if (activeTab === 'simpan') fetchScans()
+                if (activeTabRef.current === 'simpan') fetchScans()
               }
               setTimeout(() => setCamStatus('scanning'), 1500)
             }
@@ -235,7 +252,7 @@ export default function BarcodeScanner() {
     else setTimeout(() => tempInputRef.current?.focus(), 200)
   }
 
-  // ===== FILTERS =====
+  // ===== FILTERS & HELPERS =====
   const filtered = scans.filter(s => {
     if (searchTerm && !s.barcode.toLowerCase().includes(searchTerm.toLowerCase()) && !(s.note || '').toLowerCase().includes(searchTerm.toLowerCase())) return false
     if (categoryFilter !== 'all' && s.category !== categoryFilter) return false
@@ -249,6 +266,7 @@ export default function BarcodeScanner() {
   const resetFilters = () => { setSearchTerm(''); setCategoryFilter('all'); setFilterFirstFrom(''); setFilterFirstTo(''); setFilterLastFrom(''); setFilterLastTo('') }
   const toggleSelect = id => { setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
   const toggleSelectAll = () => { setSelected(selected.size === filtered.length && filtered.length > 0 ? new Set() : new Set(filtered.map(s => s.id))) }
+  const toggleCard = id => { setExpandedCards(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
 
   // ===== CRUD =====
   const handleDeleteSelected = async () => {
@@ -300,10 +318,7 @@ export default function BarcodeScanner() {
       filename = `Export_Data_Scan_${exportMonth}.xlsx`
     }
     if (!data.length) { toast.error('Tidak ada data'); return }
-    
-    // Check if any ONT data exists to include columns
     const hasOnt = data.some(s => s.category === 'ONT')
-    
     const mapped = data.map((s, i) => {
       const row = {
         'No': i + 1, 'Barcode / SN': s.barcode, 'Kategori': s.category || 'umum', 'Catatan': s.note || '',
@@ -318,16 +333,14 @@ export default function BarcodeScanner() {
       }
       return row
     })
-    
     const ws = XLSX.utils.json_to_sheet(mapped)
     ws['!cols'] = [{ wch: 5 }, { wch: 28 }, { wch: 12 }, { wch: 25 }, { wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 18 }]
     if (hasOnt) ws['!cols'].push({ wch: 15 }, { wch: 30 }, { wch: 30 })
-    
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Data Scan')
     XLSX.writeFile(wb, filename); toast.success('Export: ' + filename); setShowExportModal(false)
   }
 
-  // ===== TAB 2 =====
+  // ===== TAB 2 EXPORT =====
   const handleTempScan = async e => {
     if (e.key !== 'Enter') return
     const barcode = tempInput.trim(); if (!barcode) return
@@ -359,7 +372,7 @@ export default function BarcodeScanner() {
 
       <div style={{ display: 'flex', gap: '2px', marginBottom: '20px', borderBottom: '2px solid var(--border)' }}>
         {[{ key: 'simpan', label: '💾 Simpan Permanen' }, { key: 'sementara', label: '⏱ Sementara' }].map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{ padding: '10px 16px', border: 'none', cursor: 'pointer', background: 'none', borderBottom: activeTab === tab.key ? '3px solid var(--accent)' : '3px solid transparent', color: activeTab === tab.key ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: activeTab === tab.key ? 700 : 400, fontSize: '14px', marginBottom: '-2px' }}>
+          <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{ padding: '10px 16px', border: 'none', cursor: 'pointer', background: 'none', borderBottom: activeTab === tab.key ? '3px solid var(--accent)' : '3px solid transparent', color: activeTab === tab.key ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: activeTab === tab.key ? 700 : 400, fontSize: '14px', marginBottom: '-2px', flex: window.innerWidth <= 768 ? 1 : 'unset' }}>
             {tab.label}
           </button>
         ))}
@@ -368,60 +381,43 @@ export default function BarcodeScanner() {
       <div className="card" style={{ marginBottom: '16px', borderColor: 'var(--accent)', borderWidth: '2px', padding: '16px', maxWidth: '800px' }}>
         {activeTab === 'simpan' && (
           <>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Tag size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontWeight: 600 }}>Kategori:</span>
-                <select className="form-input" value={bulkCategory} onChange={e => setBulkCategory(e.target.value)} style={{ padding: '5px 8px', fontSize: '13px', minWidth: '110px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '14px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}><Tag size={12}/> Kategori:</label>
+                <select className="form-input" value={bulkCategory} onChange={e => setBulkCategory(e.target.value)} style={{ padding: '6px 10px', fontSize: '13px', width: '100%' }}>
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <div style={{ flex: 1, minWidth: '160px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontWeight: 600 }}>Catatan:</span>
-                <input type="text" className="form-input" placeholder="Opsional, untuk bulk scan..." value={bulkNote} onChange={e => setBulkNote(e.target.value)} style={{ flex: 1, padding: '5px 8px', fontSize: '13px' }} />
+              <div>
+                <label style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Catatan:</label>
+                <input type="text" className="form-input" placeholder="Opsional, untuk bulk scan..." value={bulkNote} onChange={e => setBulkNote(e.target.value)} style={{ padding: '6px 10px', fontSize: '13px', width: '100%' }} />
               </div>
             </div>
 
-            {/* ONT Specific Bulk Settings */}
             {bulkCategory === 'ONT' && (
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap', padding: '10px 12px', background: 'rgba(99,179,237,0.06)', borderRadius: '8px', border: '1px solid rgba(99,179,237,0.3)' }}>
-                <div style={{ flex: 1, minWidth: '100px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'flex', gap: '4px', alignItems: 'center' }}>Kondisi <span style={{color:'var(--danger)'}}>*</span></label>
-                  <select className="form-input" value={bulkOntKondisi} onChange={e => setBulkOntKondisi(e.target.value)} style={{ padding: '5px 8px', fontSize: '12px', marginTop: '4px' }}>
-                    <option value="">-- Pilih --</option>
-                    <option value="Aman">Aman</option>
-                    <option value="Rusak">Rusak</option>
-                    <option value="Dismantle">Dismantle</option>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '14px', padding: '12px', background: 'rgba(99,179,237,0.06)', borderRadius: '8px', border: '1px solid rgba(99,179,237,0.3)' }}>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>Kondisi <span style={{color:'var(--danger)'}}>*</span></label>
+                  <select className="form-input" value={bulkOntKondisi} onChange={e => setBulkOntKondisi(e.target.value)} style={{ padding: '6px 10px', fontSize: '12px', width: '100%' }}>
+                    <option value="">-- Pilih --</option><option value="Aman">Aman</option><option value="Rusak">Rusak</option><option value="Dismantle">Dismantle</option>
                   </select>
                 </div>
-                <div style={{ flex: 2, minWidth: '180px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'flex', gap: '4px', alignItems: 'center' }}>Asal Modem <span style={{color:'var(--danger)'}}>*</span></label>
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                    <select className="form-input" value={bulkOntAsal} onChange={e => { setBulkOntAsal(e.target.value); if (e.target.value !== 'Pembelian Di Luar') setBulkOntAsalDetail('') }} style={{ padding: '5px 8px', fontSize: '12px', flex: 1 }}>
-                      <option value="">-- Pilih --</option>
-                      <option value="Kiriman Dari Bekasi">Kiriman Dari Bekasi</option>
-                      <option value="Pembelian Di Luar">Pembelian Di Luar</option>
-                      <option value="Dismantle">Dismantle</option>
-                      <option value="Stok Lama">Stok Lama</option>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>Asal Modem <span style={{color:'var(--danger)'}}>*</span></label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <select className="form-input" value={bulkOntAsal} onChange={e => { setBulkOntAsal(e.target.value); if (e.target.value !== 'Pembelian Di Luar') setBulkOntAsalDetail('') }} style={{ padding: '6px 10px', fontSize: '12px', width: '100%' }}>
+                      <option value="">-- Pilih --</option><option value="Kiriman Dari Bekasi">Kiriman Dari Bekasi</option><option value="Pembelian Di Luar">Pembelian Di Luar</option><option value="Dismantle">Dismantle</option><option value="Stok Lama">Stok Lama</option>
                     </select>
-                    {bulkOntAsal === 'Pembelian Di Luar' && (
-                      <input type="text" className="form-input" placeholder="Nama Toko..." value={bulkOntAsalDetail} onChange={e => setBulkOntAsalDetail(e.target.value)} style={{ padding: '5px 8px', fontSize: '12px', flex: 1 }} />
-                    )}
+                    {bulkOntAsal === 'Pembelian Di Luar' && <input type="text" className="form-input" placeholder="Nama Toko..." value={bulkOntAsalDetail} onChange={e => setBulkOntAsalDetail(e.target.value)} style={{ padding: '6px 10px', fontSize: '12px', width: '100%' }} />}
                   </div>
                 </div>
-                <div style={{ flex: 2, minWidth: '180px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'flex', gap: '4px', alignItems: 'center' }}>Status / Tujuan <span style={{color:'var(--danger)'}}>*</span></label>
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                    <select className="form-input" value={bulkOntTujuan} onChange={e => { setBulkOntTujuan(e.target.value); if (e.target.value !== 'Akan Di Kirim Ke Site Lain') setBulkOntTujuanDetail('') }} style={{ padding: '5px 8px', fontSize: '12px', flex: 1 }}>
-                      <option value="">-- Pilih --</option>
-                      <option value="Ada Di Gudang">Ada Di Gudang</option>
-                      <option value="Akan Di Retur Ke Pusat">Akan Di Retur Ke Pusat</option>
-                      <option value="Akan Dipakai Lagi">Akan Dipakai Lagi</option>
-                      <option value="Akan Di Kirim Ke Site Lain">Akan Di Kirim Ke Site Lain</option>
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>Status / Tujuan <span style={{color:'var(--danger)'}}>*</span></label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <select className="form-input" value={bulkOntTujuan} onChange={e => { setBulkOntTujuan(e.target.value); if (e.target.value !== 'Akan Di Kirim Ke Site Lain') setBulkOntTujuanDetail('') }} style={{ padding: '6px 10px', fontSize: '12px', width: '100%' }}>
+                      <option value="">-- Pilih --</option><option value="Ada Di Gudang">Ada Di Gudang</option><option value="Akan Di Retur Ke Pusat">Akan Di Retur Ke Pusat</option><option value="Akan Dipakai Lagi">Akan Dipakai Lagi</option><option value="Akan Di Kirim Ke Site Lain">Akan Di Kirim Ke Site Lain</option>
                     </select>
-                    {bulkOntTujuan === 'Akan Di Kirim Ke Site Lain' && (
-                      <input type="text" className="form-input" placeholder="Nama Site..." value={bulkOntTujuanDetail} onChange={e => setBulkOntTujuanDetail(e.target.value)} style={{ padding: '5px 8px', fontSize: '12px', flex: 1 }} />
-                    )}
+                    {bulkOntTujuan === 'Akan Di Kirim Ke Site Lain' && <input type="text" className="form-input" placeholder="Nama Site..." value={bulkOntTujuanDetail} onChange={e => setBulkOntTujuanDetail(e.target.value)} style={{ padding: '6px 10px', fontSize: '12px', width: '100%' }} />}
                   </div>
                 </div>
               </div>
@@ -429,7 +425,7 @@ export default function BarcodeScanner() {
           </>
         )}
 
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', flexDirection: window.innerWidth <= 480 ? 'column' : 'row' }}>
           <div style={{ position: 'relative', flex: 1 }}>
             <input
               ref={activeTab === 'simpan' ? scanInputRef : tempInputRef}
@@ -445,44 +441,32 @@ export default function BarcodeScanner() {
             />
             {scanning && <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)' }}><div className="spinner" style={{ width: '16px', height: '16px' }} /></div>}
           </div>
-          <button
-            onClick={openCamera}
-            className="btn btn-primary"
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0,
-              background: hasBarcodeDetector ? 'var(--accent)' : 'var(--bg-primary)',
-              color: hasBarcodeDetector ? '#0d1117' : 'var(--text-muted)',
-              border: 'none', opacity: hasBarcodeDetector ? 1 : 0.6,
-            }}
-            title={hasBarcodeDetector ? 'Scan dengan kamera' : 'Browser ini tidak support BarcodeDetector'}
-          >
-            <Camera size={16} />
-            <span className="hide-on-mobile">Scan Kamera</span>
+          <button onClick={openCamera} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexShrink: 0, background: hasBarcodeDetector ? 'var(--accent)' : 'var(--bg-primary)', color: hasBarcodeDetector ? '#0d1117' : 'var(--text-muted)', border: 'none', opacity: hasBarcodeDetector ? 1 : 0.6, padding: '10px 16px', height: '42px' }} title={hasBarcodeDetector ? 'Scan dengan kamera' : 'Browser ini tidak support BarcodeDetector'}>
+            <Camera size={18} />
+            <span>Scan Kamera</span>
           </button>
         </div>
-        {!hasBarcodeDetector && (
-          <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--warning)', display: 'flex', gap: '4px', alignItems: 'center' }}>
-            <AlertTriangle size={11} /> Scan kamera membutuhkan Chrome di Android. Gunakan input teks manual.
-          </div>
-        )}
+        {!hasBarcodeDetector && <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--warning)', display: 'flex', gap: '4px', alignItems: 'center' }}><AlertTriangle size={11} /> Scan kamera membutuhkan Chrome di Android. Gunakan input teks manual.</div>}
       </div>
 
       {activeTab === 'simpan' && (
         <div>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
             {[{ label: 'Total', value: scans.length, color: 'var(--accent)' }, { label: 'Hari Ini', value: todayCount, color: 'var(--success)' }, { label: 'Filter', value: filtered.length, color: 'var(--text-secondary)' }].map(s => (
-              <div key={s.label} style={{ padding: '8px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div key={s.label} style={{ padding: '8px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', display: 'flex', gap: '8px', alignItems: 'center', flex: window.innerWidth <= 480 ? 1 : 'unset', justifyContent: 'center' }}>
                 <span style={{ fontSize: '18px', fontWeight: 800, color: s.color }}>{s.value}</span>
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{s.label}</span>
               </div>
             ))}
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-              {can(role, 'scanner.delete') && (<>
-                <button className={`btn btn-sm ${selectMode ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setSelectMode(!selectMode); setSelected(new Set()) }}><CheckSquare size={13} /> {selectMode ? 'Batal' : 'Pilih'}</button>
-                {selectMode && selected.size > 0 && <button className="btn btn-danger btn-sm" onClick={handleDeleteSelected}><Trash2 size={13} /> ({selected.size})</button>}
-                <button className="btn btn-secondary btn-sm" onClick={() => setShowDeleteByDate(true)} title="Hapus by tanggal"><Calendar size={13} /></button>
-              </>)}
-              {can(role, 'scanner.export') && <button className="btn btn-secondary btn-sm" onClick={() => setShowExportModal(true)}><FileDown size={13} /> Export</button>}
+            <div style={{ marginLeft: window.innerWidth <= 480 ? 0 : 'auto', width: window.innerWidth <= 480 ? '100%' : 'auto', display: 'flex', gap: '6px', alignItems: 'center', justifyContent: window.innerWidth <= 480 ? 'space-between' : 'flex-end', flexWrap: 'wrap', marginTop: window.innerWidth <= 480 ? '8px' : 0 }}>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {can(role, 'scanner.delete') && (<>
+                  <button className={`btn btn-sm ${selectMode ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setSelectMode(!selectMode); setSelected(new Set()) }}><CheckSquare size={13} /> <span className="hide-on-mobile">{selectMode ? 'Batal' : 'Pilih'}</span></button>
+                  {selectMode && selected.size > 0 && <button className="btn btn-danger btn-sm" onClick={handleDeleteSelected}><Trash2 size={13} /> ({selected.size})</button>}
+                  <button className="btn btn-secondary btn-sm" onClick={() => setShowDeleteByDate(true)} title="Hapus by tanggal"><Calendar size={13} /></button>
+                </>)}
+                {can(role, 'scanner.export') && <button className="btn btn-secondary btn-sm" onClick={() => setShowExportModal(true)}><FileDown size={13} /> <span className="hide-on-mobile">Export</span></button>}
+              </div>
               <button className="btn btn-secondary btn-sm" onClick={fetchScans}><RefreshCw size={13} /></button>
             </div>
           </div>
@@ -494,21 +478,11 @@ export default function BarcodeScanner() {
               {hasFilter && <span onClick={e => { e.stopPropagation(); resetFilters() }} style={{ marginLeft: '4px', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer', textDecoration: 'underline' }}>Reset</span>}
             </button>
             {showFilters && (
-              <div style={{ marginTop: '10px', padding: '12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <div className="search-box" style={{ maxWidth: '200px' }}><Search size={14} className="search-icon" /><input type="text" placeholder="Cari barcode..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
-                <select className="filter-select" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-                  <option value="all">Semua Kategori</option>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
-                  <Calendar size={12} style={{ color: 'var(--text-muted)' }} /><span style={{ color: 'var(--text-muted)' }}>Pertama:</span>
-                  <input type="date" className="form-input" style={{ padding: '4px 6px', fontSize: '12px', width: '130px' }} value={filterFirstFrom} onChange={e => setFilterFirstFrom(e.target.value)} />–
-                  <input type="date" className="form-input" style={{ padding: '4px 6px', fontSize: '12px', width: '130px' }} value={filterFirstTo} onChange={e => setFilterFirstTo(e.target.value)} />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
-                  <Clock size={12} style={{ color: 'var(--text-muted)' }} /><span style={{ color: 'var(--text-muted)' }}>Terakhir:</span>
-                  <input type="date" className="form-input" style={{ padding: '4px 6px', fontSize: '12px', width: '130px' }} value={filterLastFrom} onChange={e => setFilterLastFrom(e.target.value)} />–
-                  <input type="date" className="form-input" style={{ padding: '4px 6px', fontSize: '12px', width: '130px' }} value={filterLastTo} onChange={e => setFilterLastTo(e.target.value)} />
-                </div>
+              <div style={{ marginTop: '10px', padding: '12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', alignItems: 'end' }}>
+                <div><label style={{fontSize:'11px', color:'var(--text-muted)', display:'block', marginBottom:'4px'}}>Cari</label><div className="search-box" style={{ width: '100%' }}><Search size={14} className="search-icon" /><input type="text" placeholder="Barcode..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div></div>
+                <div><label style={{fontSize:'11px', color:'var(--text-muted)', display:'block', marginBottom:'4px'}}>Kategori</label><select className="form-input" style={{width:'100%', padding:'6px 10px', fontSize:'13px'}} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}><option value="all">Semua</option>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                <div><label style={{fontSize:'11px', color:'var(--text-muted)', display:'block', marginBottom:'4px'}}>Tgl Pertama (Dari)</label><input type="date" className="form-input" style={{ padding: '6px 10px', fontSize: '13px', width: '100%' }} value={filterFirstFrom} onChange={e => setFilterFirstFrom(e.target.value)} /></div>
+                <div><label style={{fontSize:'11px', color:'var(--text-muted)', display:'block', marginBottom:'4px'}}>Tgl Pertama (Sampai)</label><input type="date" className="form-input" style={{ padding: '6px 10px', fontSize: '13px', width: '100%' }} value={filterFirstTo} onChange={e => setFilterFirstTo(e.target.value)} /></div>
               </div>
             )}
           </div>
@@ -516,47 +490,103 @@ export default function BarcodeScanner() {
           {loading ? (
             <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}><div className="spinner" style={{ margin: '0 auto 12px' }} />Memuat...</div>
           ) : (
-            <div className="table-container">
-              <table className="data-table">
-                <thead><tr>
-                  {selectMode && <th style={{ width: '36px' }}><input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} style={{ cursor: 'pointer' }} /></th>}
-                  <th style={{ width: '40px' }}>No</th><th>Barcode / SN</th><th>Kategori</th><th>Catatan</th><th>Pertama Scan</th><th>Terakhir Scan</th><th style={{ textAlign: 'center', width: '60px' }}>Scan</th><th>Oleh</th><th style={{ width: '60px' }}></th>
-                </tr></thead>
-                <tbody>
-                  {filtered.length === 0 ? (
-                    <tr><td colSpan={selectMode ? 10 : 9} style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--text-muted)' }}>
-                      <ScanLine size={36} style={{ opacity: 0.2, display: 'block', margin: '0 auto 10px' }} />
-                      <div style={{ fontWeight: 600, marginBottom: '4px' }}>{hasFilter ? 'Tidak ada data sesuai filter' : 'Belum ada data scan'}</div>
-                    </td></tr>
-                  ) : filtered.map((s, i) => (
-                    <tr key={s.id} style={{ background: selected.has(s.id) ? 'rgba(99,179,237,0.07)' : undefined }}>
-                      {selectMode && <td><input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSelect(s.id)} style={{ cursor: 'pointer' }} /></td>}
-                      <td style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{i + 1}</td>
-                      <td>
-                        <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '13px', color: 'var(--accent)' }}>{s.barcode}</span>
-                        {s.category === 'ONT' && (s.ont_kondisi || s.ont_asal || s.ont_tujuan) && (
-                          <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
-                            {s.ont_kondisi && <span style={{ fontSize: '10px', padding: '2px 6px', background: s.ont_kondisi === 'Aman' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', color: s.ont_kondisi === 'Aman' ? 'var(--success)' : 'var(--danger)', borderRadius: '4px' }}>{s.ont_kondisi}</span>}
-                            {s.ont_asal && <span style={{ fontSize: '10px', padding: '2px 6px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', borderRadius: '4px' }}>Asal: {s.ont_asal} {s.ont_asal_detail ? `(${s.ont_asal_detail})` : ''}</span>}
-                            {s.ont_tujuan && <span style={{ fontSize: '10px', padding: '2px 6px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', borderRadius: '4px' }}>Ke: {s.ont_tujuan} {s.ont_tujuan_detail ? `(${s.ont_tujuan_detail})` : ''}</span>}
+            <>
+              {/* MOBILE CARD VIEW */}
+              <div className="mobile-only mobile-card-list">
+                {filtered.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                    <ScanLine size={36} style={{ opacity: 0.2, display: 'block', margin: '0 auto 10px' }} />
+                    <div style={{ fontWeight: 600 }}>Belum ada data scan</div>
+                  </div>
+                ) : filtered.map((s, i) => {
+                  const isExpanded = expandedCards.has(s.id)
+                  return (
+                    <div key={s.id} className="mobile-card" style={{ borderLeft: selectMode && selected.has(s.id) ? '4px solid var(--accent)' : undefined }}>
+                      <div className="mobile-card-header" onClick={() => selectMode ? toggleSelect(s.id) : toggleCard(s.id)}>
+                        <div style={{ flex: 1, paddingRight: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                            {selectMode && <input type="checkbox" checked={selected.has(s.id)} onChange={() => {}} style={{ pointerEvents: 'none' }} />}
+                            <span className="mobile-card-title" style={{ fontFamily: 'monospace', fontSize: '14px', color: 'var(--accent)' }}>{s.barcode}</span>
                           </div>
-                        )}
-                      </td>
-                      <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 7px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: 'var(--accent-dim)', color: 'var(--accent)' }}><Tag size={9} />{s.category || 'umum'}</span></td>
-                      <td style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.note || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                      <td style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{fmtDate(s.first_scan)}</td>
-                      <td style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{s.scan_count > 1 ? <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{fmtDate(s.last_scan)}</span> : <span style={{ color: 'var(--text-muted)' }}>{fmtDate(s.last_scan)}</span>}</td>
-                      <td style={{ textAlign: 'center' }}><span style={{ background: s.scan_count > 1 ? 'rgba(245,158,11,0.15)' : 'var(--bg-primary)', color: s.scan_count > 1 ? 'var(--warning)' : 'var(--text-muted)', borderRadius: '12px', padding: '2px 7px', fontSize: '11px', fontWeight: 700 }}>{s.scan_count}×</span></td>
-                      <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{users[s.scanned_by] || '—'}</td>
-                      <td><div style={{ display: 'flex', gap: '2px', justifyContent: 'flex-end' }}>
-                        {can(role, 'scanner.edit') && <button className="btn-icon" onClick={() => handleEdit(s)}><Edit2 size={13} /></button>}
-                        {can(role, 'scanner.delete') && <button className="btn-icon text-danger" onClick={() => handleDeleteSingle(s)}><Trash2 size={13} /></button>}
-                      </div></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <span style={{ fontSize: '10px', padding: '2px 6px', background: 'var(--accent-dim)', color: 'var(--accent)', borderRadius: '10px', fontWeight: 600 }}>{s.category || 'umum'}</span>
+                            <span style={{ fontSize: '10px', padding: '2px 6px', background: s.scan_count > 1 ? 'rgba(245,158,11,0.15)' : 'var(--bg-primary)', color: s.scan_count > 1 ? 'var(--warning)' : 'var(--text-muted)', borderRadius: '10px', fontWeight: 600 }}>{s.scan_count}×</span>
+                          </div>
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                          <span style={{ fontSize: '11px' }}>{format(new Date(s.first_scan), 'dd MMM', { locale: idLocale })}</span>
+                          {!selectMode && (isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />)}
+                        </div>
+                      </div>
+                      
+                      {isExpanded && !selectMode && (
+                        <div className="mobile-card-body">
+                          {s.category === 'ONT' && (s.ont_kondisi || s.ont_asal || s.ont_tujuan) && (
+                            <div style={{ padding: '8px', background: 'rgba(99,179,237,0.06)', borderRadius: '6px', border: '1px solid rgba(99,179,237,0.2)', marginBottom: '4px' }}>
+                              {s.ont_kondisi && <div className="mobile-info-row" style={{marginBottom:'4px'}}><span className="mobile-info-label">Kondisi</span><span className="mobile-info-value" style={{color: s.ont_kondisi==='Aman'?'var(--success)':'var(--danger)'}}>{s.ont_kondisi}</span></div>}
+                              {s.ont_asal && <div className="mobile-info-row" style={{marginBottom:'4px'}}><span className="mobile-info-label">Asal</span><span className="mobile-info-value">{s.ont_asal} {s.ont_asal_detail ? `(${s.ont_asal_detail})` : ''}</span></div>}
+                              {s.ont_tujuan && <div className="mobile-info-row"><span className="mobile-info-label">Tujuan</span><span className="mobile-info-value">{s.ont_tujuan} {s.ont_tujuan_detail ? `(${s.ont_tujuan_detail})` : ''}</span></div>}
+                            </div>
+                          )}
+                          <div className="mobile-info-row"><span className="mobile-info-label">Catatan</span><span className="mobile-info-value">{s.note || '-'}</span></div>
+                          <div className="mobile-info-row"><span className="mobile-info-label">Pertama Scan</span><span className="mobile-info-value">{fmtDate(s.first_scan)}</span></div>
+                          <div className="mobile-info-row"><span className="mobile-info-label">Terakhir Scan</span><span className="mobile-info-value">{fmtDate(s.last_scan)}</span></div>
+                          <div className="mobile-info-row"><span className="mobile-info-label">Oleh</span><span className="mobile-info-value">{users[s.scanned_by] || '-'}</span></div>
+                          
+                          <div className="mobile-card-actions">
+                            {can(role, 'scanner.edit') && <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); handleEdit(s) }}><Edit2 size={13}/> Edit</button>}
+                            {can(role, 'scanner.delete') && <button className="btn btn-danger btn-sm" onClick={(e) => { e.stopPropagation(); handleDeleteSingle(s) }}><Trash2 size={13}/> Hapus</button>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* DESKTOP TABLE VIEW */}
+              <div className="table-container desktop-only">
+                <table className="data-table">
+                  <thead><tr>
+                    {selectMode && <th style={{ width: '36px' }}><input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} style={{ cursor: 'pointer' }} /></th>}
+                    <th style={{ width: '40px' }}>No</th><th>Barcode / SN</th><th>Kategori</th><th>Catatan</th><th>Pertama Scan</th><th>Terakhir Scan</th><th style={{ textAlign: 'center', width: '60px' }}>Scan</th><th>Oleh</th><th style={{ width: '60px' }}></th>
+                  </tr></thead>
+                  <tbody>
+                    {filtered.length === 0 ? (
+                      <tr><td colSpan={selectMode ? 10 : 9} style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--text-muted)' }}>
+                        <ScanLine size={36} style={{ opacity: 0.2, display: 'block', margin: '0 auto 10px' }} />
+                        <div style={{ fontWeight: 600, marginBottom: '4px' }}>{hasFilter ? 'Tidak ada data sesuai filter' : 'Belum ada data scan'}</div>
+                      </td></tr>
+                    ) : filtered.map((s, i) => (
+                      <tr key={s.id} style={{ background: selected.has(s.id) ? 'rgba(99,179,237,0.07)' : undefined }}>
+                        {selectMode && <td><input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSelect(s.id)} style={{ cursor: 'pointer' }} /></td>}
+                        <td style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{i + 1}</td>
+                        <td>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '13px', color: 'var(--accent)' }}>{s.barcode}</span>
+                          {s.category === 'ONT' && (s.ont_kondisi || s.ont_asal || s.ont_tujuan) && (
+                            <div style={{ display: 'flex', gap: '4px', marginTop: '4px', flexWrap: 'wrap' }}>
+                              {s.ont_kondisi && <span style={{ fontSize: '10px', padding: '2px 6px', background: s.ont_kondisi === 'Aman' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', color: s.ont_kondisi === 'Aman' ? 'var(--success)' : 'var(--danger)', borderRadius: '4px' }}>{s.ont_kondisi}</span>}
+                              {s.ont_asal && <span style={{ fontSize: '10px', padding: '2px 6px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', borderRadius: '4px' }}>Asal: {s.ont_asal} {s.ont_asal_detail ? `(${s.ont_asal_detail})` : ''}</span>}
+                              {s.ont_tujuan && <span style={{ fontSize: '10px', padding: '2px 6px', background: 'var(--bg-primary)', color: 'var(--text-secondary)', borderRadius: '4px' }}>Ke: {s.ont_tujuan} {s.ont_tujuan_detail ? `(${s.ont_tujuan_detail})` : ''}</span>}
+                            </div>
+                          )}
+                        </td>
+                        <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 7px', borderRadius: '10px', fontSize: '11px', fontWeight: 600, background: 'var(--accent-dim)', color: 'var(--accent)' }}><Tag size={9} />{s.category || 'umum'}</span></td>
+                        <td style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.note || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                        <td style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{fmtDate(s.first_scan)}</td>
+                        <td style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{s.scan_count > 1 ? <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{fmtDate(s.last_scan)}</span> : <span style={{ color: 'var(--text-muted)' }}>{fmtDate(s.last_scan)}</span>}</td>
+                        <td style={{ textAlign: 'center' }}><span style={{ background: s.scan_count > 1 ? 'rgba(245,158,11,0.15)' : 'var(--bg-primary)', color: s.scan_count > 1 ? 'var(--warning)' : 'var(--text-muted)', borderRadius: '12px', padding: '2px 7px', fontSize: '11px', fontWeight: 700 }}>{s.scan_count}×</span></td>
+                        <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{users[s.scanned_by] || '—'}</td>
+                        <td><div style={{ display: 'flex', gap: '2px', justifyContent: 'flex-end' }}>
+                          {can(role, 'scanner.edit') && <button className="btn-icon" onClick={() => handleEdit(s)}><Edit2 size={13} /></button>}
+                          {can(role, 'scanner.delete') && <button className="btn-icon text-danger" onClick={() => handleDeleteSingle(s)}><Trash2 size={13} /></button>}
+                        </div></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
@@ -572,12 +602,27 @@ export default function BarcodeScanner() {
               <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Item</span>
             </div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
-              <button className="btn btn-secondary btn-sm" onClick={handleCopyAll} disabled={!tempScans.length}><Copy size={13} /> Salin</button>
-              <button className="btn btn-secondary btn-sm" onClick={handleExportTemp} disabled={!tempScans.length}><FileDown size={13} /> Export</button>
-              <button className="btn btn-danger btn-sm" onClick={() => { if (!tempScans.length || !window.confirm('Hapus semua sesi?')) return; setTempScans([]); toast.success('Sesi dibersihkan') }} disabled={!tempScans.length}><Trash2 size={13} /> Hapus Semua</button>
+              <button className="btn btn-secondary btn-sm" onClick={handleCopyAll} disabled={!tempScans.length}><Copy size={13} /> <span className="hide-on-mobile">Salin</span></button>
+              <button className="btn btn-secondary btn-sm" onClick={handleExportTemp} disabled={!tempScans.length}><FileDown size={13} /> <span className="hide-on-mobile">Export</span></button>
+              <button className="btn btn-danger btn-sm" onClick={() => { if (!tempScans.length || !window.confirm('Hapus semua sesi?')) return; setTempScans([]); toast.success('Sesi dibersihkan') }} disabled={!tempScans.length}><Trash2 size={13} /> <span className="hide-on-mobile">Hapus Semua</span></button>
             </div>
           </div>
-          <div className="table-container">
+          
+          <div className="mobile-only mobile-card-list">
+            {tempScans.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}><ScanLine size={36} style={{ opacity: 0.2, display: 'block', margin: '0 auto 10px' }} /><div style={{ fontWeight: 600 }}>Sesi kosong</div></div>
+            ) : [...tempScans].reverse().map((s, i) => (
+              <div key={s.id} className="mobile-card" style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--warning)', fontSize: '14px', marginBottom: '4px' }}>{s.barcode}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{format(new Date(s.scanned_at), 'HH:mm:ss · dd MMM yyyy')}</div>
+                </div>
+                <button className="btn-icon text-danger" onClick={() => setTempScans(p => p.filter(t => t.id !== s.id))}><Trash2 size={16} /></button>
+              </div>
+            ))}
+          </div>
+
+          <div className="table-container desktop-only">
             <table className="data-table">
               <thead><tr><th style={{ width: '50px' }}>No</th><th>Barcode / SN</th><th style={{ width: '190px' }}>Waktu Scan</th><th style={{ width: '45px' }}></th></tr></thead>
               <tbody>
@@ -603,42 +648,48 @@ export default function BarcodeScanner() {
           <div style={{ padding: '12px 16px', background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
             <div>
               <div style={{ color: '#fff', fontWeight: 700, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}><Camera size={16} /> Scan Kamera</div>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '2px' }}>Arahkan kamera ke barcode / QR Code</div>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '2px' }}>Arahkan kamera ke barcode</div>
             </div>
             <button onClick={closeCamera} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '50%', width: '38px', height: '38px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><X size={20} /></button>
           </div>
 
-          <div style={{ padding: '8px 16px', background: 'rgba(0,0,0,0.7)', display: 'flex', flexDirection: 'column', gap: '8px', flexShrink: 0 }}>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <Tag size={13} style={{ color: 'var(--accent)' }} />
-              <select value={bulkCategory} onChange={e => setBulkCategory(e.target.value)} style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '6px 10px', fontSize: '13px', cursor: 'pointer' }}>
-                {CATEGORIES.map(c => <option key={c} value={c} style={{ color: '#000', background: '#fff' }}>{c}</option>)}
-              </select>
-              <input type="text" placeholder="Catatan opsional..." value={bulkNote} onChange={e => setBulkNote(e.target.value)} style={{ flex: 1, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '6px 10px', fontSize: '13px' }} />
-              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap' }}><span style={{ color: 'var(--accent)', fontWeight: 700 }}>{camScanCount}</span> terscan</div>
-            </div>
-            
-            {bulkCategory === 'ONT' && (
-              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
-                <select value={bulkOntKondisi} onChange={e => setBulkOntKondisi(e.target.value)} style={{ background: bulkOntKondisi ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', minWidth: '85px' }}>
-                  <option value="" style={{color:'#000'}}>Kondisi...</option><option value="Aman" style={{color:'#000'}}>Aman</option><option value="Rusak" style={{color:'#000'}}>Rusak</option><option value="Dismantle" style={{color:'#000'}}>Dismantle</option>
-                </select>
-                <select value={bulkOntAsal} onChange={e => { setBulkOntAsal(e.target.value); if (e.target.value !== 'Pembelian Di Luar') setBulkOntAsalDetail('') }} style={{ background: bulkOntAsal ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', minWidth: '80px' }}>
-                  <option value="" style={{color:'#000'}}>Asal...</option><option value="Kiriman Dari Bekasi" style={{color:'#000'}}>Dari Bekasi</option><option value="Pembelian Di Luar" style={{color:'#000'}}>Beli Di Luar</option><option value="Dismantle" style={{color:'#000'}}>Dismantle</option><option value="Stok Lama" style={{color:'#000'}}>Stok Lama</option>
-                </select>
-                {bulkOntAsal === 'Pembelian Di Luar' && <input type="text" placeholder="Toko..." value={bulkOntAsalDetail} onChange={e => setBulkOntAsalDetail(e.target.value)} style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', width: '80px', minWidth: '80px' }} />}
-                <select value={bulkOntTujuan} onChange={e => { setBulkOntTujuan(e.target.value); if (e.target.value !== 'Akan Di Kirim Ke Site Lain') setBulkOntTujuanDetail('') }} style={{ background: bulkOntTujuan ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', minWidth: '85px' }}>
-                  <option value="" style={{color:'#000'}}>Tujuan...</option><option value="Ada Di Gudang" style={{color:'#000'}}>Gudang</option><option value="Akan Di Retur Ke Pusat" style={{color:'#000'}}>Retur</option><option value="Akan Dipakai Lagi" style={{color:'#000'}}>Dipakai</option><option value="Akan Di Kirim Ke Site Lain" style={{color:'#000'}}>Ke Site Lain</option>
-                </select>
-                {bulkOntTujuan === 'Akan Di Kirim Ke Site Lain' && <input type="text" placeholder="Site..." value={bulkOntTujuanDetail} onChange={e => setBulkOntTujuanDetail(e.target.value)} style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', width: '80px', minWidth: '80px' }} />}
-              </div>
+          <div style={{ padding: '10px 16px', background: 'rgba(0,0,0,0.7)', display: 'flex', flexDirection: 'column', gap: '10px', flexShrink: 0 }}>
+            {activeTab === 'simpan' ? (
+              <>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <Tag size={13} style={{ color: 'var(--accent)' }} />
+                  <select value={bulkCategory} onChange={e => setBulkCategory(e.target.value)} style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '6px 10px', fontSize: '13px', cursor: 'pointer', minWidth: '80px' }}>
+                    {CATEGORIES.map(c => <option key={c} value={c} style={{ color: '#000', background: '#fff' }}>{c}</option>)}
+                  </select>
+                  <input type="text" placeholder="Catatan opsi..." value={bulkNote} onChange={e => setBulkNote(e.target.value)} style={{ flex: 1, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '6px 10px', fontSize: '13px', minWidth: 0 }} />
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap' }}><span style={{ color: 'var(--accent)', fontWeight: 700 }}>{camScanCount}</span> scan</div>
+                </div>
+                
+                {bulkCategory === 'ONT' && (
+                  <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
+                    <select value={bulkOntKondisi} onChange={e => setBulkOntKondisi(e.target.value)} style={{ background: bulkOntKondisi ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.3)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '6px 8px', fontSize: '12px', flexShrink: 0 }}>
+                      <option value="" style={{color:'#000'}}>Kondisi...</option><option value="Aman" style={{color:'#000'}}>Aman</option><option value="Rusak" style={{color:'#000'}}>Rusak</option><option value="Dismantle" style={{color:'#000'}}>Dismantle</option>
+                    </select>
+                    <select value={bulkOntAsal} onChange={e => { setBulkOntAsal(e.target.value); if (e.target.value !== 'Pembelian Di Luar') setBulkOntAsalDetail('') }} style={{ background: bulkOntAsal ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.3)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '6px 8px', fontSize: '12px', flexShrink: 0 }}>
+                      <option value="" style={{color:'#000'}}>Asal...</option><option value="Kiriman Dari Bekasi" style={{color:'#000'}}>Dari Bekasi</option><option value="Pembelian Di Luar" style={{color:'#000'}}>Beli Di Luar</option><option value="Dismantle" style={{color:'#000'}}>Dismantle</option><option value="Stok Lama" style={{color:'#000'}}>Stok Lama</option>
+                    </select>
+                    {bulkOntAsal === 'Pembelian Di Luar' && <input type="text" placeholder="Toko..." value={bulkOntAsalDetail} onChange={e => setBulkOntAsalDetail(e.target.value)} style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '6px 8px', fontSize: '12px', width: '90px', flexShrink: 0 }} />}
+                    <select value={bulkOntTujuan} onChange={e => { setBulkOntTujuan(e.target.value); if (e.target.value !== 'Akan Di Kirim Ke Site Lain') setBulkOntTujuanDetail('') }} style={{ background: bulkOntTujuan ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.3)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '6px 8px', fontSize: '12px', flexShrink: 0 }}>
+                      <option value="" style={{color:'#000'}}>Tujuan...</option><option value="Ada Di Gudang" style={{color:'#000'}}>Gudang</option><option value="Akan Di Retur Ke Pusat" style={{color:'#000'}}>Retur</option><option value="Akan Dipakai Lagi" style={{color:'#000'}}>Dipakai</option><option value="Akan Di Kirim Ke Site Lain" style={{color:'#000'}}>Ke Site Lain</option>
+                    </select>
+                    {bulkOntTujuan === 'Akan Di Kirim Ke Site Lain' && <input type="text" placeholder="Site..." value={bulkOntTujuanDetail} onChange={e => setBulkOntTujuanDetail(e.target.value)} style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)', color: '#fff', borderRadius: '6px', padding: '6px 8px', fontSize: '12px', width: '90px', flexShrink: 0 }} />}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ color: 'var(--warning)', fontSize: '12px', textAlign: 'center' }}>Sesi Sementara: <strong style={{color:'#fff'}}>{camScanCount}</strong> barcode terscan</div>
             )}
           </div>
 
           <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
             <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} playsInline muted />
             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-              <div style={{ position: 'relative', width: '260px', height: '160px' }}>
+              <div style={{ position: 'relative', width: '280px', height: '160px' }}>
                 <div style={{ position: 'absolute', inset: 0, boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)', borderRadius: '10px' }} />
                 <div style={{ position: 'absolute', inset: 0, border: `3px solid ${camStatus === 'detected' ? '#22c55e' : 'var(--accent)'}`, borderRadius: '10px', transition: 'border-color 0.3s', boxShadow: camStatus === 'detected' ? '0 0 16px rgba(34,197,94,0.6)' : '0 0 12px rgba(99,179,237,0.4)' }} />
                 {[{ top: -2, left: -2 }, { top: -2, right: -2 }, { bottom: -2, left: -2 }, { bottom: -2, right: -2 }].map((pos, i) => (
@@ -664,7 +715,7 @@ export default function BarcodeScanner() {
 
       {/* MODAL EDIT */}
       {editItem && (
-        <div className="modal-overlay"><div className="modal">
+        <div className="modal-overlay"><div className="modal" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
           <div className="modal-header"><div><h3>Edit Data Scan</h3><p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Hanya superadmin</p></div><button className="btn-close" onClick={() => setEditItem(null)}><X size={18} /></button></div>
           <div className="modal-body">
             <div className="form-group"><label className="form-label">Barcode / SN *</label><input type="text" className="form-input" style={{ fontFamily: 'monospace', fontWeight: 600 }} value={editForm.barcode} onChange={e => setEditForm(p => ({ ...p, barcode: e.target.value }))} /></div>
@@ -681,20 +732,20 @@ export default function BarcodeScanner() {
                 </div>
                 <div style={{ marginBottom: '10px' }}>
                   <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>Asal Modem</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <select className="form-input" value={editForm.ont_asal} onChange={e => setEditForm(p => ({ ...p, ont_asal: e.target.value }))} style={{ padding: '6px 10px', fontSize: '12px', flex: 1 }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <select className="form-input" value={editForm.ont_asal} onChange={e => setEditForm(p => ({ ...p, ont_asal: e.target.value }))} style={{ padding: '6px 10px', fontSize: '12px', flex: 1, minWidth: '130px' }}>
                       <option value="">-- Pilih --</option><option value="Kiriman Dari Bekasi">Kiriman Dari Bekasi</option><option value="Pembelian Di Luar">Pembelian Di Luar</option><option value="Dismantle">Dismantle</option><option value="Stok Lama">Stok Lama</option>
                     </select>
-                    {editForm.ont_asal === 'Pembelian Di Luar' && <input type="text" className="form-input" placeholder="Nama Toko" value={editForm.ont_asal_detail} onChange={e => setEditForm(p => ({ ...p, ont_asal_detail: e.target.value }))} style={{ padding: '6px 10px', fontSize: '12px', flex: 1 }} />}
+                    {editForm.ont_asal === 'Pembelian Di Luar' && <input type="text" className="form-input" placeholder="Nama Toko" value={editForm.ont_asal_detail} onChange={e => setEditForm(p => ({ ...p, ont_asal_detail: e.target.value }))} style={{ padding: '6px 10px', fontSize: '12px', flex: 1, minWidth: '130px' }} />}
                   </div>
                 </div>
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>Status / Tujuan</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <select className="form-input" value={editForm.ont_tujuan} onChange={e => setEditForm(p => ({ ...p, ont_tujuan: e.target.value }))} style={{ padding: '6px 10px', fontSize: '12px', flex: 1 }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <select className="form-input" value={editForm.ont_tujuan} onChange={e => setEditForm(p => ({ ...p, ont_tujuan: e.target.value }))} style={{ padding: '6px 10px', fontSize: '12px', flex: 1, minWidth: '130px' }}>
                       <option value="">-- Pilih --</option><option value="Ada Di Gudang">Ada Di Gudang</option><option value="Akan Di Retur Ke Pusat">Akan Di Retur Ke Pusat</option><option value="Akan Dipakai Lagi">Akan Dipakai Lagi</option><option value="Akan Di Kirim Ke Site Lain">Akan Di Kirim Ke Site Lain</option>
                     </select>
-                    {editForm.ont_tujuan === 'Akan Di Kirim Ke Site Lain' && <input type="text" className="form-input" placeholder="Nama Site" value={editForm.ont_tujuan_detail} onChange={e => setEditForm(p => ({ ...p, ont_tujuan_detail: e.target.value }))} style={{ padding: '6px 10px', fontSize: '12px', flex: 1 }} />}
+                    {editForm.ont_tujuan === 'Akan Di Kirim Ke Site Lain' && <input type="text" className="form-input" placeholder="Nama Site" value={editForm.ont_tujuan_detail} onChange={e => setEditForm(p => ({ ...p, ont_tujuan_detail: e.target.value }))} style={{ padding: '6px 10px', fontSize: '12px', flex: 1, minWidth: '130px' }} />}
                   </div>
                 </div>
               </div>
