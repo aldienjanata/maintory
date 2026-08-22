@@ -23,6 +23,7 @@ import BannerMaintenance from './pages/banner/BannerMaintenance'
 import DataTiang from './pages/jaringan/DataTiang'
 import DataOdpOdc from './pages/jaringan/DataOdpOdc'
 import KonversiTiang from './pages/jaringan/KonversiTiang'
+import BarcodeScanner from './pages/scanner/BarcodeScanner'
 import OwnerLogin from './pages/owner/OwnerLogin'
 import OwnerPanel from './pages/owner/OwnerPanel'
 
@@ -100,6 +101,7 @@ function App() {
             <Route path="jaringan/tiang" element={<DataTiang />} />
             <Route path="jaringan/odp-odc" element={<DataOdpOdc />} />
             <Route path="jaringan/konversi" element={<KonversiTiang />} />
+            <Route path="scanner" element={<BarcodeScanner />} />
           </Route>
         </Routes>
       </Router>

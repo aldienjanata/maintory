@@ -77,6 +77,13 @@ export const can = (role, action) => {
     'log.delete': ['superadmin'],
     'log.export': ['superadmin', 'admin'],
 
+    // Scanner Barcode
+    'scanner.view':   ['superadmin', 'admin', 'teknisi'],
+    'scanner.scan':   ['superadmin', 'admin', 'teknisi'],
+    'scanner.delete': ['superadmin', 'admin'],
+    'scanner.edit':   ['superadmin'],
+    'scanner.export': ['superadmin', 'admin'],
+
     // Settings
     'settings.password': ['superadmin', 'admin', 'teknisi'],
     'settings.avatar': ['superadmin', 'admin', 'teknisi'],
