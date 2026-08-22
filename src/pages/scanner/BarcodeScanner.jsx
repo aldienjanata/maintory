@@ -269,23 +269,30 @@ export default function BarcodeScanner() {
   const toggleCard = id => { setExpandedCards(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
 
   // ===== CRUD =====
-  const handleDeleteSelected = async () => {
-    if (!selected.size || !window.confirm(`Hapus ${selected.size} data? Tidak bisa dibatalkan.`)) return
-    const { error } = await supabase.from('barcode_scans').delete().in('id', [...selected])
-    if (!error) { toast.success(`${selected.size} data dihapus`); setSelected(new Set()); setSelectMode(false); fetchScans() }
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null })
+  const requestConfirm = (title, message, onConfirm) => setConfirmDialog({ isOpen: true, title, message, onConfirm })
+
+  const handleDeleteSelected = () => {
+    if (!selected.size) return
+    requestConfirm('Konfirmasi Hapus', `Hapus ${selected.size} data? Tidak bisa dibatalkan.`, async () => {
+      const { error } = await supabase.from('barcode_scans').delete().in('id', [...selected])
+      if (!error) { toast.success(`${selected.size} data dihapus`); setSelected(new Set()); setSelectMode(false); fetchScans() }
+    })
   }
-  const handleDeleteByDate = async () => {
+  const handleDeleteByDate = () => {
     if (!deleteByDateFrom) { toast.error('Pilih tanggal awal'); return }
-    if (!window.confirm('Hapus data dalam rentang tanggal ini?')) return
-    let query = supabase.from('barcode_scans').delete().gte('first_scan', deleteByDateFrom + 'T00:00:00')
-    if (deleteByDateTo) query = query.lte('first_scan', deleteByDateTo + 'T23:59:59')
-    const { error } = await query
-    if (!error) { toast.success('Data dihapus'); setShowDeleteByDate(false); setDeleteByDateFrom(''); setDeleteByDateTo(''); fetchScans() }
+    requestConfirm('Hapus Data', 'Hapus permanen data dalam rentang tanggal ini?', async () => {
+      let query = supabase.from('barcode_scans').delete().gte('first_scan', deleteByDateFrom + 'T00:00:00')
+      if (deleteByDateTo) query = query.lte('first_scan', deleteByDateTo + 'T23:59:59')
+      const { error } = await query
+      if (!error) { toast.success('Data dihapus'); setShowDeleteByDate(false); setDeleteByDateFrom(''); setDeleteByDateTo(''); fetchScans() }
+    })
   }
-  const handleDeleteSingle = async (s) => {
-    if (!window.confirm(`Hapus "${s.barcode}"?`)) return
-    await supabase.from('barcode_scans').delete().eq('id', s.id)
-    toast.success('Dihapus'); fetchScans()
+  const handleDeleteSingle = (s) => {
+    requestConfirm('Hapus Data', `Hapus "${s.barcode}"? Tidak bisa dibatalkan.`, async () => {
+      await supabase.from('barcode_scans').delete().eq('id', s.id)
+      toast.success('Dihapus'); fetchScans()
+    })
   }
   const handleEdit = item => { 
     setEditItem(item); 
@@ -651,7 +658,7 @@ export default function BarcodeScanner() {
             <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
               <button className="btn btn-secondary btn-sm" onClick={handleCopyAll} disabled={!tempScans.length}><Copy size={13} /> <span className="hide-on-mobile">Salin</span></button>
               <button className="btn btn-secondary btn-sm" onClick={handleExportTemp} disabled={!tempScans.length}><FileDown size={13} /> <span className="hide-on-mobile">Export</span></button>
-              <button className="btn btn-danger btn-sm" onClick={() => { if (!tempScans.length || !window.confirm('Hapus semua sesi?')) return; setTempScans([]); toast.success('Sesi dibersihkan') }} disabled={!tempScans.length}><Trash2 size={13} /> <span className="hide-on-mobile">Hapus Semua</span></button>
+              <button className="btn btn-danger btn-sm" onClick={() => { if (!tempScans.length) return; requestConfirm('Bersihkan Sesi', 'Hapus semua data pindaian sementara?', () => { setTempScans([]); toast.success('Sesi dibersihkan') }) }} disabled={!tempScans.length}><Trash2 size={13} /> <span className="hide-on-mobile">Hapus Semua</span></button>
             </div>
           </div>
           
@@ -836,11 +843,29 @@ export default function BarcodeScanner() {
               </div>
             </div>
             <div style={{ padding: '8px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)', fontSize: '12px', color: 'var(--text-muted)' }}>
-              File: <strong style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>{exportMode === 'month' ? `Export_Data_Scan_${exportMonth}.xlsx` : 'Export_Data_Scan_Semua.xlsx'}</strong>
+              File: <strong style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>{exportMode === 'month' ? `Export Data Scan ${exportMonth}.xlsx` : 'Export Data Scan Semua.xlsx'}</strong>
             </div>
           </div>
           <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setShowExportModal(false)}>Batal</button><button className="btn btn-primary" onClick={handleExport}><Download size={14} /> Download</button></div>
         </div></div>
+      )}
+
+      {/* CONFIRMATION DIALOG */}
+      {confirmDialog.isOpen && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '340px' }}>
+            <div className="modal-header">
+              <h3 style={{ color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '8px' }}><AlertTriangle size={18} /> {confirmDialog.title}</h3>
+            </div>
+            <div className="modal-body" style={{ padding: '20px 16px', fontSize: '14px', lineHeight: 1.5, color: 'var(--text-primary)' }}>
+              {confirmDialog.message}
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', gap: '10px' }}>
+              <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null })}>Batal</button>
+              <button className="btn btn-danger" style={{ flex: 1 }} onClick={() => { if (confirmDialog.onConfirm) confirmDialog.onConfirm(); setConfirmDialog({ isOpen: false, title: '', message: '', onConfirm: null }) }}>Ya, Hapus</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
