@@ -365,64 +365,68 @@ export default function BarcodeScanner() {
         ))}
       </div>
 
-      <div className="card" style={{ marginBottom: '16px', borderColor: 'var(--accent)', borderWidth: '2px', padding: '16px' }}>
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Tag size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontWeight: 600 }}>Kategori:</span>
-            <select className="form-input" value={bulkCategory} onChange={e => setBulkCategory(e.target.value)} style={{ padding: '5px 8px', fontSize: '13px', minWidth: '110px' }}>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div style={{ flex: 1, minWidth: '160px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontWeight: 600 }}>Catatan:</span>
-            <input type="text" className="form-input" placeholder="Opsional, untuk bulk scan..." value={bulkNote} onChange={e => setBulkNote(e.target.value)} style={{ flex: 1, padding: '5px 8px', fontSize: '13px' }} />
-          </div>
-        </div>
+      <div className="card" style={{ marginBottom: '16px', borderColor: 'var(--accent)', borderWidth: '2px', padding: '16px', maxWidth: '800px' }}>
+        {activeTab === 'simpan' && (
+          <>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Tag size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontWeight: 600 }}>Kategori:</span>
+                <select className="form-input" value={bulkCategory} onChange={e => setBulkCategory(e.target.value)} style={{ padding: '5px 8px', fontSize: '13px', minWidth: '110px' }}>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div style={{ flex: 1, minWidth: '160px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontWeight: 600 }}>Catatan:</span>
+                <input type="text" className="form-input" placeholder="Opsional, untuk bulk scan..." value={bulkNote} onChange={e => setBulkNote(e.target.value)} style={{ flex: 1, padding: '5px 8px', fontSize: '13px' }} />
+              </div>
+            </div>
 
-        {/* ONT Specific Bulk Settings */}
-        {bulkCategory === 'ONT' && (
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap', padding: '10px 12px', background: 'rgba(99,179,237,0.06)', borderRadius: '8px', border: '1px solid rgba(99,179,237,0.3)' }}>
-            <div style={{ flex: 1, minWidth: '100px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'flex', gap: '4px', alignItems: 'center' }}>Kondisi <span style={{color:'var(--danger)'}}>*</span></label>
-              <select className="form-input" value={bulkOntKondisi} onChange={e => setBulkOntKondisi(e.target.value)} style={{ padding: '5px 8px', fontSize: '12px', marginTop: '4px' }}>
-                <option value="">-- Pilih --</option>
-                <option value="Aman">Aman</option>
-                <option value="Rusak">Rusak</option>
-                <option value="Dismantle">Dismantle</option>
-              </select>
-            </div>
-            <div style={{ flex: 2, minWidth: '180px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'flex', gap: '4px', alignItems: 'center' }}>Asal Modem <span style={{color:'var(--danger)'}}>*</span></label>
-              <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                <select className="form-input" value={bulkOntAsal} onChange={e => { setBulkOntAsal(e.target.value); if (e.target.value !== 'Pembelian Di Luar') setBulkOntAsalDetail('') }} style={{ padding: '5px 8px', fontSize: '12px', flex: 1 }}>
-                  <option value="">-- Pilih --</option>
-                  <option value="Kiriman Dari Bekasi">Kiriman Dari Bekasi</option>
-                  <option value="Pembelian Di Luar">Pembelian Di Luar</option>
-                  <option value="Dismantle">Dismantle</option>
-                  <option value="Stok Lama">Stok Lama</option>
-                </select>
-                {bulkOntAsal === 'Pembelian Di Luar' && (
-                  <input type="text" className="form-input" placeholder="Nama Toko..." value={bulkOntAsalDetail} onChange={e => setBulkOntAsalDetail(e.target.value)} style={{ padding: '5px 8px', fontSize: '12px', flex: 1 }} />
-                )}
+            {/* ONT Specific Bulk Settings */}
+            {bulkCategory === 'ONT' && (
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap', padding: '10px 12px', background: 'rgba(99,179,237,0.06)', borderRadius: '8px', border: '1px solid rgba(99,179,237,0.3)' }}>
+                <div style={{ flex: 1, minWidth: '100px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'flex', gap: '4px', alignItems: 'center' }}>Kondisi <span style={{color:'var(--danger)'}}>*</span></label>
+                  <select className="form-input" value={bulkOntKondisi} onChange={e => setBulkOntKondisi(e.target.value)} style={{ padding: '5px 8px', fontSize: '12px', marginTop: '4px' }}>
+                    <option value="">-- Pilih --</option>
+                    <option value="Aman">Aman</option>
+                    <option value="Rusak">Rusak</option>
+                    <option value="Dismantle">Dismantle</option>
+                  </select>
+                </div>
+                <div style={{ flex: 2, minWidth: '180px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'flex', gap: '4px', alignItems: 'center' }}>Asal Modem <span style={{color:'var(--danger)'}}>*</span></label>
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                    <select className="form-input" value={bulkOntAsal} onChange={e => { setBulkOntAsal(e.target.value); if (e.target.value !== 'Pembelian Di Luar') setBulkOntAsalDetail('') }} style={{ padding: '5px 8px', fontSize: '12px', flex: 1 }}>
+                      <option value="">-- Pilih --</option>
+                      <option value="Kiriman Dari Bekasi">Kiriman Dari Bekasi</option>
+                      <option value="Pembelian Di Luar">Pembelian Di Luar</option>
+                      <option value="Dismantle">Dismantle</option>
+                      <option value="Stok Lama">Stok Lama</option>
+                    </select>
+                    {bulkOntAsal === 'Pembelian Di Luar' && (
+                      <input type="text" className="form-input" placeholder="Nama Toko..." value={bulkOntAsalDetail} onChange={e => setBulkOntAsalDetail(e.target.value)} style={{ padding: '5px 8px', fontSize: '12px', flex: 1 }} />
+                    )}
+                  </div>
+                </div>
+                <div style={{ flex: 2, minWidth: '180px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'flex', gap: '4px', alignItems: 'center' }}>Status / Tujuan <span style={{color:'var(--danger)'}}>*</span></label>
+                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                    <select className="form-input" value={bulkOntTujuan} onChange={e => { setBulkOntTujuan(e.target.value); if (e.target.value !== 'Akan Di Kirim Ke Site Lain') setBulkOntTujuanDetail('') }} style={{ padding: '5px 8px', fontSize: '12px', flex: 1 }}>
+                      <option value="">-- Pilih --</option>
+                      <option value="Ada Di Gudang">Ada Di Gudang</option>
+                      <option value="Akan Di Retur Ke Pusat">Akan Di Retur Ke Pusat</option>
+                      <option value="Akan Dipakai Lagi">Akan Dipakai Lagi</option>
+                      <option value="Akan Di Kirim Ke Site Lain">Akan Di Kirim Ke Site Lain</option>
+                    </select>
+                    {bulkOntTujuan === 'Akan Di Kirim Ke Site Lain' && (
+                      <input type="text" className="form-input" placeholder="Nama Site..." value={bulkOntTujuanDetail} onChange={e => setBulkOntTujuanDetail(e.target.value)} style={{ padding: '5px 8px', fontSize: '12px', flex: 1 }} />
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div style={{ flex: 2, minWidth: '180px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', display: 'flex', gap: '4px', alignItems: 'center' }}>Status / Tujuan <span style={{color:'var(--danger)'}}>*</span></label>
-              <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                <select className="form-input" value={bulkOntTujuan} onChange={e => { setBulkOntTujuan(e.target.value); if (e.target.value !== 'Akan Di Kirim Ke Site Lain') setBulkOntTujuanDetail('') }} style={{ padding: '5px 8px', fontSize: '12px', flex: 1 }}>
-                  <option value="">-- Pilih --</option>
-                  <option value="Ada Di Gudang">Ada Di Gudang</option>
-                  <option value="Akan Di Retur Ke Pusat">Akan Di Retur Ke Pusat</option>
-                  <option value="Akan Dipakai Lagi">Akan Dipakai Lagi</option>
-                  <option value="Akan Di Kirim Ke Site Lain">Akan Di Kirim Ke Site Lain</option>
-                </select>
-                {bulkOntTujuan === 'Akan Di Kirim Ke Site Lain' && (
-                  <input type="text" className="form-input" placeholder="Nama Site..." value={bulkOntTujuanDetail} onChange={e => setBulkOntTujuanDetail(e.target.value)} style={{ padding: '5px 8px', fontSize: '12px', flex: 1 }} />
-                )}
-              </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
 
         <div style={{ display: 'flex', gap: '8px' }}>
