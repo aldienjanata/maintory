@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
-import * as XLSX from 'xlsx'
+import { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } from '../../utils/excelHelper'
 
 const CATEGORIES = ['umum', 'ONT', 'Kabel', 'Material', 'Perangkat', 'Lain-lain']
 
@@ -310,34 +310,61 @@ export default function BarcodeScanner() {
   }
 
   // ===== EXPORT =====
-  const handleExport = () => {
-    let data = scans, filename = 'Export_Data_Scan_Semua.xlsx'
+  const handleExport = async () => {
+    let data = scans, filename = 'Export Data Scan Semua.xlsx'
     if (exportMode === 'month') {
       const from = startOfMonth(parseISO(exportMonth + '-01')), to = endOfMonth(from)
       data = scans.filter(s => { const d = new Date(s.first_scan); return d >= from && d <= to })
-      filename = `Export_Data_Scan_${exportMonth}.xlsx`
+      filename = `Export Data Scan ${exportMonth}.xlsx`
     }
     if (!data.length) { toast.error('Tidak ada data'); return }
     const hasOnt = data.some(s => s.category === 'ONT')
-    const mapped = data.map((s, i) => {
-      const row = {
-        'No': i + 1, 'Barcode / SN': s.barcode, 'Kategori': s.category || 'umum', 'Catatan': s.note || '',
-        'Pertama Scan': format(new Date(s.first_scan), 'dd/MM/yyyy HH:mm', { locale: idLocale }),
-        'Terakhir Scan': format(new Date(s.last_scan), 'dd/MM/yyyy HH:mm', { locale: idLocale }),
-        'Jumlah Scan': s.scan_count, 'Oleh': users[s.scanned_by] || '-'
-      }
-      if (hasOnt) {
-        row['Kondisi ONT'] = s.ont_kondisi || ''
-        row['Asal ONT'] = s.ont_asal ? `${s.ont_asal}${s.ont_asal_detail ? ` (${s.ont_asal_detail})` : ''}` : ''
-        row['Tujuan ONT'] = s.ont_tujuan ? `${s.ont_tujuan}${s.ont_tujuan_detail ? ` (${s.ont_tujuan_detail})` : ''}` : ''
-      }
-      return row
-    })
-    const ws = XLSX.utils.json_to_sheet(mapped)
-    ws['!cols'] = [{ wch: 5 }, { wch: 28 }, { wch: 12 }, { wch: 25 }, { wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 18 }]
-    if (hasOnt) ws['!cols'].push({ wch: 15 }, { wch: 30 }, { wch: 30 })
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Data Scan')
-    XLSX.writeFile(wb, filename); toast.success('Export: ' + filename); setShowExportModal(false)
+    
+    try {
+      const ExcelJS = (await import('exceljs')).default
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet('Data Scan')
+
+      const headers = ['No', 'Barcode / SN', 'Kategori', 'Catatan', 'Tanggal Pertama', 'Jam Pertama', 'Tanggal Terakhir', 'Jam Terakhir', 'Jumlah Scan', 'Oleh']
+      if (hasOnt) headers.push('Kondisi ONT', 'Asal ONT', 'Tujuan ONT')
+
+      applyHeaderStyle(ws, headers, '0284C7')
+      const widths = [6, 25, 12, 30, 16, 12, 16, 12, 12, 18]
+      if (hasOnt) widths.push(15, 25, 25)
+      setColumnWidths(ws, widths)
+
+      data.forEach((s, i) => {
+        const firstDateObj = new Date(s.first_scan)
+        const lastDateObj = new Date(s.last_scan)
+        const rowData = [
+          i + 1,
+          s.barcode,
+          s.category || 'umum',
+          s.note || '',
+          format(firstDateObj, 'dd/MM/yyyy'),
+          format(firstDateObj, 'HH:mm'),
+          format(lastDateObj, 'dd/MM/yyyy'),
+          format(lastDateObj, 'HH:mm'),
+          s.scan_count,
+          users[s.scanned_by] || '-'
+        ]
+        if (hasOnt) {
+          rowData.push(
+            s.ont_kondisi || '',
+            s.ont_asal ? `${s.ont_asal}${s.ont_asal_detail ? ` (${s.ont_asal_detail})` : ''}` : '',
+            s.ont_tujuan ? `${s.ont_tujuan}${s.ont_tujuan_detail ? ` (${s.ont_tujuan_detail})` : ''}` : ''
+          )
+        }
+        ws.addRow(rowData)
+      })
+
+      applyDataRowStyles(ws)
+      await downloadWorkbook(wb, filename)
+      toast.success('Export: ' + filename)
+      setShowExportModal(false)
+    } catch (error) {
+      toast.error('Gagal export: ' + error.message)
+    }
   }
 
   // ===== TAB 2 EXPORT =====
@@ -349,13 +376,33 @@ export default function BarcodeScanner() {
     tempInputRef.current?.focus()
   }
   const handleCopyAll = () => { if (!tempScans.length) return; navigator.clipboard.writeText(tempScans.map(s => s.barcode).join('\n')); toast.success(`${tempScans.length} barcode disalin`) }
-  const handleExportTemp = () => {
+  const handleExportTemp = async () => {
     if (!tempScans.length) return
-    const ws = XLSX.utils.json_to_sheet(tempScans.map((s, i) => ({ 'No': i + 1, 'Barcode / SN': s.barcode, 'Waktu': format(new Date(s.scanned_at), 'HH:mm:ss dd/MM/yyyy') })))
-    ws['!cols'] = [{ wch: 5 }, { wch: 28 }, { wch: 22 }]
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Sementara')
-    XLSX.writeFile(wb, `Scan_Sementara_${format(new Date(), 'ddMMyyyy_HHmm')}.xlsx`)
-    toast.success('Export berhasil')
+    try {
+      const ExcelJS = (await import('exceljs')).default
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet('Sesi Sementara')
+      const headers = ['No', 'Barcode / SN', 'Tanggal', 'Jam']
+      applyHeaderStyle(ws, headers, 'EA580C') // orange header for temp
+      setColumnWidths(ws, [6, 25, 16, 12])
+
+      const arr = [...tempScans].reverse()
+      arr.forEach((s, i) => {
+        const d = new Date(s.scanned_at)
+        ws.addRow([
+          i + 1,
+          s.barcode,
+          format(d, 'dd/MM/yyyy'),
+          format(d, 'HH:mm:ss')
+        ])
+      })
+      
+      applyDataRowStyles(ws)
+      await downloadWorkbook(wb, `Scan Sementara ${format(new Date(), 'dd-MM-yyyy HHmm')}.xlsx`)
+      toast.success('Export berhasil')
+    } catch (error) {
+      toast.error('Gagal export: ' + error.message)
+    }
   }
 
   const fmtDate = iso => { try { return format(new Date(iso), 'dd MMM yyyy HH:mm', { locale: idLocale }) } catch { return '-' } }
