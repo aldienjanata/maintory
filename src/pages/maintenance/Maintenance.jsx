@@ -268,11 +268,25 @@ export default function Maintenance() {
 
       return matchSearch && matchStatus && matchDate
     })
-    // Selalu urutkan nomor tiket ascending (terkecil di atas)
     .sort((a, b) => {
-      const na = parseInt(a.ticket_number) || 0
-      const nb = parseInt(b.ticket_number) || 0
-      return na - nb
+      if (!dateFilter) {
+        // Jika filter tanggal "Semua", urutkan berdasarkan tanggal terbaru (descending)
+        const dateA = new Date(a.created_at).getTime()
+        const dateB = new Date(b.created_at).getTime()
+        
+        if (dateB !== dateA) {
+          return dateB - dateA
+        }
+        // Jika waktu sama (atau fallback), urutkan berdasarkan tiket terbesar
+        const na = parseInt(a.ticket_number) || 0
+        const nb = parseInt(b.ticket_number) || 0
+        return nb - na
+      } else {
+        // Jika ada filter tanggal tertentu, tetap urutkan berdasarkan nomor tiket ascending
+        const na = parseInt(a.ticket_number) || 0
+        const nb = parseInt(b.ticket_number) || 0
+        return na - nb
+      }
     })
 
   // ─── EXPORT ───────────────────────────────────────────────────────────────
