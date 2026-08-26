@@ -80,7 +80,8 @@ export default function Login() {
 
   return (
     <div className="login-page">
-      {/* Background is handled purely in CSS now */}
+      {/* Dot grid background */}
+      <div className="login-bg-grid" />
 
       {/* Login Card */}
       <div className="login-card">
@@ -90,11 +91,11 @@ export default function Login() {
         {/* Logo area */}
         <div className="login-logo-wrap">
           <div className="login-logo-icon" style={{ background: 'transparent', boxShadow: 'none', padding: '0' }}>
-            <img src="/logo.png" alt="Maintory" style={{ width: '80px', height: '80px', objectFit: 'contain', borderRadius: '0', display: 'block', filter: 'drop-shadow(0 4px 12px rgba(0, 163, 255, 0.4))' }} />
+            <img src="/logo.png" alt="Maintory" style={{ width: '80px', height: '80px', objectFit: 'contain', borderRadius: '0', display: 'block', filter: 'drop-shadow(0 4px 12px rgba(0, 163, 255, 0.45))' }} />
           </div>
           <div>
             <h1 className="login-title">Maintory</h1>
-            <p className="login-subtitle">Sistem Manajemen Maintenance &amp; Inventory</p>
+            <p className="login-subtitle">Sistem Manajemen Dan Infra ISP</p>
           </div>
         </div>
 
@@ -173,7 +174,8 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="login-footer">Cabang Banyumas &bull; © 2026 Maintory</p>
+        <p className="login-footer">Cabang Banyumas &bull; &copy; 2026 Maintory</p>
+        <p className="login-footer-credit">Crafted by <span>Aldi</span></p>
       </div>
     </div>
   )
