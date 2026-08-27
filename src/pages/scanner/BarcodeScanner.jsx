@@ -7,7 +7,7 @@ import toast from 'react-hot-toast'
 import {
   ScanLine, Search, Trash2, Edit2, X, Download,
   CheckSquare, Calendar, RefreshCw, FileDown, Clock,
-  Copy, Tag, Camera, ChevronDown, ChevronUp, AlertTriangle, Check, Info
+  Copy, Tag, Camera, ChevronDown, ChevronUp, AlertTriangle, Check, Info, Loader
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
