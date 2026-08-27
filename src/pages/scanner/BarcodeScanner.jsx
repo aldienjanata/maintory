@@ -185,22 +185,30 @@ export default function BarcodeScanner() {
     return false
   }, [profile])
 
-  const handleScan = async (e) => {
+  const handleScan = (e) => {
     if (e.key !== 'Enter') return
     const raw = barcodeInput.trim()
     if (!raw) return
     const barcode = raw.split(/\s+/)[0]
     setBarcodeInput('')
     setScanning(true)
-    const result = await processBarcode(barcode)
-    if (activeTab === 'simpan' && result) {
-      setScans(prev => {
-        const filtered = prev.filter(s => s.id !== result.id)
-        return [result, ...filtered]
-      })
-    }
-    setScanning(false)
-    scanInputRef.current?.focus()
+    processBarcode(barcode).then(result => {
+      if (activeTab === 'simpan' && result) {
+        setScans(prev => {
+          const filtered = prev.filter(s => s.id !== result.id)
+          return [result, ...filtered]
+        })
+      }
+      setScanning(false)
+    })
+  }
+
+  const handleTempScan = (e) => {
+    if (e.key !== 'Enter') return
+    const raw = tempInput.trim(); if (!raw) return
+    const barcode = raw.split(/\s+/)[0]
+    setTempInput('')
+    processBarcode(barcode)
   }
 
   // ===== CAMERA =====
@@ -241,13 +249,21 @@ export default function BarcodeScanner() {
               lastBarcodeTimeRef.current = now
               setCamLastBarcode(barcode)
               setCamStatus('detected')
-              const success = await processBarcode(barcode)
-              if (success) {
-                setCamScanCount(prev => prev + 1)
-                setCamScannedItems(prev => [{ barcode, id: crypto.randomUUID() }, ...prev])
-                if (activeTabRef.current === 'simpan') fetchScans()
-              }
-              setTimeout(() => setCamStatus('scanning'), 1500)
+              
+              const itemId = crypto.randomUUID()
+              setCamScanCount(prev => prev + 1)
+              setCamScannedItems(prev => [{ barcode, id: itemId, status: 'saving' }, ...prev])
+
+              processBarcode(barcode).then(result => {
+                if (result) {
+                  setCamScannedItems(prev => prev.map(item => item.id === itemId ? { ...item, status: 'success' } : item))
+                } else {
+                  setCamScanCount(prev => Math.max(0, prev - 1))
+                  setCamScannedItems(prev => prev.map(item => item.id === itemId ? { ...item, status: 'error' } : item))
+                }
+              })
+
+              setTimeout(() => { if (isCameraOpenRef.current) setCamStatus('scanning') }, 1500)
             }
           }
         } catch {}
@@ -436,14 +452,7 @@ export default function BarcodeScanner() {
   }
 
   // ===== TAB 2 EXPORT =====
-  const handleTempScan = async e => {
-    if (e.key !== 'Enter') return
-    const raw = tempInput.trim(); if (!raw) return
-    const barcode = raw.split(/\s+/)[0]
-    setTempInput('')
-    await processBarcode(barcode)
-    tempInputRef.current?.focus()
-  }
+
   const handleCopyAll = () => { if (!tempScans.length) return; navigator.clipboard.writeText(tempScans.map(s => s.barcode).join('\n')); toast.success(`${tempScans.length} barcode disalin`) }
   const handleExportTemp = async () => {
     if (!tempScans.length) return
@@ -551,7 +560,6 @@ export default function BarcodeScanner() {
               value={activeTab === 'simpan' ? barcodeInput : tempInput}
               onChange={e => activeTab === 'simpan' ? setBarcodeInput(e.target.value) : setTempInput(e.target.value)}
               onKeyDown={activeTab === 'simpan' ? handleScan : handleTempScan}
-              disabled={scanning}
               style={{ fontFamily: 'monospace', fontSize: '15px', width: '100%', paddingRight: scanning ? '36px' : '12px' }}
               autoComplete="off"
             />
@@ -905,10 +913,17 @@ export default function BarcodeScanner() {
                 <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', flexShrink: 0 }}>Riwayat Scan (Sesi Ini)</div>
                 {camScannedItems.map((item) => (
                   <div key={item.id} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px' }}>
-                    <div style={{ color: '#fff', fontFamily: 'monospace', fontSize: '13px', fontWeight: 600 }}>{item.barcode}</div>
-                    <button onClick={() => handleDeleteCamScan(item.barcode)} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Trash2 size={15} />
-                    </button>
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {item.status === 'saving' && <Loader size={14} className="spinner" style={{ color: 'var(--accent)' }} />}
+                      {item.status === 'success' && <Check size={14} style={{ color: '#22c55e' }} />}
+                      {item.status === 'error' && <AlertTriangle size={14} style={{ color: '#f87171' }} />}
+                      <div style={{ color: item.status === 'error' ? '#f87171' : '#fff', fontFamily: 'monospace', fontSize: '13px', fontWeight: 600 }}>{item.barcode}</div>
+                    </div>
+                    {item.status !== 'saving' && (
+                      <button onClick={() => handleDeleteCamScan(item.barcode)} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
