@@ -296,9 +296,7 @@ export default function BarcodeScanner() {
   const hasFilter = searchTerm || categoryFilter !== 'all' || filterFirstFrom || filterFirstTo || filterLastFrom || filterLastTo
   const resetFilters = () => { setSearchTerm(''); setCategoryFilter('all'); setFilterFirstFrom(''); setFilterFirstTo(''); setFilterLastFrom(''); setFilterLastTo(''); setCurrentPage(1) }
   const toggleSelect = id => { setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
-  const toggleSelectAll = () => { setSelected(selected.size === filtered.length && filtered.length > 0 ? new Set() : new Set(filtered.map(s => s.id))) }
   const toggleCard = id => { setExpandedCards(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
-
   // ===== PAGINATION =====
   const [PAGE_SIZE, setPAGE_SIZE] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
@@ -306,6 +304,23 @@ export default function BarcodeScanner() {
   const safePage = Math.min(currentPage, totalPages)
   const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
   useEffect(() => { setCurrentPage(1) }, [searchTerm, categoryFilter, filterFirstFrom, filterFirstTo, filterLastFrom, filterLastTo, PAGE_SIZE])
+
+  const toggleSelectAll = () => {
+    const allVisibleSelected = paginated.length > 0 && paginated.every(s => selected.has(s.id))
+    if (allVisibleSelected) {
+      setSelected(prev => {
+        const n = new Set(prev)
+        paginated.forEach(s => n.delete(s.id))
+        return n
+      })
+    } else {
+      setSelected(prev => {
+        const n = new Set(prev)
+        paginated.forEach(s => n.add(s.id))
+        return n
+      })
+    }
+  }
 
   // ===== CRUD =====
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null })
@@ -643,7 +658,7 @@ export default function BarcodeScanner() {
               <div className="table-container desktop-only">
                 <table className="data-table">
                   <thead><tr>
-                    {selectMode && <th style={{ width: '36px' }}><input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleSelectAll} style={{ cursor: 'pointer' }} /></th>}
+                    {selectMode && <th style={{ width: '36px' }}><input type="checkbox" checked={paginated.length > 0 && paginated.every(s => selected.has(s.id))} onChange={toggleSelectAll} style={{ cursor: 'pointer' }} /></th>}
                     <th style={{ width: '40px' }}>No</th><th>Barcode / SN</th><th>Kategori</th><th>Catatan</th><th>Pertama Scan</th><th>Terakhir Scan</th><th style={{ textAlign: 'center', width: '60px' }}>Scan</th><th>Oleh</th><th style={{ width: '60px' }}></th>
                   </tr></thead>
                   <tbody>

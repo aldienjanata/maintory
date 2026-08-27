@@ -526,10 +526,19 @@ export default function DataTiang() {
     })
   }
   const toggleSelectAll = () => {
-    if (selectedIds.size === paginated.length && paginated.every(p => selectedIds.has(p.id))) {
-      setSelectedIds(new Set())
+    const allVisibleSelected = paginated.length > 0 && paginated.every(p => selectedIds.has(p.id))
+    if (allVisibleSelected) {
+      setSelectedIds(prev => {
+        const n = new Set(prev)
+        paginated.forEach(p => n.delete(p.id))
+        return n
+      })
     } else {
-      setSelectedIds(new Set(paginated.map(p => p.id)))
+      setSelectedIds(prev => {
+        const n = new Set(prev)
+        paginated.forEach(p => n.add(p.id))
+        return n
+      })
     }
   }
   const clearSelection = () => setSelectedIds(new Set())
