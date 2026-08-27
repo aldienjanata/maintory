@@ -822,7 +822,7 @@ export default function BarcodeScanner() {
 
       {/* CAMERA MODAL */}
       {isCameraOpen && createPortal(
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#000', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#000', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ padding: '12px 16px', background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
             <div>
               <div style={{ color: '#fff', fontWeight: 700, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}><Camera size={16} /> Scan Kamera</div>
@@ -864,8 +864,8 @@ export default function BarcodeScanner() {
             )}
           </div>
 
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-            <div style={{ width: '100%', maxWidth: '420px', aspectRatio: '3/4', maxHeight: '60vh', position: 'relative', overflow: 'hidden', borderRadius: '16px', background: '#111', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+            <div style={{ width: '100%', maxWidth: '420px', aspectRatio: '3/4', maxHeight: '100%', position: 'relative', overflow: 'hidden', borderRadius: '16px', background: '#111', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
               <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay playsInline muted />
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                 <div style={{ position: 'relative', width: '85%', height: '35%' }}>
