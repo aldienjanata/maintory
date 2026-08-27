@@ -160,25 +160,26 @@ export default function BarcodeScanner() {
     const { data: existing } = await supabase.from('barcode_scans').select('*').eq('barcode', barcode).maybeSingle()
     if (existing) {
       const newCount = (existing.scan_count || 1) + 1
-      const { error } = await supabase.from('barcode_scans')
-        .update({ 
-          last_scan: new Date().toISOString(), 
-          scan_count: newCount, 
-          updated_by: profile.id,
-          note: bulk.note.trim() || existing.note,
-          category: bulk.category,
-          ...ontFields
-        }).eq('id', existing.id)
-      if (!error) { toast.success(`🔄 Diperbarui: "${barcode}" (${newCount}×)`, { duration: 2000 }); return true }
+      const payload = {
+        last_scan: new Date().toISOString(), 
+        scan_count: newCount, 
+        updated_by: profile.id,
+        note: bulk.note.trim() || existing.note,
+        category: bulk.category,
+        ...ontFields
+      }
+      const { error, data: updated } = await supabase.from('barcode_scans').update(payload).eq('id', existing.id).select().single()
+      if (!error) { toast.success(`🔄 Diperbarui: "${barcode}" (${newCount}x)`, { duration: 2000 }); return updated }
       if (error) { toast.error('Gagal update: ' + error.message); return false }
     } else {
       const now = new Date().toISOString()
-      const { error } = await supabase.from('barcode_scans').insert({
+      const payload = {
         barcode, note: bulk.note.trim() || null, category: bulk.category,
         scanned_by: profile.id, first_scan: now, last_scan: now, scan_count: 1,
         ...ontFields
-      })
-      if (!error) { toast.success(`✅ Tersimpan: "${barcode}"`, { duration: 2000 }); return true }
+      }
+      const { error, data: inserted } = await supabase.from('barcode_scans').insert(payload).select().single()
+      if (!error) { toast.success(`✅ Tersimpan: "${barcode}"`, { duration: 2000 }); return inserted }
       if (error) { toast.error('Gagal simpan: ' + error.message); return false }
     }
     return false
@@ -191,8 +192,13 @@ export default function BarcodeScanner() {
     const barcode = raw.split(/\s+/)[0]
     setBarcodeInput('')
     setScanning(true)
-    const success = await processBarcode(barcode)
-    if (activeTab === 'simpan' && success) fetchScans()
+    const result = await processBarcode(barcode)
+    if (activeTab === 'simpan' && result) {
+      setScans(prev => {
+        const filtered = prev.filter(s => s.id !== result.id)
+        return [result, ...filtered]
+      })
+    }
     setScanning(false)
     scanInputRef.current?.focus()
   }
