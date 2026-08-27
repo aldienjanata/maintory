@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
@@ -203,8 +204,14 @@ export default function BarcodeScanner() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
       streamRef.current = stream
-      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play() }
-      startDetecting()
+      // Tunggu modal render agar videoRef.current tidak null
+      setTimeout(async () => {
+        if (videoRef.current) { 
+          videoRef.current.srcObject = stream
+          try { await videoRef.current.play() } catch (e) {}
+          startDetecting()
+        }
+      }, 50)
     } catch (err) { toast.error('Gagal akses kamera: ' + err.message); setIsCameraOpen(false) }
   }
 
@@ -697,7 +704,7 @@ export default function BarcodeScanner() {
       )}
 
       {/* CAMERA MODAL */}
-      {isCameraOpen && (
+      {isCameraOpen && createPortal(
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#000', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '12px 16px', background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
             <div>
@@ -742,7 +749,7 @@ export default function BarcodeScanner() {
 
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
             <div style={{ width: '100%', maxWidth: '420px', aspectRatio: '3/4', maxHeight: '60vh', position: 'relative', overflow: 'hidden', borderRadius: '16px', background: '#111', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
-              <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} playsInline muted />
+              <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay playsInline muted />
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                 <div style={{ position: 'relative', width: '85%', height: '35%' }}>
                   <div style={{ position: 'absolute', inset: 0, boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)', borderRadius: '10px' }} />
@@ -766,8 +773,7 @@ export default function BarcodeScanner() {
               </>
             ) : <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>Menunggu barcode...</div>}
           </div>
-        </div>
-      )}
+        </div>, document.body)}
 
       {/* MODAL EDIT */}
       {editItem && (
