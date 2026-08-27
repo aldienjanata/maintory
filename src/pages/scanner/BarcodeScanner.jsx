@@ -879,7 +879,7 @@ export default function BarcodeScanner() {
             </div>
           </div>
 
-          <div style={{ flexShrink: 0, background: 'rgba(0,0,0,0.85)', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', maxHeight: '35vh' }}>
+          <div style={{ flexShrink: 0, background: 'rgba(0,0,0,0.85)', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', maxHeight: '45vh' }}>
             <div style={{ padding: '12px 16px', background: camStatus === 'detected' ? 'rgba(34,197,94,0.15)' : 'transparent', transition: 'background 0.3s', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
               {camLastBarcode ? (
                 <>
@@ -893,10 +893,10 @@ export default function BarcodeScanner() {
             </div>
 
             {camScannedItems.length > 0 && (
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', overflowY: 'auto', padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Riwayat Scan (Sesi Ini)</div>
+              <div style={{ flex: 1, minHeight: 0, borderTop: '1px solid rgba(255,255,255,0.1)', overflowY: 'auto', padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', flexShrink: 0 }}>Riwayat Scan (Sesi Ini)</div>
                 {camScannedItems.map((item) => (
-                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px' }}>
+                  <div key={item.id} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px' }}>
                     <div style={{ color: '#fff', fontFamily: 'monospace', fontSize: '13px', fontWeight: 600 }}>{item.barcode}</div>
                     <button onClick={() => handleDeleteCamScan(item.barcode)} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Trash2 size={15} />
