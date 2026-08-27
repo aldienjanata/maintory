@@ -23,12 +23,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <App />
             <UpdatePrompt />
             <Toaster
-              position="top-right"
+              position="top-center"
               toastOptions={{
                 style: {
                   background: 'var(--bg-card)',
                   color: 'var(--text-primary)',
                   border: '1px solid var(--border)',
+                  maxWidth: '380px',
+                  fontSize: '13.5px',
                 },
                 success: {
                   iconTheme: {

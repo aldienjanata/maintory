@@ -294,10 +294,18 @@ export default function BarcodeScanner() {
     return true
   })
   const hasFilter = searchTerm || categoryFilter !== 'all' || filterFirstFrom || filterFirstTo || filterLastFrom || filterLastTo
-  const resetFilters = () => { setSearchTerm(''); setCategoryFilter('all'); setFilterFirstFrom(''); setFilterFirstTo(''); setFilterLastFrom(''); setFilterLastTo('') }
+  const resetFilters = () => { setSearchTerm(''); setCategoryFilter('all'); setFilterFirstFrom(''); setFilterFirstTo(''); setFilterLastFrom(''); setFilterLastTo(''); setCurrentPage(1) }
   const toggleSelect = id => { setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
   const toggleSelectAll = () => { setSelected(selected.size === filtered.length && filtered.length > 0 ? new Set() : new Set(filtered.map(s => s.id))) }
   const toggleCard = id => { setExpandedCards(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
+
+  // ===== PAGINATION =====
+  const PAGE_SIZE = 20
+  const [currentPage, setCurrentPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(currentPage, totalPages)
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  useEffect(() => { setCurrentPage(1) }, [searchTerm, categoryFilter, filterFirstFrom, filterFirstTo, filterLastFrom, filterLastTo])
 
   // ===== CRUD =====
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null })
@@ -583,14 +591,16 @@ export default function BarcodeScanner() {
                     <ScanLine size={36} style={{ opacity: 0.2, display: 'block', margin: '0 auto 10px' }} />
                     <div style={{ fontWeight: 600 }}>Belum ada data scan</div>
                   </div>
-                ) : filtered.map((s, i) => {
+                ) : paginated.map((s, i) => {
                   const isExpanded = expandedCards.has(s.id)
+                  const globalIndex = (safePage - 1) * PAGE_SIZE + i + 1
                   return (
                     <div key={s.id} className="mobile-card" style={{ borderLeft: selectMode && selected.has(s.id) ? '4px solid var(--accent)' : undefined }}>
                       <div className="mobile-card-header" onClick={() => selectMode ? toggleSelect(s.id) : toggleCard(s.id)}>
                         <div style={{ flex: 1, paddingRight: '10px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                             {selectMode && <input type="checkbox" checked={selected.has(s.id)} onChange={() => {}} style={{ pointerEvents: 'none' }} />}
+                            <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600 }}>#{globalIndex}</span>
                             <span className="mobile-card-title" style={{ fontFamily: 'monospace', fontSize: '14px', color: 'var(--accent)' }}>{s.barcode}</span>
                           </div>
                           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -642,10 +652,10 @@ export default function BarcodeScanner() {
                         <ScanLine size={36} style={{ opacity: 0.2, display: 'block', margin: '0 auto 10px' }} />
                         <div style={{ fontWeight: 600, marginBottom: '4px' }}>{hasFilter ? 'Tidak ada data sesuai filter' : 'Belum ada data scan'}</div>
                       </td></tr>
-                    ) : filtered.map((s, i) => (
+                    ) : paginated.map((s, i) => (
                       <tr key={s.id} style={{ background: selected.has(s.id) ? 'rgba(99,179,237,0.07)' : undefined }}>
                         {selectMode && <td><input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSelect(s.id)} style={{ cursor: 'pointer' }} /></td>}
-                        <td style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{i + 1}</td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(safePage - 1) * PAGE_SIZE + i + 1}</td>
                         <td>
                           <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '13px', color: 'var(--accent)' }}>{s.barcode}</span>
                           {s.category === 'ONT' && (s.ont_kondisi || s.ont_asal || s.ont_tujuan) && (
@@ -671,10 +681,64 @@ export default function BarcodeScanner() {
                   </tbody>
                 </table>
               </div>
+
+              {/* PAGINATION */}
+              {totalPages > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={safePage === 1}
+                    style={{ padding: '6px 10px' }}
+                  >«</button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={safePage === 1}
+                    style={{ padding: '6px 10px' }}
+                  >‹ Prev</button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 2)
+                    .reduce((acc, p, idx, arr) => {
+                      if (idx > 0 && p - arr[idx - 1] > 1) acc.push('...')
+                      acc.push(p)
+                      return acc
+                    }, [])
+                    .map((p, i) => p === '...' ? (
+                      <span key={`ellipsis-${i}`} style={{ color: 'var(--text-muted)', padding: '0 4px' }}>…</span>
+                    ) : (
+                      <button
+                        key={p}
+                        className={`btn btn-sm ${safePage === p ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setCurrentPage(p)}
+                        style={{ minWidth: '36px', padding: '6px 10px', fontWeight: safePage === p ? 700 : 400 }}
+                      >{p}</button>
+                    ))
+                  }
+
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={safePage === totalPages}
+                    style={{ padding: '6px 10px' }}
+                  >Next ›</button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={safePage === totalPages}
+                    style={{ padding: '6px 10px' }}
+                  >»</button>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Hal {safePage}/{totalPages} • {filtered.length} data
+                  </span>
+                </div>
+              )}
             </>
           )}
         </div>
       )}
+
 
       {activeTab === 'sementara' && (
         <div>
