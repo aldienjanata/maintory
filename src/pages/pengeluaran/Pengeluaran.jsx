@@ -56,9 +56,9 @@ export default function Pengeluaran() {
   const [statusFilter, setStatusFilter] = useState('semua')
   const [schedStatusFilter, setSchedStatusFilter] = useState('semua')
   const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(20)
+  const [perPage, setPerPage] = useState(10)
   const [schedPage, setSchedPage] = useState(1)
-  const [schedPerPage, setSchedPerPage] = useState(20)
+  const [schedPerPage, setSchedPerPage] = useState(10)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
   const [exportMonth, setExportMonth] = useState('')
 

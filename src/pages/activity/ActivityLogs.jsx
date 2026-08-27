@@ -7,6 +7,7 @@ import { Search, Trash2, History, Filter, Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import { useProgress } from '../../contexts/ProgressContext'
+import Pagination from '../../components/common/Pagination'
 
 const MODULES = ['Auth', 'Maintenance', 'Stok Gudang', 'Serial Number', 'Dropcore', 'Pengeluaran', 'Dismantle', 'Pergantian ONT', 'Settings']
 
@@ -20,14 +21,15 @@ export default function ActivityLogs() {
   const [searchTerm, setSearchTerm] = useState('')
   const [moduleFilter, setModuleFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState('')
-  const [page, setPage] = useState(0)
-  const PAGE_SIZE = 50
+  const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
+  const [totalItems, setTotalItems] = useState(0)
 
-  useEffect(() => { fetchLogs() }, [page, moduleFilter, dateFilter])
+  useEffect(() => { fetchLogs() }, [page, perPage, moduleFilter, dateFilter])
 
   const fetchLogs = async () => {
     setLoading(true)
-    let query = supabase.from('activity_logs').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+    let query = supabase.from('activity_logs').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range((page - 1) * perPage, page * perPage - 1)
 
     if (moduleFilter !== 'all') query = query.eq('module', moduleFilter)
     if (dateFilter) {
@@ -36,8 +38,11 @@ export default function ActivityLogs() {
       query = query.gte('created_at', start).lte('created_at', end)
     }
 
-    const { data, error } = await query
-    if (!error) setLogs(data || [])
+    const { data, count, error } = await query
+    if (!error) {
+      setLogs(data || [])
+      if (count !== null) setTotalItems(count)
+    }
     setLoading(false)
   }
 
@@ -197,14 +202,13 @@ export default function ActivityLogs() {
         </div>
 
         {/* Pagination */}
-        <div className="flex justify-between items-center mt-4">
-          <span className="text-secondary" style={{ fontSize: '12px' }}>{filtered.length} entri ditampilkan</span>
-          <div className="flex gap-2">
-            <button className="btn btn-secondary btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>← Sebelumnya</button>
-            <span className="btn btn-ghost btn-sm" style={{ cursor: 'default' }}>Hal. {page + 1}</span>
-            <button className="btn btn-secondary btn-sm" onClick={() => setPage(p => p + 1)} disabled={logs.length < PAGE_SIZE}>Berikutnya →</button>
-          </div>
-        </div>
+        <Pagination
+          page={page}
+          setPage={setPage}
+          perPage={perPage}
+          setPerPage={setPerPage}
+          totalItems={totalItems}
+        />
       </div>
     </div>
   )

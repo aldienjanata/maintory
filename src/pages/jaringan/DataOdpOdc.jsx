@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useProgress } from '../../contexts/ProgressContext'
 import toast from 'react-hot-toast'
+import Pagination from '../../components/common/Pagination'
 import {
   Plus, X, Edit2, Trash2, MapPin, Search, Download,
   ChevronDown, ChevronUp, ExternalLink, Antenna, Upload,
@@ -334,7 +335,7 @@ export default function DataOdpOdc() {
 
   // Pagination
   const [page, setPage] = useState(1)
-  const perPage = 15
+  const [perPage, setPerPage] = useState(10)
 
   useEffect(() => { fetchData() }, [])
 
@@ -1611,15 +1612,13 @@ export default function DataOdpOdc() {
         </div>
         <style>{`@media (max-width: 768px) { .desktop-table { display: none !important; } .mobile-cards { display: block !important; } }`}</style>
         
-        {totalPages > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', padding: '14px', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>‹</button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1).map((p, i, arr) => (
-              <span key={p}>{i > 0 && arr[i - 1] !== p - 1 && <span style={{ color: 'var(--text-secondary)', padding: '0 2px' }}>…</span>}<button className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setPage(p)}>{p}</button></span>
-            ))}
-            <button className="btn btn-secondary btn-sm" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>›</button>
-          </div>
-        )}
+        <Pagination
+          page={page}
+          setPage={setPage}
+          perPage={perPage}
+          setPerPage={setPerPage}
+          totalItems={filtered.length}
+        />
       </div>
 
       {/* ══════ MODAL TAMBAH/EDIT ══════ */}

@@ -51,7 +51,7 @@ export default function Pagination({ page, setPage, perPage, setPerPage, totalIt
             cursor: 'pointer' 
           }}
         >
-          {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n} / hal</option>)}
+          {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n} / hal</option>)}
         </select>
       </div>
 

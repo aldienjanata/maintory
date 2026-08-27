@@ -300,12 +300,12 @@ export default function BarcodeScanner() {
   const toggleCard = id => { setExpandedCards(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
 
   // ===== PAGINATION =====
-  const PAGE_SIZE = 20
+  const [PAGE_SIZE, setPAGE_SIZE] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(currentPage, totalPages)
   const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
-  useEffect(() => { setCurrentPage(1) }, [searchTerm, categoryFilter, filterFirstFrom, filterFirstTo, filterLastFrom, filterLastTo])
+  useEffect(() => { setCurrentPage(1) }, [searchTerm, categoryFilter, filterFirstFrom, filterFirstTo, filterLastFrom, filterLastTo, PAGE_SIZE])
 
   // ===== CRUD =====
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null })
@@ -683,8 +683,21 @@ export default function BarcodeScanner() {
               </div>
 
               {/* PAGINATION */}
-              {totalPages > 1 && (
+              {(totalPages > 1 || filtered.length > 0) && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginTop: '16px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '8px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Tampilkan:</span>
+                    <select 
+                      value={PAGE_SIZE} 
+                      onChange={e => setPAGE_SIZE(Number(e.target.value))} 
+                      className="form-input" 
+                      style={{ padding: '4px 8px', fontSize: '12px', width: 'auto' }}
+                    >
+                      {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                  
+                  {totalPages > 1 && <>
                   <button
                     className="btn btn-secondary btn-sm"
                     onClick={() => setCurrentPage(1)}
@@ -732,6 +745,7 @@ export default function BarcodeScanner() {
                   <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                     Hal {safePage}/{totalPages} • {filtered.length} data
                   </span>
+                  </>}
                 </div>
               )}
             </>
