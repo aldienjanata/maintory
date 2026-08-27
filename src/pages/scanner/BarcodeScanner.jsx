@@ -186,8 +186,9 @@ export default function BarcodeScanner() {
 
   const handleScan = async (e) => {
     if (e.key !== 'Enter') return
-    const barcode = barcodeInput.trim()
-    if (!barcode) return
+    const raw = barcodeInput.trim()
+    if (!raw) return
+    const barcode = raw.split(/\s+/)[0]
     setBarcodeInput('')
     setScanning(true)
     const success = await processBarcode(barcode)
@@ -227,7 +228,7 @@ export default function BarcodeScanner() {
         try {
           const barcodes = await detectorRef.current.detect(videoRef.current)
           if (barcodes.length > 0) {
-            const barcode = barcodes[0].rawValue
+            const barcode = barcodes[0].rawValue.trim().split(/\s+/)[0]
             const now = Date.now()
             if (barcode !== lastBarcodeRef.current || now - lastBarcodeTimeRef.current > 2500) {
               lastBarcodeRef.current = barcode
@@ -431,7 +432,8 @@ export default function BarcodeScanner() {
   // ===== TAB 2 EXPORT =====
   const handleTempScan = async e => {
     if (e.key !== 'Enter') return
-    const barcode = tempInput.trim(); if (!barcode) return
+    const raw = tempInput.trim(); if (!raw) return
+    const barcode = raw.split(/\s+/)[0]
     setTempInput('')
     await processBarcode(barcode)
     tempInputRef.current?.focus()
