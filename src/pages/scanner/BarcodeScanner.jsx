@@ -78,6 +78,7 @@ export default function BarcodeScanner() {
   const [isCameraOpen, setIsCameraOpen] = useState(false)
   const [camLastBarcode, setCamLastBarcode] = useState('')
   const [camScanCount, setCamScanCount] = useState(0)
+  const [camScannedItems, setCamScannedItems] = useState([])
   const [camStatus, setCamStatus] = useState('scanning')
   const [hasBarcodeDetector] = useState(() => 'BarcodeDetector' in window)
   const videoRef = useRef(null)
@@ -200,6 +201,7 @@ export default function BarcodeScanner() {
     if (!hasBarcodeDetector) { toast.error('Browser ini tidak mendukung scan kamera. Gunakan Chrome di Android.'); return }
     setIsCameraOpen(true)
     setCamScanCount(0)
+    setCamScannedItems([])
     setCamLastBarcode('')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
@@ -235,6 +237,7 @@ export default function BarcodeScanner() {
               const success = await processBarcode(barcode)
               if (success) {
                 setCamScanCount(prev => prev + 1)
+                setCamScannedItems(prev => [{ barcode, id: crypto.randomUUID() }, ...prev])
                 if (activeTabRef.current === 'simpan') fetchScans()
               }
               setTimeout(() => setCamStatus('scanning'), 1500)
@@ -245,6 +248,27 @@ export default function BarcodeScanner() {
       scanTimerRef.current = setTimeout(detect, 250)
     }
     detect()
+  }
+
+  const handleDeleteCamScan = async (barcode) => {
+    if (activeTab === 'simpan') {
+      const { error } = await supabase.from('barcode_scans').delete().eq('barcode', barcode)
+      if (error) {
+        toast.error('Gagal hapus: ' + error.message)
+      } else {
+        toast.success(`Dihapus: ${barcode}`)
+        fetchScans()
+        setCamScanCount(prev => Math.max(0, prev - 1))
+        setCamScannedItems(prev => prev.filter(i => i.barcode !== barcode))
+        if (camLastBarcode === barcode) setCamLastBarcode('')
+      }
+    } else {
+      setTempScans(prev => prev.filter(s => s.barcode !== barcode))
+      setCamScanCount(prev => Math.max(0, prev - 1))
+      setCamScannedItems(prev => prev.filter(i => i.barcode !== barcode))
+      if (camLastBarcode === barcode) setCamLastBarcode('')
+      toast.success(`Dihapus dari sesi sementara`)
+    }
   }
 
   const closeCamera = () => {
@@ -762,16 +786,32 @@ export default function BarcodeScanner() {
             </div>
           </div>
 
-          <div style={{ padding: '12px 16px', background: camStatus === 'detected' ? 'rgba(34,197,94,0.15)' : 'rgba(0,0,0,0.75)', borderTop: `1px solid ${camStatus === 'detected' ? 'rgba(34,197,94,0.4)' : 'rgba(255,255,255,0.1)'}`, transition: 'background 0.3s', flexShrink: 0, minHeight: '64px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {camLastBarcode ? (
-              <>
-                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: camStatus === 'detected' ? '#22c55e' : 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.3s' }}><Check size={18} style={{ color: '#000' }} /></div>
-                <div>
-                  <div style={{ color: '#fff', fontFamily: 'monospace', fontWeight: 700, fontSize: '15px' }}>{camLastBarcode}</div>
-                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '2px' }}>Total sesi ini: {camScanCount} barcode</div>
-                </div>
-              </>
-            ) : <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>Menunggu barcode...</div>}
+          <div style={{ flexShrink: 0, background: 'rgba(0,0,0,0.85)', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', maxHeight: '35vh' }}>
+            <div style={{ padding: '12px 16px', background: camStatus === 'detected' ? 'rgba(34,197,94,0.15)' : 'transparent', transition: 'background 0.3s', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+              {camLastBarcode ? (
+                <>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: camStatus === 'detected' ? '#22c55e' : 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.3s' }}><Check size={18} style={{ color: '#000' }} /></div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: '#fff', fontFamily: 'monospace', fontWeight: 700, fontSize: '15px' }}>{camLastBarcode}</div>
+                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px', marginTop: '2px' }}>Total sesi ini: {camScanCount} barcode</div>
+                  </div>
+                </>
+              ) : <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px', padding: '8px 0' }}>Menunggu barcode...</div>}
+            </div>
+
+            {camScannedItems.length > 0 && (
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', overflowY: 'auto', padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Riwayat Scan (Sesi Ini)</div>
+                {camScannedItems.map((item) => (
+                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px' }}>
+                    <div style={{ color: '#fff', fontFamily: 'monospace', fontSize: '13px', fontWeight: 600 }}>{item.barcode}</div>
+                    <button onClick={() => handleDeleteCamScan(item.barcode)} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>, document.body)}
 
