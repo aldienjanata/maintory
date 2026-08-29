@@ -969,10 +969,10 @@ export default function BonBarang() {
               }
             } else if (it.item_type === 'dropcore') {
               const hType = (it.haspel?.type || '1c').toUpperCase()
-              jenisBarang = `DROPCORE ${hType}`
               kode = it.haspel?.haspel_code || '-'
               const hId = it.haspel_id || (it.haspel && it.haspel.id)
               const isUtuh = hId && firstDispatchByHaspel[hId]?.dispatchId === d.id
+              jenisBarang = `DROPCORE ${hType} (${isUtuh ? 'Utuh' : 'Sisa'})`
               qtyDibawa = isUtuh ? 1 : 0
               satuan = 'Haspel (Bawa) / Meter (Pakai)'
               if (isSelesai) {
@@ -982,10 +982,10 @@ export default function BonBarang() {
               }
             } else if (it.item_type === 'adss') {
               const hType = (it.adss?.type || '24c').toUpperCase()
-              jenisBarang = `KABEL ADSS ${hType}`
               kode = it.adss?.haspel_code || '-'
               const hId = it.adss_id || (it.adss && it.adss.id)
               const isUtuh = hId && firstDispatchAdss[hId]?.dispatchId === d.id
+              jenisBarang = `KABEL ADSS ${hType} (${isUtuh ? 'Utuh' : 'Sisa'})`
               qtyDibawa = isUtuh ? 1 : 0
               satuan = 'Haspel (Bawa) / Meter (Pakai)'
               if (isSelesai) {
