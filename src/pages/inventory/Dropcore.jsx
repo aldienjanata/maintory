@@ -121,9 +121,8 @@ export default function Dropcore() {
               action: 'isi_ulang_dropcore',
               meters: Number(form.initial_meters),
               quantity: 1,
-              module: 'dropcore',
-              user_id: profile.id,
-              notes: (form.note ? form.note + ' | ' : '') + `Refill Merk: ${form.merk}`
+              created_by: profile.id,
+              note: (form.note ? form.note + ' | ' : '') + `Refill Merk: ${form.merk}`
             })
             setSaving(false)
             setIsModalOpen(false)
@@ -258,8 +257,8 @@ export default function Dropcore() {
       date: l.log_date,
       action: l.action === 'masuk' ? 'Masuk' : l.action === 'isi_ulang_dropcore' ? 'Isi Ulang' : 'Koreksi',
       qty: l.meters,
-      note: l.note,
-      user: l.user?.full_name,
+      note: l.note || l.notes || '-',
+      user: l.user?.full_name || '-',
       type: 'in'
     }))
 
