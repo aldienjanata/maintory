@@ -522,15 +522,27 @@ export default function Dropcore() {
           const { error } = await supabase.from('inventory_log').insert(row)
           if (error) {
             console.error("Failed inserting row:", row, error)
-            // Try Capitalized as fallback
-            const capRow = { ...row, item_type: row.item_type === 'dropcore' ? 'Dropcore' : (row.item_type === 'adss' ? 'Adss' : row.item_type) }
-            const { error: err2 } = await supabase.from('inventory_log').insert(capRow)
-            if (err2) {
-                console.error("Also failed capitalized:", capRow, err2)
-                failCount++
-                lastError = err2
-            } else {
+            let success = false
+            const guesses = [
+              'Dropcore', 'Adss', 'DROPCORE', 'ADSS', 
+              'dropcore_haspel', 'adss_haspel', 'dropcore_haspels', 'adss_haspels',
+              'Dropcore Haspel', 'Kabel ADSS', 'Dropcore_Haspel', 'Adss_Haspel',
+              'haspel_dropcore', 'haspel_adss'
+            ]
+            for (const guess of guesses) {
+              const testRow = { ...row, item_type: guess }
+              const { error: errGuess } = await supabase.from('inventory_log').insert(testRow)
+              if (!errGuess) {
+                success = true
                 successCount++
+                console.log(`Success with item_type: ${guess}!`)
+                break
+              } else {
+                lastError = errGuess
+              }
+            }
+            if (!success) {
+                failCount++
             }
           } else {
             successCount++
