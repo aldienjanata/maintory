@@ -515,18 +515,30 @@ export default function Dropcore() {
         })
       }
       if (toInsert.length > 0) {
-        const { error } = await supabase.from('inventory_log').insert(toInsert)
-        if (error) {
-          // If violates check constraint (e.g. strict casing like 'Dropcore'/'Adss')
-          console.error("Insert failed, trying Capitalized types...", error)
-          const toInsertCap = toInsert.map(i => ({
-            ...i,
-            item_type: i.item_type === 'dropcore' ? 'Dropcore' : (i.item_type === 'adss' ? 'Adss' : i.item_type)
-          }))
-          const { error: err2 } = await supabase.from('inventory_log').insert(toInsertCap)
-          if (err2) throw err2
+        let successCount = 0
+        let failCount = 0
+        for (const row of toInsert) {
+          const { error } = await supabase.from('inventory_log').insert(row)
+          if (error) {
+            console.error("Failed inserting row:", row, error)
+            // Try Capitalized as fallback
+            const capRow = { ...row, item_type: row.item_type === 'dropcore' ? 'Dropcore' : (row.item_type === 'adss' ? 'Adss' : row.item_type) }
+            const { error: err2 } = await supabase.from('inventory_log').insert(capRow)
+            if (err2) {
+                console.error("Also failed capitalized:", capRow, err2)
+                failCount++
+            } else {
+                successCount++
+            }
+          } else {
+            successCount++
+          }
         }
-        toast.success(`Berhasil menyuntikkan ${toInsert.length} riwayat masuk!`)
+        if (failCount > 0) {
+          toast.error(`Berhasil ${successCount}, Gagal ${failCount}. Cek console untuk detail.`)
+        } else {
+          toast.success(`Berhasil menyuntikkan ${successCount} riwayat masuk!`)
+        }
       } else {
         toast.success('Semua haspel sudah memiliki riwayat masuk.')
       }
