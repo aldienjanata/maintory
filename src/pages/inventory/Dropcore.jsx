@@ -485,6 +485,49 @@ export default function Dropcore() {
     }
   }
 
+  const handleInjectHistory = async () => {
+    try {
+      showProgress()
+      const { data: dcs } = await supabase.from('dropcore_haspels').select('*')
+      const { data: ads } = await supabase.from('adss_haspels').select('*')
+      const { data: logs } = await supabase.from('inventory_log').select('*').in('action', ['masuk', 'isi_ulang_dropcore', 'isi_ulang_adss'])
+      
+      const dLog = new Set(logs.filter(l => l.item_type?.toLowerCase() === 'dropcore').map(l => l.item_id))
+      const aLog = new Set(logs.filter(l => l.item_type?.toLowerCase() === 'adss').map(l => l.item_id))
+      
+      const toInsert = []
+      for (const h of (dcs || [])) {
+        if (!dLog.has(h.id)) toInsert.push({
+          log_date: h.date_in || h.created_at.substring(0, 10),
+          item_type: 'dropcore', item_id: h.id, action: 'masuk',
+          meters: Number(h.initial_meters) || 1000,
+          note: h.merk ? `Merk: ${h.merk} (Riwayat Suntik Sistem)` : '(Riwayat Suntik Sistem)',
+          created_at: h.created_at, created_by: h.created_by || null
+        })
+      }
+      for (const h of (ads || [])) {
+        if (!aLog.has(h.id)) toInsert.push({
+          log_date: h.date_in || h.created_at.substring(0, 10),
+          item_type: 'adss', item_id: h.id, action: 'masuk',
+          meters: Number(h.initial_meters) || 4000,
+          note: h.brand ? `Merk: ${h.brand} (Riwayat Suntik Sistem)` : '(Riwayat Suntik Sistem)',
+          created_at: h.created_at, created_by: h.created_by || null
+        })
+      }
+      if (toInsert.length > 0) {
+        const { error } = await supabase.from('inventory_log').insert(toInsert)
+        if (error) throw error
+        toast.success(`Berhasil menyuntikkan ${toInsert.length} riwayat masuk!`)
+      } else {
+        toast.success('Semua haspel sudah memiliki riwayat masuk.')
+      }
+    } catch (err) {
+      toast.error('Gagal: ' + err.message)
+    } finally {
+      hideProgress()
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -493,6 +536,11 @@ export default function Dropcore() {
           <p>Kelola inventaris kabel dropcore berdasarkan haspel</p>
         </div>
         <div className="page-header-right">
+          {role === 'superadmin' && (
+            <button className="btn btn-secondary" onClick={handleInjectHistory} style={{ background: 'var(--warning)', color: 'white', borderColor: 'var(--warning)' }}>
+              Pemutihan Riwayat Lama
+            </button>
+          )}
           {can(role, 'inventory.dropcore.export') && (
             <button className="btn btn-secondary" onClick={handleExportExcel}><Download size={16} /> Export</button>
           )}
