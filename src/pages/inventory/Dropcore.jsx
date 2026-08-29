@@ -290,7 +290,7 @@ export default function Dropcore() {
       })
       .filter(r => r.date)
 
-    const combined = [...inRows, ...outRowsExp, ...outRowsDisp].sort((a, b) => (a.date < b.date ? -1 : 1))
+    const combined = [...inRows, ...outRowsExp, ...outRowsDisp].sort((a, b) => (a.date > b.date ? -1 : 1))
     setHistoryData(combined)
     setHistoryLoading(false)
   }
