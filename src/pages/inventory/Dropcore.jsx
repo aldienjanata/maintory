@@ -104,6 +104,7 @@ export default function Dropcore() {
               initial_meters: form.initial_meters,
               used_meters: 0,
               merk: form.merk,
+              date_in: form.date_in,
               status: 'tersedia',
               updated_at: new Date().toISOString()
             }).eq('id', existing.id)
@@ -249,7 +250,7 @@ export default function Dropcore() {
 
     const inRows = (logs || []).map(l => ({
       date: l.log_date,
-      action: l.action === 'masuk' ? 'Masuk' : 'Koreksi',
+      action: l.action === 'masuk' ? 'Masuk' : l.action === 'isi_ulang_dropcore' ? 'Isi Ulang' : 'Koreksi',
       qty: l.meters,
       note: l.note,
       user: l.user?.full_name,
