@@ -120,6 +120,7 @@ export default function Dropcore() {
               item_id: finalHaspelId,
               action: 'isi_ulang_dropcore',
               meters: Number(form.initial_meters),
+              quantity: 1,
               module: 'dropcore',
               user_id: profile.id,
               notes: (form.note ? form.note + ' | ' : '') + `Refill Merk: ${form.merk}`
@@ -149,6 +150,7 @@ export default function Dropcore() {
           item_id: finalHaspelId,
           action: 'masuk',
           meters: Number(form.initial_meters),
+          quantity: 1,
           note: (form.note ? form.note + ' | ' : '') + `Merk: ${form.merk}`,
           created_by: profile.id
         })
@@ -487,81 +489,93 @@ export default function Dropcore() {
 
   const handleInjectHistory = async () => {
     try {
-      showProgress()
+      showProgress('Memuat data haspel...', 'Mengambil data dari database', 5)
+
       const { data: dcs } = await supabase.from('dropcore_haspels').select('*')
       const { data: ads } = await supabase.from('adss_haspels').select('*')
-      const { data: logs } = await supabase.from('inventory_log').select('*').in('action', ['masuk', 'isi_ulang_dropcore', 'isi_ulang_adss'])
+
+      showProgress('Mengecek riwayat...', 'Mencari haspel yang belum ada riwayat masuknya', 20)
+      const { data: logs } = await supabase.from('inventory_log').select('item_id, item_type, action').in('action', ['masuk', 'isi_ulang_dropcore', 'isi_ulang_adss'])
       
-      const dLog = new Set(logs.filter(l => l.item_type?.toLowerCase() === 'dropcore').map(l => l.item_id))
-      const aLog = new Set(logs.filter(l => l.item_type?.toLowerCase() === 'adss').map(l => l.item_id))
+      // Cek value item_type yang sudah berhasil tersimpan sebelumnya di DB
+      const allTypes = [...new Set((logs || []).map(l => l.item_type))]
+      const dropcoreType = allTypes.find(t => t?.toLowerCase().includes('dropcore')) || 'dropcore'
+      const adssType = allTypes.find(t => t?.toLowerCase().includes('adss')) || 'adss'
+      
+      const dLog = new Set((logs || []).filter(l => l.item_type === dropcoreType).map(l => l.item_id))
+      const aLog = new Set((logs || []).filter(l => l.item_type === adssType).map(l => l.item_id))
       
       const toInsert = []
       for (const h of (dcs || [])) {
         if (!dLog.has(h.id)) toInsert.push({
           log_date: h.date_in || h.created_at.substring(0, 10),
-          item_type: 'dropcore', item_id: h.id, action: 'masuk',
+          item_type: dropcoreType, item_id: h.id, action: 'masuk',
           meters: Number(h.initial_meters) || 1000,
+          quantity: 1,
           note: h.merk ? `Merk: ${h.merk} (Riwayat Suntik Sistem)` : '(Riwayat Suntik Sistem)',
-          created_at: h.created_at, created_by: h.created_by || null
+          created_by: h.created_by || null
         })
       }
       for (const h of (ads || [])) {
         if (!aLog.has(h.id)) toInsert.push({
           log_date: h.date_in || h.created_at.substring(0, 10),
-          item_type: 'adss', item_id: h.id, action: 'masuk',
+          item_type: adssType, item_id: h.id, action: 'masuk',
           meters: Number(h.initial_meters) || 4000,
+          quantity: 1,
           note: h.brand ? `Merk: ${h.brand} (Riwayat Suntik Sistem)` : '(Riwayat Suntik Sistem)',
-          created_at: h.created_at, created_by: h.created_by || null
+          created_by: h.created_by || null
         })
       }
-      if (toInsert.length > 0) {
-        let successCount = 0
-        let failCount = 0
-        let lastError = null
-        for (const row of toInsert) {
-          const { error } = await supabase.from('inventory_log').insert(row)
-          if (error) {
-            console.error("Failed inserting row:", row, error)
-            let success = false
-            const guesses = [
-              'Dropcore', 'Adss', 'DROPCORE', 'ADSS', 
-              'dropcore_haspel', 'adss_haspel', 'dropcore_haspels', 'adss_haspels',
-              'Dropcore Haspel', 'Kabel ADSS', 'Dropcore_Haspel', 'Adss_Haspel',
-              'haspel_dropcore', 'haspel_adss'
-            ]
-            for (const guess of guesses) {
-              const testRow = { ...row, item_type: guess }
-              const { error: errGuess } = await supabase.from('inventory_log').insert(testRow)
-              if (!errGuess) {
-                success = true
-                successCount++
-                console.log(`Success with item_type: ${guess}!`)
-                break
-              } else {
-                lastError = errGuess
-              }
-            }
-            if (!success) {
-                failCount++
-            }
-          } else {
-            successCount++
-          }
-        }
-        if (failCount > 0) {
-          toast.error(`Gagal ${failCount}. Error detail: ${JSON.stringify(lastError)}`, { duration: 15000 })
-        } else {
-          toast.success(`Berhasil menyuntikkan ${successCount} riwayat masuk!`)
-        }
-      } else {
+
+      if (toInsert.length === 0) {
         toast.success('Semua haspel sudah memiliki riwayat masuk.')
+        hideProgress()
+        return
+      }
+
+      let successCount = 0
+      let failCount = 0
+      let lastError = null
+      const total = toInsert.length
+      for (let i = 0; i < total; i++) {
+        const row = toInsert[i]
+        const pct = 20 + Math.round((i / total) * 75)
+        showProgress('Menyuntikkan riwayat...', `Memproses ${i + 1} dari ${total}`, pct)
+
+        const { error } = await supabase.from('inventory_log').insert(row)
+        if (error) {
+          // If initial type fails, brute-force with all variants
+          const typeGuesses = dropcoreType === 'dropcore'
+            ? ['Dropcore', 'DROPCORE', 'dropcore_haspel', 'Dropcore Haspel', 'Dropcore_Haspel']
+            : ['adss', 'Adss', 'ADSS', 'adss_haspel', 'Kabel ADSS', 'Adss_Haspel']
+          const allGuesses = [...typeGuesses, 'dropcore', 'adss', 'Dropcore', 'Adss']
+          let success = false
+          for (const guess of allGuesses) {
+            const { error: err2 } = await supabase.from('inventory_log').insert({ ...row, item_type: guess })
+            if (!err2) { success = true; successCount++; break }
+            else lastError = err2
+          }
+          if (!success) failCount++
+        } else {
+          successCount++
+        }
+      }
+
+      showProgress('Selesai!', '', 100)
+      await new Promise(r => setTimeout(r, 800))
+      hideProgress()
+
+      if (failCount > 0) {
+        toast.error(`Berhasil ${successCount}, Gagal ${failCount}. Error: ${lastError?.message}`, { duration: 10000 })
+      } else {
+        toast.success(`Berhasil menyuntikkan ${successCount} riwayat masuk!`)
       }
     } catch (err) {
-      toast.error('Gagal: ' + err.message)
-    } finally {
       hideProgress()
+      toast.error('Gagal: ' + err.message)
     }
   }
+
 
   return (
     <div>

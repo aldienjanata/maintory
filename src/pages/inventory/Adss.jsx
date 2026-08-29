@@ -119,6 +119,7 @@ export default function Adss() {
           item_id: finalHaspelId,
           action: 'masuk',
           meters: Number(form.initial_meters),
+          quantity: 1,
           note: form.note || null,
           created_by: profile.id
         })
