@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
+import Swal from 'sweetalert2'
 import toast from 'react-hot-toast'
 import { Search, Plus, Trash2, Edit2, X, Cable, AlertTriangle, Download, History } from 'lucide-react'
 import { format } from 'date-fns'
@@ -91,8 +92,17 @@ export default function Adss() {
         const codeExists = haspels.some(h => h.haspel_code.toLowerCase() === form.haspel_code.toLowerCase())
 
         if (codeExists) {
-          toast.error('Kode haspel sudah pernah digunakan. Harap gunakan kode yang unik (berkelanjutan)!')
           setSaving(false)
+          Swal.fire({
+            title: 'Kode Sudah Digunakan!',
+            html: `Kode haspel <strong>${form.haspel_code}</strong> sudah pernah terdaftar di sistem.<br/><br/>Harap gunakan kode baru yang unik (berkelanjutan).`,
+            icon: 'error',
+            confirmButtonText: 'Mengerti',
+            background: 'var(--bg-card)',
+            color: 'var(--text-primary)',
+            confirmButtonColor: 'var(--accent)',
+            allowOutsideClick: false
+          })
           return
         }
         
