@@ -233,9 +233,38 @@ export default function Dropcore() {
 
     const { data: dispItems } = await supabase
       .from('dispatch_items')
-      .select('*, dispatch:dispatches(dispatch_date, location, technician_ids, work_type, status)')
+      .select('*, dispatch:dispatches(dispatch_date, location, site, technicians, technician_ids, work_type, status)')
       .eq('item_type', 'dropcore')
       .eq('haspel_id', haspel.id)
+
+    // Also get expense_items that are linked via dispatch (some old Bon Barang records 
+    // auto-create expense via 'Otomatis dari Laporan Bon Barang' but haspel_id might be null in older records)
+    // We detect them by finding selesai dispatches for this haspel_id and their linked expense_items
+    const selesaiDispatchIds = (dispItems || [])
+      .filter(di => di.dispatch?.status === 'selesai')
+      .map(di => di.dispatch_id)
+      .filter(Boolean)
+
+    let expItemsFromDisp = []
+    if (selesaiDispatchIds.length > 0) {
+      // Get expense_items that are dropcore and have meters_used > 0 but haspel_id missing or null
+      // linked through dispatch items for this haspel
+      const { data: ei2 } = await supabase
+        .from('expense_items')
+        .select('*, expense:daily_expenses(expense_date, site, technicians, work_type, note)')
+        .eq('item_type', 'dropcore')
+        .is('haspel_id', null)
+        .gt('meters_used', 0)
+      // Among these, filter those whose expense was auto-created on same date as a selesai dispatch for this haspel
+      const selesaiDates = (dispItems || [])
+        .filter(di => di.dispatch?.status === 'selesai')
+        .map(di => di.dispatch?.dispatch_date)
+        .filter(Boolean)
+      expItemsFromDisp = (ei2 || []).filter(ei =>
+        selesaiDates.includes(ei.expense?.expense_date) &&
+        ei.expense?.note?.includes('Bon Barang')
+      )
+    }
 
     // Fetch all users to map technician IDs
     const { data: usersData } = await supabase.from('users').select('id, full_name')
@@ -278,13 +307,15 @@ export default function Dropcore() {
     const outRowsDisp = (dispItems || [])
       .filter(di => di.dispatch?.status === 'selesai' && Number(di.meters_used) > 0)
       .map(di => {
-        const techNames = (di.dispatch?.technician_ids || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+        // dispatches stores technicians as array (new) or technician_ids (old)
+        const techIds = di.dispatch?.technicians || di.dispatch?.technician_ids || []
+        const techNames = techIds.map(tid => usersMap[tid]).filter(Boolean).join(', ')
         const wType = di.dispatch?.work_type
         return {
           date: di.dispatch?.dispatch_date,
           action: 'Keluar (Bon Barang)',
           qty: di.meters_used,
-          note: di.dispatch?.location,
+          note: di.dispatch?.site || di.dispatch?.location,
           technicianNames: techNames,
           workType: workTypeLabels[wType] || wType,
           type: 'out'
@@ -292,7 +323,22 @@ export default function Dropcore() {
       })
       .filter(r => r.date)
 
-    const combined = [...inRows, ...outRowsExp, ...outRowsDisp].sort((a, b) => (a.date > b.date ? -1 : 1))
+    // Fallback for old Bon Barang records where expense_items.haspel_id was null
+    const outRowsExpFallback = expItemsFromDisp.map(ei => {
+      const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+      const wType = ei.expense?.work_type
+      return {
+        date: ei.expense?.expense_date || ei.created_at?.substring(0, 10),
+        action: 'Keluar (Bon Barang)',
+        qty: ei.meters_used,
+        note: ei.expense?.site || '-',
+        technicianNames: techNames,
+        workType: workTypeLabels[wType] || wType,
+        type: 'out'
+      }
+    }).filter(r => r.date)
+
+    const combined = [...inRows, ...outRowsExp, ...outRowsDisp, ...outRowsExpFallback].sort((a, b) => (a.date > b.date ? -1 : 1))
     setHistoryData(combined)
     setHistoryLoading(false)
   }
