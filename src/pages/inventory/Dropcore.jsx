@@ -231,11 +231,15 @@ export default function Dropcore() {
       .eq('haspel_id', haspel.id)
       .order('created_at', { ascending: true })
 
-    const { data: dispItems } = await supabase
+    const { data: dispItems, error: dispErr } = await supabase
       .from('dispatch_items')
-      .select('*, dispatch:dispatches(dispatch_date, location, site, technicians, technician_ids, work_type, status)')
+      .select('*, dispatch:dispatches(*)')
       .eq('item_type', 'dropcore')
       .eq('haspel_id', haspel.id)
+    if (dispErr) {
+        console.error("dispErr:", dispErr)
+        toast.error(`dispErr: ${dispErr.message}`, { duration: 10000 })
+    }
 
     // Also get expense_items that are linked via dispatch (some old Bon Barang records 
     // auto-create expense via 'Otomatis dari Laporan Bon Barang' but haspel_id might be null in older records)
@@ -271,6 +275,14 @@ export default function Dropcore() {
     const usersMap = {}
     ;(usersData || []).forEach(u => usersMap[u.id] = u.full_name)
 
+    // DEBUG: Show dispItems info
+    const debugInfo = (dispItems || []).map(d => `${d.dispatch?.dispatch_date}|${d.dispatch?.status}|${d.meters_used}`).join(', ')
+    console.log("DEBUG dispItems:", dispItems)
+    console.log("DEBUG expItemsFromDisp:", expItemsFromDisp)
+    if (haspel.haspel_code === 'H2C-004') {
+        toast(`Debug H2C-004 dispItems: ${debugInfo || 'empty'}. expItemsFromDisp: ${expItemsFromDisp.length}`, { duration: 10000 })
+    }
+
     const workTypeLabels = {
       'ikr_psb': 'IKR / PSB',
       'mt': 'Maintenance',
@@ -305,17 +317,17 @@ export default function Dropcore() {
       .filter(r => r.date) // skip rows with no date at all
 
     const outRowsDisp = (dispItems || [])
-      .filter(di => di.dispatch?.status === 'selesai' && Number(di.meters_used) > 0)
+      .filter(di => (di.dispatch?.status === 'selesai' || !di.dispatch) && Number(di.meters_used) > 0)
       .map(di => {
         // dispatches stores technicians as array (new) or technician_ids (old)
-        const techIds = di.dispatch?.technicians || di.dispatch?.technician_ids || []
+        const techIds = di.dispatch?.technicians || di.dispatch?.technician_ids || (di.dispatch?.technician_id ? [di.dispatch.technician_id] : [])
         const techNames = techIds.map(tid => usersMap[tid]).filter(Boolean).join(', ')
         const wType = di.dispatch?.work_type
         return {
-          date: di.dispatch?.dispatch_date,
+          date: di.dispatch?.dispatch_date || di.created_at?.substring(0, 10),
           action: 'Keluar (Bon Barang)',
           qty: di.meters_used,
-          note: di.dispatch?.site || di.dispatch?.location,
+          note: di.dispatch?.site || di.dispatch?.location || '(Relation missing)',
           technicianNames: techNames,
           workType: workTypeLabels[wType] || wType,
           type: 'out'

@@ -202,9 +202,9 @@ export default function Adss() {
 
     const { data: dispItems } = await supabase
       .from('dispatch_items')
-      .select('*, dispatch:dispatches(dispatch_date, location, technician_ids, work_type, status)')
+      .select('*, dispatch:dispatches(*)')
       .eq('item_type', 'adss')
-      .eq('haspel_id', haspel.id)
+      .eq('adss_id', haspel.id)
 
     // Fetch all users to map technician IDs
     const { data: usersData } = await supabase.from('users').select('id, full_name')
@@ -245,15 +245,16 @@ export default function Adss() {
       .filter(r => r.date)
 
     const outRowsDisp = (dispItems || [])
-      .filter(di => di.dispatch?.status === 'selesai' && Number(di.meters_used) > 0)
+      .filter(di => (di.dispatch?.status === 'selesai' || !di.dispatch) && Number(di.meters_used) > 0)
       .map(di => {
-        const techNames = (di.dispatch?.technician_ids || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+        const techIds = di.dispatch?.technicians || di.dispatch?.technician_ids || (di.dispatch?.technician_id ? [di.dispatch.technician_id] : [])
+        const techNames = techIds.map(tid => usersMap[tid]).filter(Boolean).join(', ')
         const wType = di.dispatch?.work_type
         return {
-          date: di.dispatch?.dispatch_date,
+          date: di.dispatch?.dispatch_date || di.created_at?.substring(0, 10),
           action: 'Keluar (Bon Barang)',
           qty: di.meters_used,
-          note: di.dispatch?.location,
+          note: di.dispatch?.site || di.dispatch?.location || '(Relation missing)',
           technicianNames: techNames,
           workType: workTypeLabels[wType] || wType,
           type: 'out'
