@@ -257,20 +257,20 @@ export default function Dropcore() {
     }))
 
     const outRowsExp = (expItems || [])
-      .filter(ei => !ei.expense?.note?.includes('Bon Barang'))
       .map(ei => {
         const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
         const wType = ei.expense?.work_type
         return {
-          date: ei.expense?.expense_date,
+          date: ei.expense?.expense_date || ei.created_at?.substring(0, 10),
           action: 'Keluar',
           qty: ei.meters_used,
-          note: ei.expense?.site,
+          note: ei.expense?.site || ei.expense?.note || '-',
           technicianNames: techNames,
           workType: workTypeLabels[wType] || wType,
           type: 'out'
         }
       })
+      .filter(r => r.date) // skip rows with no date at all
 
     const outRowsDisp = (dispItems || [])
       .filter(di => di.dispatch?.status === 'selesai' && Number(di.meters_used) > 0)
@@ -279,7 +279,7 @@ export default function Dropcore() {
         const wType = di.dispatch?.work_type
         return {
           date: di.dispatch?.dispatch_date,
-          action: 'Keluar',
+          action: 'Keluar (Bon Barang)',
           qty: di.meters_used,
           note: di.dispatch?.location,
           technicianNames: techNames,
@@ -287,6 +287,7 @@ export default function Dropcore() {
           type: 'out'
         }
       })
+      .filter(r => r.date)
 
     const combined = [...inRows, ...outRowsExp, ...outRowsDisp].sort((a, b) => (a.date < b.date ? -1 : 1))
     setHistoryData(combined)
