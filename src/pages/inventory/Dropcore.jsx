@@ -516,7 +516,16 @@ export default function Dropcore() {
       }
       if (toInsert.length > 0) {
         const { error } = await supabase.from('inventory_log').insert(toInsert)
-        if (error) throw error
+        if (error) {
+          // If violates check constraint (e.g. strict casing like 'Dropcore'/'Adss')
+          console.error("Insert failed, trying Capitalized types...", error)
+          const toInsertCap = toInsert.map(i => ({
+            ...i,
+            item_type: i.item_type === 'dropcore' ? 'Dropcore' : (i.item_type === 'adss' ? 'Adss' : i.item_type)
+          }))
+          const { error: err2 } = await supabase.from('inventory_log').insert(toInsertCap)
+          if (err2) throw err2
+        }
         toast.success(`Berhasil menyuntikkan ${toInsert.length} riwayat masuk!`)
       } else {
         toast.success('Semua haspel sudah memiliki riwayat masuk.')
