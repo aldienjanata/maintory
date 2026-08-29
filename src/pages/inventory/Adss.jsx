@@ -87,30 +87,21 @@ export default function Adss() {
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Adss', action: 'Edit Haspel', detail: `Haspel: ${form.haspel_code}` })
         toast.success('Haspel berhasil diperbarui')
       } else {
-        // Check if ANY existing haspel with this code is currently 'tersedia'
-        const isTersedia = haspels.some(h => h.haspel_code.toLowerCase() === form.haspel_code.toLowerCase() && h.status === 'tersedia')
-        let finalHaspelId = null
+        // Check if ANY existing haspel already uses this code
+        const codeExists = haspels.some(h => h.haspel_code.toLowerCase() === form.haspel_code.toLowerCase())
 
-        if (isTersedia) {
-          toast.error('Kode haspel masih tersedia dan memiliki sisa. Gunakan kode lain atau habiskan dulu yang ini.')
+        if (codeExists) {
+          toast.error('Kode haspel sudah pernah digunakan. Harap gunakan kode yang unik (berkelanjutan)!')
           setSaving(false)
           return
         }
         
-        const wasUsedBefore = haspels.some(h => h.haspel_code.toLowerCase() === form.haspel_code.toLowerCase())
-        
-        // Always insert new row so it gets a fresh UUID for the new cycle
         const { data: insertedData, error } = await supabase.from('adss_haspels').insert({ ...form, status, created_by: profile.id }).select().single()
         if (error) throw error
-        finalHaspelId = insertedData.id
+        const finalHaspelId = insertedData.id
         
-        if (wasUsedBefore) {
-          await logActivity({ userId: profile.id, username: profile.username, role, module: 'Adss', action: 'Tambah Haspel (Re-use)', detail: `Haspel: ${form.haspel_code}` })
-          toast.success('Kode haspel dipakai ulang untuk stok baru!')
-        } else {
-          await logActivity({ userId: profile.id, username: profile.username, role, module: 'Adss', action: 'Tambah Haspel', detail: `Haspel: ${form.haspel_code}` })
-          toast.success('Haspel berhasil ditambahkan')
-        }
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Adss', action: 'Tambah Haspel', detail: `Haspel: ${form.haspel_code}` })
+        toast.success('Haspel berhasil ditambahkan')
 
         // Add to inventory_log
         await supabase.from('inventory_log').insert({
