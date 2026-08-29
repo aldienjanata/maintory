@@ -229,6 +229,7 @@ export default function Adss() {
     }))
 
     const outRowsExp = (expItems || [])
+      .filter(ei => !ei.expense?.note?.includes('Bon Barang'))
       .map(ei => {
         const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
         const wType = ei.expense?.work_type

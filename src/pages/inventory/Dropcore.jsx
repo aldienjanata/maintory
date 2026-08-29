@@ -241,47 +241,10 @@ export default function Dropcore() {
         toast.error(`dispErr: ${dispErr.message}`, { duration: 10000 })
     }
 
-    // Also get expense_items that are linked via dispatch (some old Bon Barang records 
-    // auto-create expense via 'Otomatis dari Laporan Bon Barang' but haspel_id might be null in older records)
-    // We detect them by finding selesai dispatches for this haspel_id and their linked expense_items
-    const selesaiDispatchIds = (dispItems || [])
-      .filter(di => di.dispatch?.status === 'selesai')
-      .map(di => di.dispatch_id)
-      .filter(Boolean)
-
-    let expItemsFromDisp = []
-    if (selesaiDispatchIds.length > 0) {
-      // Get expense_items that are dropcore and have meters_used > 0 but haspel_id missing or null
-      // linked through dispatch items for this haspel
-      const { data: ei2 } = await supabase
-        .from('expense_items')
-        .select('*, expense:daily_expenses(expense_date, site, technicians, work_type, note)')
-        .eq('item_type', 'dropcore')
-        .is('haspel_id', null)
-        .gt('meters_used', 0)
-      // Among these, filter those whose expense was auto-created on same date as a selesai dispatch for this haspel
-      const selesaiDates = (dispItems || [])
-        .filter(di => di.dispatch?.status === 'selesai')
-        .map(di => di.dispatch?.dispatch_date)
-        .filter(Boolean)
-      expItemsFromDisp = (ei2 || []).filter(ei =>
-        selesaiDates.includes(ei.expense?.expense_date) &&
-        ei.expense?.note?.includes('Bon Barang')
-      )
-    }
-
     // Fetch all users to map technician IDs
     const { data: usersData } = await supabase.from('users').select('id, full_name')
     const usersMap = {}
     ;(usersData || []).forEach(u => usersMap[u.id] = u.full_name)
-
-    // DEBUG: Show dispItems info
-    const debugInfo = (dispItems || []).map(d => `${d.dispatch?.dispatch_date}|${d.dispatch?.status}|${d.meters_used}`).join(', ')
-    console.log("DEBUG dispItems:", dispItems)
-    console.log("DEBUG expItemsFromDisp:", expItemsFromDisp)
-    if (haspel.haspel_code === 'H2C-004') {
-        toast(`Debug H2C-004 dispItems: ${debugInfo || 'empty'}. expItemsFromDisp: ${expItemsFromDisp.length}`, { duration: 10000 })
-    }
 
     const workTypeLabels = {
       'ikr_psb': 'IKR / PSB',
@@ -301,6 +264,7 @@ export default function Dropcore() {
     }))
 
     const outRowsExp = (expItems || [])
+      .filter(ei => !ei.expense?.note?.includes('Bon Barang'))
       .map(ei => {
         const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
         const wType = ei.expense?.work_type
@@ -335,22 +299,7 @@ export default function Dropcore() {
       })
       .filter(r => r.date)
 
-    // Fallback for old Bon Barang records where expense_items.haspel_id was null
-    const outRowsExpFallback = expItemsFromDisp.map(ei => {
-      const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
-      const wType = ei.expense?.work_type
-      return {
-        date: ei.expense?.expense_date || ei.created_at?.substring(0, 10),
-        action: 'Keluar (Bon Barang)',
-        qty: ei.meters_used,
-        note: ei.expense?.site || '-',
-        technicianNames: techNames,
-        workType: workTypeLabels[wType] || wType,
-        type: 'out'
-      }
-    }).filter(r => r.date)
-
-    const combined = [...inRows, ...outRowsExp, ...outRowsDisp, ...outRowsExpFallback].sort((a, b) => (a.date > b.date ? -1 : 1))
+    const combined = [...inRows, ...outRowsExp, ...outRowsDisp].sort((a, b) => (a.date > b.date ? -1 : 1))
     setHistoryData(combined)
     setHistoryLoading(false)
   }
