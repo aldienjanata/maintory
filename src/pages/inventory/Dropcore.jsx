@@ -517,6 +517,7 @@ export default function Dropcore() {
       if (toInsert.length > 0) {
         let successCount = 0
         let failCount = 0
+        let lastError = null
         for (const row of toInsert) {
           const { error } = await supabase.from('inventory_log').insert(row)
           if (error) {
@@ -527,6 +528,7 @@ export default function Dropcore() {
             if (err2) {
                 console.error("Also failed capitalized:", capRow, err2)
                 failCount++
+                lastError = err2
             } else {
                 successCount++
             }
@@ -535,7 +537,7 @@ export default function Dropcore() {
           }
         }
         if (failCount > 0) {
-          toast.error(`Berhasil ${successCount}, Gagal ${failCount}. Cek console untuk detail.`)
+          toast.error(`Gagal ${failCount}. Error detail: ${JSON.stringify(lastError)}`, { duration: 15000 })
         } else {
           toast.success(`Berhasil menyuntikkan ${successCount} riwayat masuk!`)
         }
