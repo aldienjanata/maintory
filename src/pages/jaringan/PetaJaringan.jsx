@@ -370,7 +370,7 @@ export default function PetaJaringan() {
                 <Marker key={`cluster-${cluster.id}`} latitude={latitude} longitude={longitude}>
                   <div 
                     onClick={(e) => {
-                      e.originalEvent.stopPropagation();
+                      e.stopPropagation();
                       const expansionZoom = Math.min(supercluster.getClusterExpansionZoom(cluster.id), 20);
                       mapRef.current?.flyTo({ center: [longitude, latitude], zoom: expansionZoom, duration: 600 });
                     }}
@@ -405,7 +405,7 @@ export default function PetaJaringan() {
                   <Marker key={`group-${key}`} latitude={lat} longitude={lng} style={{ zIndex: 10 }}>
                     <div 
                       onClick={(e) => {
-                        e.originalEvent.stopPropagation();
+                        e.stopPropagation();
                         setSpiderfiedCoord(key);
                       }}
                       style={{
@@ -460,7 +460,7 @@ export default function PetaJaringan() {
                           transition: 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' // Bouncy animation
                         }} 
                         onClick={(e) => {
-                          e.originalEvent.stopPropagation();
+                          e.stopPropagation();
                           setSelected({ lon: lng, lat, ...pt.properties });
                         }}
                       />
