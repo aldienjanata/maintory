@@ -14,7 +14,7 @@ const ICON_DEFS = [
   { name: 'icon-odc',   url: '/icon_odc.png' },
 ]
 
-// ── Base Style Kosong (Base Map dimuat sebagai layer terpisah agar instan) ───
+// ── Base Style Kosong ─────────────────────────────────────────────────────────
 const EMPTY_STYLE = {
   version: 8,
   sources: {},
@@ -144,12 +144,14 @@ export default function PetaJaringan() {
   const [devices, setDevices] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
+  
+  // State sangat penting untuk memastikan Layer dirender HANYA setelah Icon siap
+  const [iconsReady, setIconsReady] = useState(false)
 
   const [mapType, setMapType]             = useState('hybrid')
   const [showTiang, setShowTiang]         = useState(true)
   const [showPerangkat, setShowPerangkat] = useState(true)
 
-  // ── Fetch Data (Kembali pakai * agar tidak error jika kolom berubah) ──────
   useEffect(() => {
     supabase.from('network_poles').select('*')
       .then(({ data }) => { if (data) setPoles(data.filter(p => p.latitude && p.longitude)) })
@@ -159,25 +161,34 @@ export default function PetaJaringan() {
       .finally(() => setLoading(false))
   }, [])
 
-  // ── Map Load Handler (Otomatis load custom icons) ─────────────────────────
+  // ── Map Load Handler (Auto-GPS & Preload WebGL Icons) ──────────────────────
   const onMapLoad = useCallback((e) => {
     const map = e.target
-    
-    // Load awal
-    ICON_DEFS.forEach(({ name, url }) => {
-      map.loadImage(url, (err, img) => {
-        if (!err && !map.hasImage(name)) map.addImage(name, img, { sdf: false })
-      })
-    })
 
-    // Fallback kuat jika gambar telat termuat
-    map.on('styleimagemissing', ({ id }) => {
-      const def = ICON_DEFS.find(d => d.name === id)
-      if (def) {
-        map.loadImage(def.url, (err, img) => {
-          if (!err && !map.hasImage(id)) map.addImage(id, img, { sdf: false })
+    // 1. Terbang ke lokasi pengguna saat ini (GPS)
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 16, duration: 2500 })
+        },
+        () => console.warn('Akses lokasi GPS ditolak/gagal'),
+        { enableHighAccuracy: true, timeout: 5000 }
+      )
+    }
+
+    // 2. Preload semua PNG icons ke WebGL Texture memory
+    Promise.all(ICON_DEFS.map(({ name, url }) => {
+      return new Promise(resolve => {
+        map.loadImage(url, (err, img) => {
+          if (!err && !map.hasImage(name)) {
+            map.addImage(name, img)
+          }
+          resolve()
         })
-      }
+      })
+    })).then(() => {
+      // SETELAH semua gambar di-load ke memory, baru perbolehkan render layer
+      setIconsReady(true)
     })
   }, [])
 
@@ -229,6 +240,8 @@ export default function PetaJaringan() {
     ? { longitude: Number(poles[0].longitude), latitude: Number(poles[0].latitude), zoom: 14 }
     : { longitude: 109.245, latitude: -7.427, zoom: 13 }
 
+  const interactiveLayers = iconsReady ? ['poles-clusters', 'poles-symbols', 'devices-clusters', 'devices-symbols'] : []
+
   return (
     <div className="page-container">
       <style>{`
@@ -245,7 +258,6 @@ export default function PetaJaringan() {
         }
       `}</style>
 
-      {/* Header */}
       <div className="page-header" style={{ marginBottom: 12 }}>
         <div className="page-header-left">
           <div className="page-icon"><MapIcon size={24} /></div>
@@ -256,12 +268,10 @@ export default function PetaJaringan() {
         </div>
       </div>
 
-      {/* Search */}
       <div style={{ marginBottom: 10 }}>
         <SearchBar onResult={([lat, lon]) => mapRef.current?.flyTo({ center: [lon, lat], zoom: 16, duration: 1200 })} />
       </div>
 
-      {/* Stats */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         {[['#6b7280', `📡 Tiang: ${tiangCount}`], ['#22c55e', `📦 ODP: ${odpCount}`], ['#f97316', `🔶 ODC: ${odcCount}`]].map(([color, label]) => (
           <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
@@ -270,7 +280,6 @@ export default function PetaJaringan() {
         ))}
       </div>
 
-      {/* Map */}
       {loading ? (
         <div className="loading-screen" style={{ height: 400 }}>
           <div className="spinner" />
@@ -295,13 +304,13 @@ export default function PetaJaringan() {
             onLoad={onMapLoad}
             onClick={onClick}
             onMouseDown={onMapClick}
-            interactiveLayerIds={['poles-clusters', 'poles-symbols', 'devices-clusters', 'devices-symbols']}
+            interactiveLayerIds={interactiveLayers}
             maxZoom={22}
             style={{ width: '100%', height: '100%' }}
             preserveDrawingBuffer={false}
             antialias={false}
           >
-            {/* ── Base Maps (Render sbg Layer React jadi switch nya INSTAN) ── */}
+            {/* ── Base Maps ── */}
             <Source id="base-osm-src" type="raster" tiles={['https://tile.openstreetmap.org/{z}/{x}/{y}.png']} tileSize={256} maxzoom={19}>
               <Layer id="base-osm-layer" type="raster" layout={{ visibility: mapType === 'roadmap' ? 'visible' : 'none' }} />
             </Source>
@@ -321,43 +330,50 @@ export default function PetaJaringan() {
             <FullscreenControl position="top-right" />
             <ScaleControl position="bottom-left" unit="metric" />
 
-            {/* ── Tiang: WebGL GeoJSON Symbol Layer ── */}
-            <Source id="poles" type="geojson" data={polesGeoJSON} cluster={true} clusterMaxZoom={16} clusterRadius={55}>
-              <Layer id="poles-clusters" type="circle"
-                filter={['has', 'point_count']}
-                layout={{ visibility: showTiang ? 'visible' : 'none' }}
-                paint={{ 'circle-color': '#6b7280', 'circle-radius': ['step', ['get', 'point_count'], 16, 10, 24, 100, 32], 'circle-stroke-width': 2, 'circle-stroke-color': '#fff', 'circle-opacity': 0.9 }}
-              />
-              <Layer id="poles-symbols" type="symbol"
-                filter={['!', ['has', 'point_count']]}
-                layout={{
-                  visibility: showTiang ? 'visible' : 'none',
-                  'icon-image': 'icon-tiang',
-                  'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.55, 17, 0.9],
-                  'icon-allow-overlap': true,
-                  'icon-anchor': 'bottom',
-                }}
-              />
-            </Source>
+            {/* ── LAYER DATA (Hanya di-render JIKA icon sudah siap di memory) ── */}
+            {iconsReady && (
+              <>
+                {/* ── Tiang: WebGL GeoJSON Symbol Layer ── */}
+                <Source id="poles" type="geojson" data={polesGeoJSON} cluster={true} clusterMaxZoom={16} clusterRadius={55}>
+                  <Layer id="poles-clusters" type="circle"
+                    filter={['has', 'point_count']}
+                    layout={{ visibility: showTiang ? 'visible' : 'none' }}
+                    paint={{ 'circle-color': '#6b7280', 'circle-radius': ['step', ['get', 'point_count'], 16, 10, 24, 100, 32], 'circle-stroke-width': 2, 'circle-stroke-color': '#fff', 'circle-opacity': 0.9 }}
+                  />
+                  <Layer id="poles-symbols" type="symbol"
+                    filter={['!', ['has', 'point_count']]}
+                    layout={{
+                      visibility: showTiang ? 'visible' : 'none',
+                      'icon-image': 'icon-tiang',
+                      'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.45, 17, 0.8],
+                      'icon-allow-overlap': true,
+                      'icon-ignore-placement': true,
+                      'icon-anchor': 'bottom',
+                    }}
+                  />
+                </Source>
 
-            {/* ── ODP/ODC: WebGL GeoJSON Symbol Layer ── */}
-            <Source id="devices" type="geojson" data={devicesGeoJSON} cluster={true} clusterMaxZoom={16} clusterRadius={55}>
-              <Layer id="devices-clusters" type="circle"
-                filter={['has', 'point_count']}
-                layout={{ visibility: showPerangkat ? 'visible' : 'none' }}
-                paint={{ 'circle-color': '#22c55e', 'circle-radius': ['step', ['get', 'point_count'], 16, 10, 24, 100, 32], 'circle-stroke-width': 2, 'circle-stroke-color': '#fff', 'circle-opacity': 0.9 }}
-              />
-              <Layer id="devices-symbols" type="symbol"
-                filter={['!', ['has', 'point_count']]}
-                layout={{
-                  visibility: showPerangkat ? 'visible' : 'none',
-                  'icon-image': ['get', '_icon'],
-                  'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.55, 17, 0.9],
-                  'icon-allow-overlap': true,
-                  'icon-anchor': 'bottom',
-                }}
-              />
-            </Source>
+                {/* ── ODP/ODC: WebGL GeoJSON Symbol Layer ── */}
+                <Source id="devices" type="geojson" data={devicesGeoJSON} cluster={true} clusterMaxZoom={16} clusterRadius={55}>
+                  <Layer id="devices-clusters" type="circle"
+                    filter={['has', 'point_count']}
+                    layout={{ visibility: showPerangkat ? 'visible' : 'none' }}
+                    paint={{ 'circle-color': '#22c55e', 'circle-radius': ['step', ['get', 'point_count'], 16, 10, 24, 100, 32], 'circle-stroke-width': 2, 'circle-stroke-color': '#fff', 'circle-opacity': 0.9 }}
+                  />
+                  <Layer id="devices-symbols" type="symbol"
+                    filter={['!', ['has', 'point_count']]}
+                    layout={{
+                      visibility: showPerangkat ? 'visible' : 'none',
+                      'icon-image': ['get', '_icon'],
+                      'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.45, 17, 0.8],
+                      'icon-allow-overlap': true,
+                      'icon-ignore-placement': true,
+                      'icon-anchor': 'bottom',
+                    }}
+                  />
+                </Source>
+              </>
+            )}
 
             {/* ── Popup ── */}
             {selected && (
