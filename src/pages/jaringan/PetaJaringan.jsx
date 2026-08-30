@@ -33,7 +33,7 @@ const isValidCoord = (lat, lon) => {
   return lt !== 0 && ln !== 0;
 };
 
-function ToggleSwitch({ checked, onChange, color, label }) {
+function ToggleSwitch({ checked, onChange, color, label, iconB64 }) {
   return (
     <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '7px 0', borderBottom: '1px solid #f1f5f9' }}>
       <div onClick={() => onChange(!checked)} style={{
@@ -46,7 +46,10 @@ function ToggleSwitch({ checked, onChange, color, label }) {
           boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
         }} />
       </div>
-      <span style={{ fontSize: 13, color: '#334155', fontWeight: 500 }}>{label}</span>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#334155', fontWeight: 500 }}>
+        {iconB64 && <img src={iconB64} alt="" style={{ width: 14, height: 14, objectFit: 'contain' }} />}
+        {label}
+      </span>
     </label>
   )
 }
@@ -90,8 +93,8 @@ function FloatingLayerPanel({ mapType, setMapType, showTiang, setShowTiang, show
             ))}
           </div>
           <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>DATA JARINGAN</p>
-          <ToggleSwitch checked={showTiang}     onChange={setShowTiang}     color="#6b7280" label="📡 Titik Tiang" />
-          <ToggleSwitch checked={showPerangkat} onChange={setShowPerangkat} color="#22c55e" label="📦 Titik ODP / ODC" />
+          <ToggleSwitch checked={showTiang}     onChange={setShowTiang}     color="#6b7280" label="Titik Tiang" iconB64={TIANG_B64} />
+          <ToggleSwitch checked={showPerangkat} onChange={setShowPerangkat} color="#22c55e" label="Titik ODP / ODC" iconB64={ODP_B64} />
         </div>
       )}
     </div>
@@ -155,11 +158,9 @@ export default function PetaJaringan() {
   const [showTiang, setShowTiang]         = useState(true)
   const [showPerangkat, setShowPerangkat] = useState(true)
 
-  // ── 1. Fetch Data (Tanpa Limit Supabase!) ──────────────────────────────────
   useEffect(() => {
     const fetchAllData = async () => {
       try {
-        // Tiang (bisa >1000 data)
         let allPoles = []
         let fromP = 0
         const step = 1000
@@ -172,7 +173,6 @@ export default function PetaJaringan() {
         }
         setPoles(allPoles.filter(p => isValidCoord(p.latitude, p.longitude)))
 
-        // ODP/ODC
         let allDevices = []
         let fromD = 0
         while (true) {
@@ -192,7 +192,6 @@ export default function PetaJaringan() {
     fetchAllData()
   }, [])
 
-  // ── 2. Native HTML5 Geolocation ─────────────────────────────────────────────
   useEffect(() => {
     let toastId = null
     if (navigator.geolocation) {
@@ -208,20 +207,17 @@ export default function PetaJaringan() {
     }
   }, [])
 
-  // ── 3. Map Load Handler (Safe Image Injector) ────────────────────────────────
   const onMapLoad = useCallback((e) => {
     const map = e.target
 
     setTimeout(() => geoControlRef.current?.trigger(), 800)
 
-    // A. Preload via direct addImage
     ICON_DEFS.forEach(({ name, b64 }) => {
       const img = new Image()
       img.onload = () => { if (!map.hasImage(name)) map.addImage(name, img) }
       img.src = b64
     })
 
-    // B. Tangkap request image dari layer (Best Practice Mapbox/MapLibre)
     map.on('styleimagemissing', (evt) => {
       const def = ICON_DEFS.find(d => d.name === evt.id)
       if (def) {
@@ -232,7 +228,6 @@ export default function PetaJaringan() {
     })
   }, [])
 
-  // ── 4. GeoJSON Builder ───────────────────────────────────────────────────────
   const polesGeoJSON = useMemo(() => ({
     type: 'FeatureCollection',
     features: poles.map(p => ({
@@ -251,7 +246,6 @@ export default function PetaJaringan() {
     }))
   }), [devices])
 
-  // ── 5. Handlers ─────────────────────────────────────────────────────────────
   const onClick = useCallback((e) => {
     const fs = e.features
     if (!fs?.length) { setSelected(null); return }
@@ -308,9 +302,15 @@ export default function PetaJaringan() {
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        {[['#6b7280', `📡 Tiang: ${tiangCount}`], ['#22c55e', `📦 ODP: ${odpCount}`], ['#f97316', `🔶 ODC: ${odcCount}`]].map(([color, label]) => (
-          <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />{label}
+        {[
+          ['#6b7280', TIANG_B64, `Tiang: ${tiangCount}`], 
+          ['#22c55e', ODP_B64, `ODP: ${odpCount}`], 
+          ['#f97316', ODC_B64, `ODC: ${odcCount}`]
+        ].map(([color, b64, label]) => (
+          <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
+            <img src={b64} alt="icon" style={{ width: 14, height: 14, objectFit: 'contain' }} />
+            {label}
           </span>
         ))}
       </div>
@@ -318,7 +318,7 @@ export default function PetaJaringan() {
       {loading ? (
         <div className="loading-screen" style={{ height: 400 }}>
           <div className="spinner" />
-          <p className="text-secondary mt-2">Memuat data jaringan...</p>
+          <p className="text-secondary mt-2">Memuat {tiangCount > 0 ? `${tiangCount}+` : ''} data jaringan...</p>
         </div>
       ) : (
         <div style={{
@@ -345,7 +345,6 @@ export default function PetaJaringan() {
             preserveDrawingBuffer={false}
             antialias={false}
           >
-            {/* ── Base Maps ── */}
             <Source id="base-osm-src" type="raster" tiles={['https://tile.openstreetmap.org/{z}/{x}/{y}.png']} tileSize={256} maxzoom={19}>
               <Layer id="base-osm-layer" type="raster" layout={{ visibility: mapType === 'roadmap' ? 'visible' : 'none' }} />
             </Source>
@@ -359,7 +358,6 @@ export default function PetaJaringan() {
               <Layer id="base-sat-layer" type="raster" layout={{ visibility: mapType === 'hybrid' ? 'visible' : 'none' }} />
             </Source>
 
-            {/* Built-in Controls */}
             <NavigationControl position="bottom-right" visualizePitch showCompass showZoom />
             <GeolocateControl 
               ref={geoControlRef}
@@ -449,12 +447,15 @@ export default function PetaJaringan() {
                     margin: '-10px -10px 8px', padding: '8px 12px', borderRadius: '10px 10px 0 0',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'
                   }}>
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
-                        {selected._type === 'tiang' ? '🗼 TIANG' : `📦 ${selected.type}`}
-                      </div>
-                      <div style={{ fontWeight: 700, fontSize: 15, color: '#1e293b', marginTop: 2 }}>
-                        {selected.pole_id || selected.device_id || '-'}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <img src={selected._type === 'tiang' ? TIANG_B64 : selected.type === 'ODC' ? ODC_B64 : ODP_B64} alt="" style={{ width: 16, height: 16 }} />
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
+                          {selected._type === 'tiang' ? 'TIANG' : selected.type}
+                        </div>
+                        <div style={{ fontWeight: 700, fontSize: 15, color: '#1e293b', marginTop: 1 }}>
+                          {selected.pole_id || selected.device_id || '-'}
+                        </div>
                       </div>
                     </div>
                     <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, marginLeft: 8 }}>
