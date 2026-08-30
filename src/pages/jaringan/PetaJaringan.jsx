@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
-import { MapContainer, TileLayer, Marker, Popup, LayersControl, LayerGroup, Polyline, CircleMarker, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet'
+import MarkerClusterGroup from 'react-leaflet-cluster'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import { Map, LocateFixed } from 'lucide-react'
+import { Map as MapIcon, LocateFixed, Layers, Image as ImageIcon } from 'lucide-react'
 
 // Fix Leaflet's default icon path issue with Vite
 delete L.Icon.Default.prototype._getIconUrl;
@@ -17,7 +18,7 @@ L.Icon.Default.mergeOptions({
 const tiangIcon = new L.Icon({
   iconUrl: '/icon_tiang.png',
   iconSize: [28, 28],
-  iconAnchor: [14, 28], // Ujung bawah gambar menunjuk ke titik
+  iconAnchor: [14, 28],
   popupAnchor: [0, -28],
 });
 
@@ -29,7 +30,7 @@ const odpIcon = new L.Icon({
 });
 
 const odcIcon = new L.Icon({
-  iconUrl: '/icon_odc.png', // Fallback to odp if odc image not ideal, tapi user bilang ada icon_odc
+  iconUrl: '/icon_odc.png',
   iconSize: [28, 28],
   iconAnchor: [14, 28],
   popupAnchor: [0, -28],
@@ -42,7 +43,7 @@ function LocationButton({ position }) {
     <button
       onClick={(e) => {
         e.preventDefault()
-        if (position) map.flyTo(position, 17)
+        if (position) map.flyTo(position, 18)
       }}
       className="btn btn-primary"
       style={{
@@ -56,7 +57,8 @@ function LocationButton({ position }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)'
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3)',
+        padding: 0
       }}
       title="Kembali ke Lokasi Saya"
     >
@@ -70,6 +72,12 @@ export default function PetaJaringan() {
   const [devices, setDevices] = useState([])
   const [loading, setLoading] = useState(true)
   const [userLocation, setUserLocation] = useState(null)
+
+  // Map Controls State
+  const [mapType, setMapType] = useState('hybrid') // 'standard' | 'hybrid'
+  const [showTiang, setShowTiang] = useState(true)
+  const [showPerangkat, setShowPerangkat] = useState(true)
+  const [showLines, setShowLines] = useState(true)
 
   useEffect(() => {
     fetchData()
@@ -108,6 +116,8 @@ export default function PetaJaringan() {
 
   // Pre-calculate lines connecting ODP to their parent Poles
   const connections = useMemo(() => {
+    if (!showLines) return [] // Hanya kalkulasi jika ingin ditampilkan untuk ringankan CPU
+    
     const lines = []
     devices.forEach(device => {
       if (device.parent_pole_id) {
@@ -125,140 +135,204 @@ export default function PetaJaringan() {
       }
     })
     return lines
-  }, [poles, devices])
+  }, [poles, devices, showLines])
 
   return (
-    <div className="page-container">
-      <div className="page-header">
+    <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <div className="page-header" style={{ marginBottom: 0, paddingBottom: '16px' }}>
         <div className="page-header-left">
           <div className="page-icon">
-            <Map size={24} />
+            <MapIcon size={24} />
           </div>
           <div>
             <h1 className="page-title">Peta Jaringan</h1>
-            <p className="page-subtitle">Peta Interaktif Lokasi Tiang dan Perangkat FO</p>
+            <p className="page-subtitle">Visualisasi Geografis Resolusi Tinggi</p>
           </div>
         </div>
       </div>
 
+      {/* Custom Control Panel Terpisah (UI Percantik) */}
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '20px',
+        padding: '12px 20px',
+        backgroundColor: 'var(--bg-card)',
+        borderBottom: '1px solid var(--border-color)',
+        alignItems: 'center'
+      }}>
+        
+        {/* Pilihan Mode Peta */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ fontSize: '13px', fontWeight: 'bold', marginRight: '8px', color: 'var(--text-secondary)' }}>
+            MODE PETA:
+          </span>
+          <button 
+            onClick={() => setMapType('standard')}
+            className={`btn ${mapType === 'standard' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '6px 12px', fontSize: '13px', display: 'flex', gap: '6px', alignItems: 'center' }}
+          >
+            <MapIcon size={14} /> Peta Jalan
+          </button>
+          <button 
+            onClick={() => setMapType('hybrid')}
+            className={`btn ${mapType === 'hybrid' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '6px 12px', fontSize: '13px', display: 'flex', gap: '6px', alignItems: 'center' }}
+          >
+            <ImageIcon size={14} /> Satelit HD (Google Maps)
+          </button>
+        </div>
+
+        <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border-color)', display: 'block' }}></div>
+
+        {/* Pilihan Tampilan Data */}
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '13px', fontWeight: 'bold', marginRight: '4px', color: 'var(--text-secondary)' }}>
+            TAMPILKAN:
+          </span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px' }}>
+            <input 
+              type="checkbox" 
+              checked={showTiang} 
+              onChange={e => setShowTiang(e.target.checked)} 
+              style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+            />
+            Titik Tiang
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px' }}>
+            <input 
+              type="checkbox" 
+              checked={showPerangkat} 
+              onChange={e => setShowPerangkat(e.target.checked)} 
+              style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+            />
+            Titik ODP & ODC
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px' }}>
+            <input 
+              type="checkbox" 
+              checked={showLines} 
+              onChange={e => setShowLines(e.target.checked)} 
+              style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+            />
+            Garis Tarikan
+          </label>
+        </div>
+      </div>
+
       {loading ? (
-        <div className="loading-screen">
+        <div className="loading-screen" style={{ flex: 1 }}>
           <div className="spinner"></div>
-          <p className="text-secondary mt-2">Memuat peta...</p>
+          <p className="text-secondary mt-2">Memuat peta & clustering data...</p>
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, height: 'calc(100vh - 160px)', overflow: 'hidden', position: 'relative' }}>
-          <MapContainer center={center} zoom={userLocation ? 16 : 13} style={{ height: '100%', width: '100%', zIndex: 1 }}>
+        <div style={{ flex: 1, position: 'relative' }}>
+          <MapContainer 
+            center={center} 
+            zoom={userLocation ? 17 : 14} 
+            maxZoom={21} // Google Maps support deep zoom
+            style={{ height: '100%', width: '100%', zIndex: 1 }}
+          >
             
             {/* Tombol kembali ke lokasi saya */}
             <LocationButton position={userLocation} />
 
-            <LayersControl position="topright">
-              {/* Standard Map */}
-              <LayersControl.BaseLayer checked name="Peta Standar (Google Style)">
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-              </LayersControl.BaseLayer>
-              
-              {/* Satellite Map */}
-              <LayersControl.BaseLayer name="Satelit (Esri)">
-                <TileLayer
-                  attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                />
-              </LayersControl.BaseLayer>
+            {/* Google Maps Layer (Satelit Hybrid atau Standar) */}
+            <TileLayer
+              attribution='&copy; Google Maps'
+              url={mapType === 'hybrid' 
+                ? "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}" 
+                : "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+              }
+              maxZoom={21}
+            />
 
-              {/* Data Tiang Layer */}
-              <LayersControl.Overlay checked name="Titik Tiang">
-                <LayerGroup>
-                  {poles.map(pole => (
+            {/* Data Tiang Layer dengan Clustering (Anti Lag) */}
+            {showTiang && (
+              <MarkerClusterGroup chunkedLoading maxClusterRadius={40}>
+                {poles.map(pole => (
+                  <Marker 
+                    key={pole.id} 
+                    position={[Number(pole.latitude), Number(pole.longitude)]}
+                    icon={tiangIcon}
+                  >
+                    <Popup>
+                      <div style={{ minWidth: '180px' }}>
+                        <h4 style={{ margin: '0 0 8px 0', borderBottom: '1px solid #ccc', paddingBottom: '4px' }}>{pole.pole_id}</h4>
+                        <p style={{ margin: '2px 0' }}><strong>Site:</strong> {pole.site}</p>
+                        <p style={{ margin: '2px 0' }}><strong>Desa:</strong> {pole.desa}</p>
+                        <p style={{ margin: '2px 0' }}><strong>Jalan:</strong> {pole.jalan || '-'}</p>
+                        <p style={{ margin: '2px 0' }}><strong>Prov/Kab:</strong> {pole.provinsi || '-'} / {pole.kabupaten || '-'}</p>
+                        <p style={{ margin: '2px 0' }}><strong>Keterangan:</strong> {pole.keterangan || '-'}</p>
+                        <p style={{ margin: '2px 0' }}><strong>Status:</strong> {pole.status || '-'}</p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
+              </MarkerClusterGroup>
+            )}
+
+            {/* Data ODP & ODC Layer dengan Clustering (Anti Lag) */}
+            {showPerangkat && (
+              <MarkerClusterGroup chunkedLoading maxClusterRadius={40}>
+                {devices.map(device => {
+                  const dIcon = device.type === 'ODC' ? odcIcon : odpIcon
+                  return (
                     <Marker 
-                      key={pole.id} 
-                      position={[Number(pole.latitude), Number(pole.longitude)]}
-                      icon={tiangIcon}
+                      key={device.id} 
+                      position={[Number(device.latitude), Number(device.longitude)]}
+                      icon={dIcon}
                     >
                       <Popup>
                         <div style={{ minWidth: '180px' }}>
-                          <h4 style={{ margin: '0 0 8px 0', borderBottom: '1px solid #ccc', paddingBottom: '4px' }}>{pole.pole_id}</h4>
-                          <p style={{ margin: '2px 0' }}><strong>Site:</strong> {pole.site}</p>
-                          <p style={{ margin: '2px 0' }}><strong>Desa:</strong> {pole.desa}</p>
-                          <p style={{ margin: '2px 0' }}><strong>Jalan:</strong> {pole.jalan || '-'}</p>
-                          <p style={{ margin: '2px 0' }}><strong>Prov/Kab:</strong> {pole.provinsi || '-'} / {pole.kabupaten || '-'}</p>
-                          <p style={{ margin: '2px 0' }}><strong>Keterangan:</strong> {pole.keterangan || '-'}</p>
-                          <p style={{ margin: '2px 0' }}><strong>Status:</strong> {pole.status || '-'}</p>
+                          <h4 style={{ margin: '0 0 8px 0', borderBottom: '1px solid #ccc', paddingBottom: '4px' }}>{device.device_id} ({device.type})</h4>
+                          <p style={{ margin: '2px 0' }}><strong>Site:</strong> {device.site}</p>
+                          <p style={{ margin: '2px 0' }}><strong>Desa:</strong> {device.desa}</p>
+                          <p style={{ margin: '2px 0' }}><strong>Jalan:</strong> {device.jalan || '-'}</p>
+                          <p style={{ margin: '2px 0' }}><strong>Kapasitas:</strong> {device.capacity || '-'} Port</p>
+                          <p style={{ margin: '2px 0' }}><strong>Tiang Induk:</strong> {device.parent_pole_id || '-'}</p>
+                          <p style={{ margin: '2px 0' }}><strong>Keterangan:</strong> {device.keterangan || '-'}</p>
                         </div>
                       </Popup>
                     </Marker>
-                  ))}
-                </LayerGroup>
-              </LayersControl.Overlay>
+                  )
+                })}
+              </MarkerClusterGroup>
+            )}
 
-              {/* Data ODP & ODC Layer */}
-              <LayersControl.Overlay checked name="Titik ODP & ODC">
-                <LayerGroup>
-                  {devices.map(device => {
-                    const dIcon = device.type === 'ODC' ? odcIcon : odpIcon
-                    return (
-                      <Marker 
-                        key={device.id} 
-                        position={[Number(device.latitude), Number(device.longitude)]}
-                        icon={dIcon}
-                      >
-                        <Popup>
-                          <div style={{ minWidth: '180px' }}>
-                            <h4 style={{ margin: '0 0 8px 0', borderBottom: '1px solid #ccc', paddingBottom: '4px' }}>{device.device_id} ({device.type})</h4>
-                            <p style={{ margin: '2px 0' }}><strong>Site:</strong> {device.site}</p>
-                            <p style={{ margin: '2px 0' }}><strong>Desa:</strong> {device.desa}</p>
-                            <p style={{ margin: '2px 0' }}><strong>Jalan:</strong> {device.jalan || '-'}</p>
-                            <p style={{ margin: '2px 0' }}><strong>Kapasitas:</strong> {device.capacity || '-'} Port</p>
-                            <p style={{ margin: '2px 0' }}><strong>Tiang Induk:</strong> {device.parent_pole_id || '-'}</p>
-                            <p style={{ margin: '2px 0' }}><strong>Keterangan:</strong> {device.keterangan || '-'}</p>
-                          </div>
-                        </Popup>
-                      </Marker>
-                    )
-                  })}
-                </LayerGroup>
-              </LayersControl.Overlay>
+            {/* Garis Koneksi Layer */}
+            {showLines && (
+              <LayerGroup>
+                {connections.map(line => (
+                  <Polyline 
+                    key={line.id} 
+                    positions={line.positions} 
+                    color={line.color} 
+                    weight={3}
+                    opacity={0.7}
+                    dashArray="8, 6"
+                  />
+                ))}
+              </LayerGroup>
+            )}
 
-              {/* Garis Koneksi Layer */}
-              <LayersControl.Overlay checked name="Garis Tarikan (ODP ke Tiang)">
-                <LayerGroup>
-                  {connections.map(line => (
-                    <Polyline 
-                      key={line.id} 
-                      positions={line.positions} 
-                      color={line.color} 
-                      weight={3}
-                      opacity={0.7}
-                      dashArray="8, 6"
-                    />
-                  ))}
-                </LayerGroup>
-              </LayersControl.Overlay>
-
-              {/* Titik Lokasi Pengguna Layer */}
-              {userLocation && (
-                <LayersControl.Overlay checked name="Lokasi Anda (Biru)">
-                  <LayerGroup>
-                    <CircleMarker 
-                      center={userLocation}
-                      radius={8}
-                      pathOptions={{ color: '#ffffff', fillColor: '#3b82f6', fillOpacity: 1, weight: 3 }}
-                    >
-                      <Popup>Posisi Anda Saat Ini</Popup>
-                    </CircleMarker>
-                    <CircleMarker 
-                      center={userLocation}
-                      radius={18}
-                      pathOptions={{ color: 'transparent', fillColor: '#3b82f6', fillOpacity: 0.2 }}
-                    />
-                  </LayerGroup>
-                </LayersControl.Overlay>
-              )}
-            </LayersControl>
+            {/* Titik Lokasi Pengguna Layer */}
+            {userLocation && (
+              <LayerGroup>
+                <CircleMarker 
+                  center={userLocation}
+                  radius={8}
+                  pathOptions={{ color: '#ffffff', fillColor: '#3b82f6', fillOpacity: 1, weight: 3 }}
+                >
+                  <Popup>Posisi Anda Saat Ini</Popup>
+                </CircleMarker>
+                <CircleMarker 
+                  center={userLocation}
+                  radius={18}
+                  pathOptions={{ color: 'transparent', fillColor: '#3b82f6', fillOpacity: 0.2 }}
+                />
+              </LayerGroup>
+            )}
           </MapContainer>
         </div>
       )}
