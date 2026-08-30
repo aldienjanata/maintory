@@ -473,12 +473,12 @@ export default function PetaJaringan() {
             {/* ── Popup ── */}
             {selected && (
               <Popup longitude={selected.lon} latitude={selected.lat} anchor="bottom" closeButton={true} closeOnClick={false} maxWidth="280px" onClose={() => setSelected(null)} offset={[0, -25]}>
-                <div style={{ padding: '14px 16px', fontSize: '11px', color: '#000', lineHeight: '1.4' }}>
-                  <div style={{ fontWeight: 'bold', fontSize: '12px', marginBottom: '10px', paddingRight: '12px' }}>
-                    {selected.pole_id || selected.device_id || '-'}
+                <div style={{ padding: '16px 18px', fontSize: '13px', color: '#000', lineHeight: '1.5' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', paddingRight: '14px' }}>
+                    {selected._type === 'tiang' ? (selected.pole_id || '-') : (selected.device_id || '-')}
                   </div>
                   
-                  <div style={{ marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <div style={{ marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     {selected._type === 'tiang' ? (
                       <>
                         {selected.site && <div>Site: {selected.site}</div>}
