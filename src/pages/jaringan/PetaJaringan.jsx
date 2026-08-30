@@ -268,8 +268,8 @@ export default function PetaJaringan() {
       <style>{`
         @keyframes pjSpin { to { transform: rotate(360deg); } }
         .maplibregl-ctrl-group { border-radius: 12px !important; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important; border: none !important; }
-        .maplibregl-popup-content { border-radius: 12px !important; padding: 10px !important; box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important; border: 1px solid #e2e8f0 !important; font-family: system-ui, sans-serif !important; min-width: 200px; }
-        .maplibregl-popup-tip { display: none !important; }
+        .maplibregl-popup-content { border-radius: 0 !important; padding: 0 !important; box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important; border: 1px solid #999 !important; font-family: Arial, sans-serif !important; min-width: 240px; }
+        .maplibregl-popup-tip { border-top-color: #fff !important; }
         .maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin-bottom: 6px !important; }
         .maplibregl-ctrl-compass .maplibregl-ctrl-icon {
           background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23ea4335' d='M12 2.5L7.5 12 12 12z'/%3E%3Cpath fill='%239aa0a6' d='M12 21.5L7.5 12 12 12z'/%3E%3Cpath fill='%23d93025' d='M12 2.5L16.5 12 12 12z'/%3E%3Cpath fill='%2380868b' d='M12 21.5L16.5 12 12 12z'/%3E%3C/svg%3E") !important;
@@ -472,37 +472,51 @@ export default function PetaJaringan() {
 
             {/* ── Popup ── */}
             {selected && (
-              <Popup longitude={selected.lon} latitude={selected.lat} anchor="bottom" closeButton={false} maxWidth="240px" onClose={() => setSelected(null)} offset={[0, -35]}>
-                <div>
-                  <div style={{
-                    background: selected._type === 'tiang' ? '#f8fafc' : selected.type === 'ODC' ? '#fff7ed' : '#f0fdf4',
-                    margin: '-10px -10px 8px', padding: '8px 12px', borderRadius: '10px 10px 0 0',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <img src={selected._type === 'tiang' ? TIANG_B64 : selected.type === 'ODC' ? ODC_B64 : ODP_B64} alt="" style={{ width: 18, height: 18 }} />
-                      <div>
-                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
-                          {selected._type === 'tiang' ? 'TIANG' : selected.type}
-                        </div>
-                        <div style={{ fontWeight: 700, fontSize: 15, color: '#1e293b', marginTop: 1 }}>
-                          {selected.pole_id || selected.device_id || '-'}
-                        </div>
-                      </div>
-                    </div>
-                    <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, marginLeft: 8 }}>
-                      <X size={14} color="#94a3b8" />
-                    </button>
+              <Popup longitude={selected.lon} latitude={selected.lat} anchor="bottom" closeButton={true} closeOnClick={false} maxWidth="280px" onClose={() => setSelected(null)} offset={[0, -25]}>
+                <div style={{ padding: '14px 16px', fontSize: '11px', color: '#000', lineHeight: '1.4' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '12px', marginBottom: '10px', paddingRight: '12px' }}>
+                    {selected.pole_id || selected.device_id || '-'}
                   </div>
-                  {(selected._type === 'tiang'
-                    ? [['Site', selected.site], ['Desa', selected.desa], ['Jalan', selected.jalan], ['Kab.', selected.kabupaten], ['Status', selected.status], ['Ket.', selected.keterangan]]
-                    : [['Site', selected.site], ['Desa', selected.desa], ['Jalan', selected.jalan], ['Kapasitas', selected.capacity ? `${selected.capacity} Port` : ''], ['Tiang Induk', selected.parent_pole_id], ['Ket.', selected.keterangan]]
-                  ).filter(([, v]) => v).map(([k, v]) => (
-                    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12, borderBottom: '1px solid #f1f5f9', gap: 8 }}>
-                      <span style={{ color: '#64748b', flexShrink: 0 }}>{k}</span>
-                      <span style={{ fontWeight: 600, textAlign: 'right', wordBreak: 'break-word', maxWidth: 150, color: '#1e293b' }}>{v}</span>
-                    </div>
-                  ))}
+                  
+                  <div style={{ marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    {selected._type === 'tiang' ? (
+                      <>
+                        {selected.site && <div>Site: {selected.site}</div>}
+                        {selected.kecamatan && <div>Kecamatan: {selected.kecamatan}</div>}
+                        {selected.kabupaten && <div>Kabupaten: {selected.kabupaten}</div>}
+                        {selected.desa && <div>Desa: {selected.desa}</div>}
+                        {selected.jalan && <div>Jalan/gang: {selected.jalan}</div>}
+                        {selected.status && <div>Status: {selected.status}</div>}
+                        {selected.keterangan && <div>Keterangan: {selected.keterangan}</div>}
+                      </>
+                    ) : (
+                      <>
+                        {selected.site && <div>Site: {selected.site}</div>}
+                        <div>Jenis: {selected.type}</div>
+                        {selected.box_type && <div>Jenis Box: {selected.box_type}</div>}
+                        {selected.capacity && <div>Kapasitas: {selected.capacity}</div>}
+                        {selected.power_cable_type && <div>Jenis Kabel Power: {selected.power_cable_type}</div>}
+                        {selected.core_power && <div>Core Power: {selected.core_power}</div>}
+                        {selected.pon && <div>PON: {selected.pon}</div>}
+                        {selected.distance_to_olt && <div>Jarak ke OLT/Server: {selected.distance_to_olt}</div>}
+                        {selected.parent_pole_id && <div>Tiang Induk: {selected.parent_pole_id}</div>}
+                        {selected.kecamatan && <div>Kecamatan: {selected.kecamatan}</div>}
+                        {selected.desa && <div>Desa: {selected.desa}</div>}
+                        {selected.jalan && <div>Jalan/gang: {selected.jalan}</div>}
+                        {selected.keterangan && <div>Keterangan: {selected.keterangan}</div>}
+                      </>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <a href={`https://www.google.com/maps?q=${selected.lat},${selected.lon}`} target="_blank" rel="noreferrer" style={{ color: '#1a0dab', textDecoration: 'underline' }}>
+                      Lihat di Google Maps
+                    </a>
+                  </div>
+                  
+                  <div style={{ marginTop: '8px', color: '#1a0dab' }}>
+                    Directions: <span style={{ textDecoration: 'underline', cursor: 'pointer' }}>To here</span> - <span style={{ textDecoration: 'underline', cursor: 'pointer' }}>From here</span>
+                  </div>
                 </div>
               </Popup>
             )}
