@@ -7,15 +7,15 @@ import Map, {
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { Map as MapIcon, Search, X, Layers } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { TIANG_B64, ODP_B64, ODC_B64 } from './iconsBase64'
 
-// ── Definisi Icon ──────────────────────────────────────────────────────────────
+// ── Definisi Icon (Base64 = 100% Anti-Gagal, Anti-Cache, Langsung Memory) ─────
 const ICON_DEFS = [
-  { name: 'icon-tiang', url: '/icon_tiang.png' },
-  { name: 'icon-odp',   url: '/icon_odp.png' },
-  { name: 'icon-odc',   url: '/icon_odc.png' },
+  { name: 'icon-tiang', b64: TIANG_B64 },
+  { name: 'icon-odp',   b64: ODP_B64 },
+  { name: 'icon-odc',   b64: ODC_B64 },
 ]
 
-// Tambahkan glyphs agar MapLibre bisa merender text/angka pada cluster
 const EMPTY_STYLE = { 
   version: 8, 
   sources: {}, 
@@ -157,6 +157,8 @@ export default function PetaJaringan() {
   const [devices, setDevices] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
+  
+  const [iconsReady, setIconsReady] = useState(false)
 
   const [mapType, setMapType]             = useState('hybrid')
   const [showTiang, setShowTiang]         = useState(true)
@@ -172,43 +174,40 @@ export default function PetaJaringan() {
       .finally(() => setLoading(false))
   }, [])
 
-  // ── 2. Native HTML5 Geolocation (Bypass MapLibre UI Block di HP) ────────────
+  // ── 2. Native HTML5 Geolocation (Dengan Notifikasi Toast UX) ────────────────
   useEffect(() => {
+    let toastId = null
     if (navigator.geolocation) {
+      toastId = toast.loading('📍 Sedang melacak lokasi Anda...', { position: 'bottom-center' })
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          // Begitu lokasi dapat, langsung perintahkan Map terbang ke sana
+          toast.success('Lokasi Anda ditemukan!', { id: toastId, position: 'bottom-center' })
           mapRef.current?.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 16, duration: 2500 })
         },
-        () => { console.warn("GPS timeout/ditolak") },
+        () => { 
+          toast.dismiss(toastId)
+        },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       )
     }
   }, [])
 
-  // ── 3. Map Load Handler ─────────────────────────────────────────────────────
+  // ── 3. Map Load Handler (Base64 Injector) ───────────────────────────────────
   const onMapLoad = useCallback((e) => {
     const map = e.target
 
-    // Auto-trigger tombol biru GPS MapLibre sebagai visual feedback
     setTimeout(() => geoControlRef.current?.trigger(), 800)
 
-    // Load Image dengan Cache-Buster (?v=timestamp) agar HP dipaksa update icon
-    const ts = Date.now()
-    ICON_DEFS.forEach(({ name, url }) => {
-      map.loadImage(`${url}?v=${ts}`, (err, img) => {
-        if (!err && !map.hasImage(name)) map.addImage(name, img)
-      })
-    })
-
-    // Fallback tangkapan jika layer render duluan sebelum gambar selesai download
-    map.on('styleimagemissing', (evt) => {
-      const def = ICON_DEFS.find(d => d.name === evt.id)
-      if (def) {
-        map.loadImage(`${def.url}?v=${ts}`, (err, img) => {
-          if (!err && !map.hasImage(evt.id)) map.addImage(evt.id, img)
-        })
+    // Load Base64 Icon langsung ke Memory
+    let loadedCount = 0
+    ICON_DEFS.forEach(({ name, b64 }) => {
+      const img = new Image()
+      img.onload = () => {
+        if (!map.hasImage(name)) map.addImage(name, img)
+        loadedCount++
+        if (loadedCount === ICON_DEFS.length) setIconsReady(true)
       }
+      img.src = b64
     })
   }, [])
 
@@ -328,7 +327,7 @@ export default function PetaJaringan() {
             preserveDrawingBuffer={false}
             antialias={false}
           >
-            {/* ── Base Maps ── */}
+            {/* ── Base Maps (Satelit di-setting tileSize=128 untuk Super HD Retina Quality) ── */}
             <Source id="base-osm-src" type="raster" tiles={['https://tile.openstreetmap.org/{z}/{x}/{y}.png']} tileSize={256} maxzoom={19}>
               <Layer id="base-osm-layer" type="raster" layout={{ visibility: mapType === 'roadmap' ? 'visible' : 'none' }} />
             </Source>
@@ -338,11 +337,11 @@ export default function PetaJaringan() {
               'https://mt1.google.com/vt/lyrs=y&hl=id&x={x}&y={y}&z={z}',
               'https://mt2.google.com/vt/lyrs=y&hl=id&x={x}&y={y}&z={z}',
               'https://mt3.google.com/vt/lyrs=y&hl=id&x={x}&y={y}&z={z}',
-            ]} tileSize={256} maxzoom={21}>
+            ]} tileSize={128} maxzoom={21}>
               <Layer id="base-sat-layer" type="raster" layout={{ visibility: mapType === 'hybrid' ? 'visible' : 'none' }} />
             </Source>
 
-            {/* Built-in Controls (Termasuk GPS) */}
+            {/* Built-in Controls */}
             <NavigationControl position="bottom-right" visualizePitch showCompass showZoom />
             <GeolocateControl 
               ref={geoControlRef}
@@ -355,75 +354,78 @@ export default function PetaJaringan() {
             <FullscreenControl position="top-right" />
             <ScaleControl position="bottom-left" unit="metric" />
 
-            {/* ── LAYER DATA (Akan otomatis muncul setelah image selesai load / event styleimagemissing) ── */}
-            
-            {/* ── TIANG ── */}
-            <Source id="poles" type="geojson" data={polesGeoJSON} cluster={true} clusterMaxZoom={16} clusterRadius={55}>
-              <Layer id="poles-clusters" type="circle"
-                filter={['has', 'point_count']}
-                layout={{ visibility: showTiang ? 'visible' : 'none' }}
-                paint={{ 
-                  'circle-color': '#6b7280', 
-                  'circle-radius': ['step', ['get', 'point_count'], 16, 10, 24, 100, 32], 
-                  'circle-stroke-width': 2, 
-                  'circle-stroke-color': '#fff' 
-                }}
-              />
-              <Layer id="poles-cluster-count" type="symbol"
-                filter={['has', 'point_count']}
-                layout={{
-                  visibility: showTiang ? 'visible' : 'none',
-                  'text-field': '{point_count_abbreviated}',
-                  'text-size': 12,
-                }}
-                paint={{ 'text-color': '#ffffff' }}
-              />
-              <Layer id="poles-symbols" type="symbol"
-                filter={['!', ['has', 'point_count']]}
-                layout={{
-                  visibility: showTiang ? 'visible' : 'none',
-                  'icon-image': 'icon-tiang',
-                  'icon-size': 0.55,
-                  'icon-allow-overlap': true,
-                  'icon-ignore-placement': true,
-                  'icon-anchor': 'bottom',
-                }}
-              />
-            </Source>
+            {/* ── LAYER DATA (Hanya dirender saat Base64 memory siap) ── */}
+            {iconsReady && (
+              <>
+                {/* ── TIANG ── */}
+                <Source id="poles" type="geojson" data={polesGeoJSON} cluster={true} clusterMaxZoom={16} clusterRadius={55}>
+                  <Layer id="poles-clusters" type="circle"
+                    filter={['has', 'point_count']}
+                    layout={{ visibility: showTiang ? 'visible' : 'none' }}
+                    paint={{ 
+                      'circle-color': '#6b7280', 
+                      'circle-radius': ['step', ['get', 'point_count'], 16, 10, 24, 100, 32], 
+                      'circle-stroke-width': 2, 
+                      'circle-stroke-color': '#fff' 
+                    }}
+                  />
+                  <Layer id="poles-cluster-count" type="symbol"
+                    filter={['has', 'point_count']}
+                    layout={{
+                      visibility: showTiang ? 'visible' : 'none',
+                      'text-field': '{point_count_abbreviated}',
+                      'text-size': 12,
+                    }}
+                    paint={{ 'text-color': '#ffffff' }}
+                  />
+                  <Layer id="poles-symbols" type="symbol"
+                    filter={['!', ['has', 'point_count']]}
+                    layout={{
+                      visibility: showTiang ? 'visible' : 'none',
+                      'icon-image': 'icon-tiang',
+                      'icon-size': 0.65,
+                      'icon-allow-overlap': true,
+                      'icon-ignore-placement': true,
+                      'icon-anchor': 'bottom',
+                    }}
+                  />
+                </Source>
 
-            {/* ── ODP/ODC ── */}
-            <Source id="devices" type="geojson" data={devicesGeoJSON} cluster={true} clusterMaxZoom={16} clusterRadius={55}>
-              <Layer id="devices-clusters" type="circle"
-                filter={['has', 'point_count']}
-                layout={{ visibility: showPerangkat ? 'visible' : 'none' }}
-                paint={{ 
-                  'circle-color': '#22c55e', 
-                  'circle-radius': ['step', ['get', 'point_count'], 16, 10, 24, 100, 32], 
-                  'circle-stroke-width': 2, 
-                  'circle-stroke-color': '#fff' 
-                }}
-              />
-              <Layer id="devices-cluster-count" type="symbol"
-                filter={['has', 'point_count']}
-                layout={{
-                  visibility: showPerangkat ? 'visible' : 'none',
-                  'text-field': '{point_count_abbreviated}',
-                  'text-size': 12,
-                }}
-                paint={{ 'text-color': '#ffffff' }}
-              />
-              <Layer id="devices-symbols" type="symbol"
-                filter={['!', ['has', 'point_count']]}
-                layout={{
-                  visibility: showPerangkat ? 'visible' : 'none',
-                  'icon-image': ['get', '_icon'],
-                  'icon-size': 0.55,
-                  'icon-allow-overlap': true,
-                  'icon-ignore-placement': true,
-                  'icon-anchor': 'bottom',
-                }}
-              />
-            </Source>
+                {/* ── ODP/ODC ── */}
+                <Source id="devices" type="geojson" data={devicesGeoJSON} cluster={true} clusterMaxZoom={16} clusterRadius={55}>
+                  <Layer id="devices-clusters" type="circle"
+                    filter={['has', 'point_count']}
+                    layout={{ visibility: showPerangkat ? 'visible' : 'none' }}
+                    paint={{ 
+                      'circle-color': '#22c55e', 
+                      'circle-radius': ['step', ['get', 'point_count'], 16, 10, 24, 100, 32], 
+                      'circle-stroke-width': 2, 
+                      'circle-stroke-color': '#fff' 
+                    }}
+                  />
+                  <Layer id="devices-cluster-count" type="symbol"
+                    filter={['has', 'point_count']}
+                    layout={{
+                      visibility: showPerangkat ? 'visible' : 'none',
+                      'text-field': '{point_count_abbreviated}',
+                      'text-size': 12,
+                    }}
+                    paint={{ 'text-color': '#ffffff' }}
+                  />
+                  <Layer id="devices-symbols" type="symbol"
+                    filter={['!', ['has', 'point_count']]}
+                    layout={{
+                      visibility: showPerangkat ? 'visible' : 'none',
+                      'icon-image': ['get', '_icon'],
+                      'icon-size': 0.65,
+                      'icon-allow-overlap': true,
+                      'icon-ignore-placement': true,
+                      'icon-anchor': 'bottom',
+                    }}
+                  />
+                </Source>
+              </>
+            )}
 
             {/* ── Popup ── */}
             {selected && (
