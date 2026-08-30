@@ -426,55 +426,76 @@ export default function PetaJaringan() {
               }
 
               // Otherwise render the individual points (either single, or fan out spiderfied)
-              return pts.map((pt, index) => {
-                let offsetX = 0;
-                let offsetY = 0;
+              
+              // Spider leg SVG rendered from center, points to each spread icon
+              const spiderLegSvg = isSpiderfied && total > 1 ? (
+                <Marker key={`legs-${key}`} latitude={lat} longitude={lng} anchor="center" style={{ zIndex: 5 }}>
+                  <svg width={1} height={1} style={{ overflow: 'visible', pointerEvents: 'none' }}>
+                    {pts.map((pt2, i) => {
+                      const a = (i / total) * Math.PI * 2;
+                      const r = total > 5 ? 46 : (total > 3 ? 38 : 28);
+                      const sx = Math.cos(a) * r;
+                      const sy = Math.sin(a) * r;
+                      const isSel = selected && selected.id === pt2.properties.id && selected._type === pt2.properties._type;
+                      return (
+                        <g key={i}>
+                          <line x1={0} y1={0} x2={sx} y2={sy} stroke={isSel ? '#3b82f6' : 'white'} strokeWidth={isSel ? 5 : 3} opacity="0.85" />
+                          <line x1={0} y1={0} x2={sx} y2={sy} stroke={isSel ? '#60a5fa' : '#94a3b8'} strokeWidth="1.5" opacity="0.85" />
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </Marker>
+              ) : null;
+
+              const iconMarkers = pts.map((pt, index) => {
+                let ox = 0;
+                let oy = 0;
                 
                 if (isSpiderfied && total > 1) {
                   const angle = (index / total) * Math.PI * 2;
-                  // Increase radius based on number of items to prevent cramping
                   const radius = total > 5 ? 46 : (total > 3 ? 38 : 28);
-                  offsetX = Math.cos(angle) * radius;
-                  offsetY = Math.sin(angle) * radius;
+                  ox = Math.cos(angle) * radius;
+                  oy = Math.sin(angle) * radius;
                 }
 
                 const iconImg = pt.properties._type === 'tiang' ? TIANG_B64 : pt.properties.type === 'ODC' ? ODC_B64 : ODP_B64;
                 const isSelected = selected && selected._type === pt.properties._type && selected.id === pt.properties.id;
+                const sz = isSelected ? 42 : 30;
                 
                 return (
-                  <Marker key={`point-${pt.properties.id}`} latitude={lat} longitude={lng} style={{ zIndex: isSelected ? 50 : (isSpiderfied ? 20 : 1) }}>
-                    <div style={{ position: 'relative' }}>
-                      
-                      {/* Spider Legs */}
-                      {isSpiderfied && total > 1 && (
-                        <svg style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 1, overflow: 'visible', pointerEvents: 'none', zIndex: -1 }}>
-                          <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke={isSelected ? '#3b82f6' : 'white'} strokeWidth={isSelected ? '6' : '4'} opacity="0.9" />
-                          <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke={isSelected ? '#60a5fa' : '#94a3b8'} strokeWidth="2" opacity="0.9" />
-                        </svg>
-                      )}
-
-                      <img 
-                        src={iconImg} 
-                        alt={pt.properties._type} 
-                        style={{ 
-                          width: isSelected ? 42 : 30,
-                          height: isSelected ? 42 : 30,
-                          cursor: 'pointer', 
-                          filter: isSelected
-                            ? 'drop-shadow(0 0 10px rgba(59,130,246,1)) drop-shadow(0 0 20px rgba(59,130,246,0.6))'
-                            : 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))',
-                          transform: `translate(calc(-50% + ${offsetX}px), calc(-100% + ${offsetY}px))`,
-                          transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                        }} 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelected({ lon: lng, lat, ...pt.properties });
-                        }}
-                      />
-                    </div>
+                  // Use Marker offset prop so the DOM position (and hitbox) moves with the visual
+                  <Marker
+                    key={`point-${pt.properties.id}`}
+                    latitude={lat}
+                    longitude={lng}
+                    offset={[ox, oy]}
+                    anchor="bottom"
+                    style={{ zIndex: isSelected ? 50 : (isSpiderfied ? 20 : 1), transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}
+                  >
+                    <img 
+                      src={iconImg} 
+                      alt={pt.properties._type} 
+                      style={{ 
+                        width: sz,
+                        height: sz,
+                        cursor: 'pointer', 
+                        display: 'block',
+                        filter: isSelected
+                          ? 'drop-shadow(0 0 10px rgba(59,130,246,1)) drop-shadow(0 0 20px rgba(59,130,246,0.6))'
+                          : 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))',
+                        transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                      }} 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelected({ lon: lng, lat, ...pt.properties });
+                      }}
+                    />
                   </Marker>
-                )
-              })
+                );
+              });
+
+              return [spiderLegSvg, ...iconMarkers];
             })}
 
             {/* ── Popup ── */}
