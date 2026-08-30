@@ -147,12 +147,14 @@ export default function PetaJaringan() {
   const [devices, setDevices] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
+  
+  // SPIDERFY STATE
+  const [spiderfiedCoord, setSpiderfiedCoord] = useState(null)
 
   const [mapType, setMapType]             = useState('hybrid')
   const [showTiang, setShowTiang]         = useState(true)
   const [showPerangkat, setShowPerangkat] = useState(true)
 
-  // Bounds & Zoom untuk Supercluster HTML
   const [bounds, setBounds] = useState(null)
   const [zoom, setZoom] = useState(14)
 
@@ -218,7 +220,6 @@ export default function PetaJaringan() {
     updateBounds()
   }, [updateBounds])
 
-  // ── SUPERCLUSTER JS (Mengganti WebGL demi stabilitas rendering Icon) ───────
   const points = useMemo(() => {
     let pts = []
     if (showTiang) {
@@ -253,6 +254,15 @@ export default function PetaJaringan() {
     ? { longitude: parseCoord(poles[0].longitude), latitude: parseCoord(poles[0].latitude), zoom: 14 }
     : { longitude: 109.245, latitude: -7.427, zoom: 13 }
 
+  // Group individual points to detect exact overlaps for Spiderfy
+  const nonClusterPoints = clusters.filter(c => !c.properties.cluster)
+  const pointGroups = {}
+  nonClusterPoints.forEach(c => {
+    const key = `${c.geometry.coordinates[0]},${c.geometry.coordinates[1]}`
+    if (!pointGroups[key]) pointGroups[key] = []
+    pointGroups[key].push(c)
+  })
+
   return (
     <div className="page-container">
       <style>{`
@@ -272,7 +282,7 @@ export default function PetaJaringan() {
           <div className="page-icon"><MapIcon size={24} /></div>
           <div>
             <h1 className="page-title">Peta Jaringan</h1>
-            <p className="page-subtitle">MapLibre GL · Fast Supercluster HTML</p>
+            <p className="page-subtitle">MapLibre GL · Spiderfy Clustering</p>
           </div>
         </div>
       </div>
@@ -319,6 +329,7 @@ export default function PetaJaringan() {
             onLoad={onMapLoad}
             onMove={updateBounds}
             onZoom={updateBounds}
+            onClick={() => setSpiderfiedCoord(null)}
             maxZoom={22}
             style={{ width: '100%', height: '100%' }}
             preserveDrawingBuffer={false}
@@ -349,59 +360,114 @@ export default function PetaJaringan() {
             <FullscreenControl position="top-right" />
             <ScaleControl position="bottom-left" unit="metric" />
 
-            {/* ── SUPERCLUSTER HTML MARKERS ── */}
-            {clusters.map(cluster => {
+            {/* ── MACRO CLUSTERS ── */}
+            {clusters.filter(c => c.properties.cluster).map(cluster => {
               const [longitude, latitude] = cluster.geometry.coordinates;
-              const { cluster: isCluster, point_count: pointCount, _type } = cluster.properties;
+              const pointCount = cluster.properties.point_count;
+              const size = Math.min(pointCount * 1.2 + 20, 50);
+              
+              return (
+                <Marker key={`cluster-${cluster.id}`} latitude={latitude} longitude={longitude}>
+                  <div 
+                    onClick={(e) => {
+                      e.originalEvent.stopPropagation();
+                      const expansionZoom = Math.min(supercluster.getClusterExpansionZoom(cluster.id), 20);
+                      mapRef.current?.flyTo({ center: [longitude, latitude], zoom: expansionZoom, duration: 600 });
+                    }}
+                    style={{
+                      width: size, height: size,
+                      background: 'rgba(59, 130, 246, 0.9)',
+                      color: 'white', borderRadius: '50%',
+                      display: 'flex', justifyContent: 'center', alignItems: 'center',
+                      fontWeight: 'bold', fontSize: '13px',
+                      border: '2px solid white', cursor: 'pointer',
+                      boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                      transition: 'transform 0.1s'
+                    }}
+                    onMouseOver={e => e.currentTarget.style.transform = 'scale(1.1)'}
+                    onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    {pointCount > 999 ? (pointCount / 1000).toFixed(1) + 'k' : pointCount}
+                  </div>
+                </Marker>
+              );
+            })}
 
-              if (isCluster) {
-                const size = Math.min(pointCount * 1.2 + 20, 50);
+            {/* ── INDIVIDUAL POINTS & SPIDERFY ── */}
+            {Object.entries(pointGroups).flatMap(([key, pts]) => {
+              const [lng, lat] = key.split(',').map(Number);
+              const isSpiderfied = spiderfiedCoord === key;
+              const total = pts.length;
+
+              // If exact overlaps exist and not expanded, show a mini "Overlapping Group" marker
+              if (total > 1 && !isSpiderfied) {
                 return (
-                  <Marker key={`cluster-${cluster.id}`} latitude={latitude} longitude={longitude}>
+                  <Marker key={`group-${key}`} latitude={lat} longitude={lng} style={{ zIndex: 10 }}>
                     <div 
                       onClick={(e) => {
                         e.originalEvent.stopPropagation();
-                        const expansionZoom = Math.min(supercluster.getClusterExpansionZoom(cluster.id), 20);
-                        mapRef.current?.flyTo({ center: [longitude, latitude], zoom: expansionZoom, duration: 600 });
+                        setSpiderfiedCoord(key);
                       }}
                       style={{
-                        width: size, height: size,
-                        background: 'rgba(59, 130, 246, 0.9)',
-                        color: 'white', borderRadius: '50%',
-                        display: 'flex', justifyContent: 'center', alignItems: 'center',
-                        fontWeight: 'bold', fontSize: '13px',
-                        border: '2px solid white', cursor: 'pointer',
-                        boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
-                        transition: 'transform 0.1s'
+                        width: 28, height: 28, background: '#ef4444', color: 'white',
+                        borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center',
+                        fontWeight: 'bold', fontSize: 13, border: '2px solid white', cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+                        transition: 'transform 0.2s'
                       }}
-                      onMouseOver={e => e.currentTarget.style.transform = 'scale(1.1)'}
+                      onMouseOver={e => e.currentTarget.style.transform = 'scale(1.15)'}
                       onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
                     >
-                      {pointCount > 999 ? (pointCount / 1000).toFixed(1) + 'k' : pointCount}
+                      {total}
                     </div>
                   </Marker>
-                );
+                )
               }
 
-              // Single Point
-              const iconImg = _type === 'tiang' ? TIANG_B64 : cluster.properties.type === 'ODC' ? ODC_B64 : ODP_B64;
-              return (
-                <Marker key={`point-${cluster.properties.id || Math.random()}`} latitude={latitude} longitude={longitude}>
-                  <img 
-                    src={iconImg} 
-                    alt={_type} 
-                    style={{ 
-                      width: 26, height: 26, cursor: 'pointer', 
-                      filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))',
-                      transform: 'translateY(-13px)' // Anchor center-bottom visually
-                    }} 
-                    onClick={(e) => {
-                      e.originalEvent.stopPropagation();
-                      setSelected({ lon: longitude, lat: latitude, ...cluster.properties });
-                    }}
-                  />
-                </Marker>
-              );
+              // Otherwise render the individual points (either single, or fan out spiderfied)
+              return pts.map((pt, index) => {
+                let offsetX = 0;
+                let offsetY = 0;
+                
+                if (isSpiderfied && total > 1) {
+                  const angle = (index / total) * Math.PI * 2;
+                  const radius = 26; // spread radius in pixels
+                  offsetX = Math.cos(angle) * radius;
+                  offsetY = Math.sin(angle) * radius;
+                }
+
+                const iconImg = pt.properties._type === 'tiang' ? TIANG_B64 : pt.properties.type === 'ODC' ? ODC_B64 : ODP_B64;
+                
+                return (
+                  <Marker key={`point-${pt.properties.id}`} latitude={lat} longitude={lng} style={{ zIndex: isSpiderfied ? 20 : 1 }}>
+                    <div style={{ position: 'relative' }}>
+                      
+                      {/* Spider Legs */}
+                      {isSpiderfied && total > 1 && (
+                        <svg style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 1, overflow: 'visible', pointerEvents: 'none', zIndex: -1 }}>
+                          <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke="white" strokeWidth="4" opacity="0.8" />
+                          <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke="#94a3b8" strokeWidth="2" opacity="0.8" />
+                        </svg>
+                      )}
+
+                      <img 
+                        src={iconImg} 
+                        alt={pt.properties._type} 
+                        style={{ 
+                          width: 28, height: 28, cursor: 'pointer', 
+                          filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))',
+                          transform: `translate(calc(-50% + ${offsetX}px), calc(-100% + ${offsetY}px))`, // Offset relative to center-bottom
+                          transition: 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' // Bouncy animation
+                        }} 
+                        onClick={(e) => {
+                          e.originalEvent.stopPropagation();
+                          setSelected({ lon: lng, lat, ...pt.properties });
+                        }}
+                      />
+                    </div>
+                  </Marker>
+                )
+              })
             })}
 
             {/* ── Popup ── */}
