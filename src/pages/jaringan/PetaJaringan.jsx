@@ -1,25 +1,19 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import Map, {
-  Popup, Source, Layer,
+  Popup, Source, Layer, Marker,
   NavigationControl, GeolocateControl, FullscreenControl, ScaleControl
 } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { Map as MapIcon, Search, X, Layers } from 'lucide-react'
 import toast from 'react-hot-toast'
+import useSupercluster from 'use-supercluster'
 import { TIANG_B64, ODP_B64, ODC_B64 } from './iconsBase64'
-
-const ICON_DEFS = [
-  { name: 'icon-tiang', b64: TIANG_B64 },
-  { name: 'icon-odp',   b64: ODP_B64 },
-  { name: 'icon-odc',   b64: ODC_B64 },
-]
 
 const EMPTY_STYLE = { 
   version: 8, 
   sources: {}, 
-  layers: [],
-  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf"
+  layers: []
 }
 
 const parseCoord = (c) => {
@@ -158,6 +152,10 @@ export default function PetaJaringan() {
   const [showTiang, setShowTiang]         = useState(true)
   const [showPerangkat, setShowPerangkat] = useState(true)
 
+  // Bounds & Zoom untuk Supercluster HTML
+  const [bounds, setBounds] = useState(null)
+  const [zoom, setZoom] = useState(14)
+
   useEffect(() => {
     const fetchAllData = async () => {
       try {
@@ -207,63 +205,45 @@ export default function PetaJaringan() {
     }
   }, [])
 
+  const updateBounds = useCallback(() => {
+    if (mapRef.current) {
+      const b = mapRef.current.getBounds()
+      setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()])
+      setZoom(mapRef.current.getZoom())
+    }
+  }, [])
+
   const onMapLoad = useCallback((e) => {
-    const map = e.target
-
     setTimeout(() => geoControlRef.current?.trigger(), 800)
+    updateBounds()
+  }, [updateBounds])
 
-    ICON_DEFS.forEach(({ name, b64 }) => {
-      const img = new Image()
-      img.onload = () => { if (!map.hasImage(name)) map.addImage(name, img) }
-      img.src = b64
-    })
-
-    map.on('styleimagemissing', (evt) => {
-      const def = ICON_DEFS.find(d => d.name === evt.id)
-      if (def) {
-        const img = new Image()
-        img.onload = () => { if (!map.hasImage(evt.id)) map.addImage(evt.id, img) }
-        img.src = def.b64
-      }
-    })
-  }, [])
-
-  const polesGeoJSON = useMemo(() => ({
-    type: 'FeatureCollection',
-    features: poles.map(p => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [parseCoord(p.longitude), parseCoord(p.latitude)] },
-      properties: { ...p, _type: 'tiang' }
-    }))
-  }), [poles])
-
-  const devicesGeoJSON = useMemo(() => ({
-    type: 'FeatureCollection',
-    features: devices.map(d => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [parseCoord(d.longitude), parseCoord(d.latitude)] },
-      properties: { ...d, _type: 'device', _icon: d.type === 'ODC' ? 'icon-odc' : 'icon-odp' }
-    }))
-  }), [devices])
-
-  const onClick = useCallback((e) => {
-    const fs = e.features
-    if (!fs?.length) { setSelected(null); return }
-    const f = fs[0]
-
-    if (f.properties?.point_count) {
-      mapRef.current?.flyTo({ center: f.geometry.coordinates, zoom: (mapRef.current?.getZoom?.() || 14) + 3, duration: 600 })
-      return
+  // ── SUPERCLUSTER JS (Mengganti WebGL demi stabilitas rendering Icon) ───────
+  const points = useMemo(() => {
+    let pts = []
+    if (showTiang) {
+      pts.push(...poles.map(p => ({
+        type: 'Feature',
+        properties: { cluster: false, _type: 'tiang', ...p },
+        geometry: { type: 'Point', coordinates: [parseCoord(p.longitude), parseCoord(p.latitude)] }
+      })))
     }
-
-    if (f.properties?._type) {
-      setSelected({ lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], ...f.properties })
+    if (showPerangkat) {
+      pts.push(...devices.map(d => ({
+        type: 'Feature',
+        properties: { cluster: false, _type: 'device', ...d },
+        geometry: { type: 'Point', coordinates: [parseCoord(d.longitude), parseCoord(d.latitude)] }
+      })))
     }
-  }, [])
+    return pts
+  }, [poles, devices, showTiang, showPerangkat])
 
-  const onMapClick = useCallback((e) => {
-    if (!e.features?.length) setSelected(null)
-  }, [])
+  const { clusters, supercluster } = useSupercluster({
+    points,
+    bounds,
+    zoom,
+    options: { radius: 60, maxZoom: 16 }
+  })
 
   const tiangCount = poles.length
   const odpCount   = devices.filter(d => d.type === 'ODP').length
@@ -292,7 +272,7 @@ export default function PetaJaringan() {
           <div className="page-icon"><MapIcon size={24} /></div>
           <div>
             <h1 className="page-title">Peta Jaringan</h1>
-            <p className="page-subtitle">MapLibre GL · WebGL · Rotasi &amp; Tilt 3D</p>
+            <p className="page-subtitle">MapLibre GL · Fast Supercluster HTML</p>
           </div>
         </div>
       </div>
@@ -337,9 +317,8 @@ export default function PetaJaringan() {
             initialViewState={{ ...center, pitch: 0, bearing: 0 }}
             mapStyle={EMPTY_STYLE}
             onLoad={onMapLoad}
-            onClick={onClick}
-            onMouseDown={onMapClick}
-            interactiveLayerIds={['poles-clusters', 'poles-symbols', 'devices-clusters', 'devices-symbols']}
+            onMove={updateBounds}
+            onZoom={updateBounds}
             maxZoom={22}
             style={{ width: '100%', height: '100%' }}
             preserveDrawingBuffer={false}
@@ -370,77 +349,64 @@ export default function PetaJaringan() {
             <FullscreenControl position="top-right" />
             <ScaleControl position="bottom-left" unit="metric" />
 
-            {/* ── TIANG ── */}
-            <Source id="poles" type="geojson" data={polesGeoJSON} cluster={true} clusterMaxZoom={16} clusterRadius={55}>
-              <Layer id="poles-clusters" type="circle"
-                filter={['has', 'point_count']}
-                layout={{ visibility: showTiang ? 'visible' : 'none' }}
-                paint={{ 
-                  'circle-color': '#6b7280', 
-                  'circle-radius': ['step', ['get', 'point_count'], 16, 10, 24, 100, 32], 
-                  'circle-stroke-width': 2, 
-                  'circle-stroke-color': '#fff' 
-                }}
-              />
-              <Layer id="poles-cluster-count" type="symbol"
-                filter={['has', 'point_count']}
-                layout={{
-                  visibility: showTiang ? 'visible' : 'none',
-                  'text-field': '{point_count_abbreviated}',
-                  'text-size': 12,
-                }}
-                paint={{ 'text-color': '#ffffff' }}
-              />
-              <Layer id="poles-symbols" type="symbol"
-                filter={['!', ['has', 'point_count']]}
-                layout={{
-                  visibility: showTiang ? 'visible' : 'none',
-                  'icon-image': 'icon-tiang',
-                  'icon-size': 0.65,
-                  'icon-allow-overlap': true,
-                  'icon-ignore-placement': true,
-                  'icon-anchor': 'bottom',
-                }}
-              />
-            </Source>
+            {/* ── SUPERCLUSTER HTML MARKERS ── */}
+            {clusters.map(cluster => {
+              const [longitude, latitude] = cluster.geometry.coordinates;
+              const { cluster: isCluster, point_count: pointCount, _type } = cluster.properties;
 
-            {/* ── ODP/ODC ── */}
-            <Source id="devices" type="geojson" data={devicesGeoJSON} cluster={true} clusterMaxZoom={16} clusterRadius={55}>
-              <Layer id="devices-clusters" type="circle"
-                filter={['has', 'point_count']}
-                layout={{ visibility: showPerangkat ? 'visible' : 'none' }}
-                paint={{ 
-                  'circle-color': '#22c55e', 
-                  'circle-radius': ['step', ['get', 'point_count'], 16, 10, 24, 100, 32], 
-                  'circle-stroke-width': 2, 
-                  'circle-stroke-color': '#fff' 
-                }}
-              />
-              <Layer id="devices-cluster-count" type="symbol"
-                filter={['has', 'point_count']}
-                layout={{
-                  visibility: showPerangkat ? 'visible' : 'none',
-                  'text-field': '{point_count_abbreviated}',
-                  'text-size': 12,
-                }}
-                paint={{ 'text-color': '#ffffff' }}
-              />
-              <Layer id="devices-symbols" type="symbol"
-                filter={['!', ['has', 'point_count']]}
-                layout={{
-                  visibility: showPerangkat ? 'visible' : 'none',
-                  'icon-image': ['get', '_icon'],
-                  'icon-size': 0.65,
-                  'icon-allow-overlap': true,
-                  'icon-ignore-placement': true,
-                  'icon-anchor': 'bottom',
-                }}
-              />
-            </Source>
+              if (isCluster) {
+                const size = Math.min(pointCount * 1.2 + 20, 50);
+                return (
+                  <Marker key={`cluster-${cluster.id}`} latitude={latitude} longitude={longitude}>
+                    <div 
+                      onClick={(e) => {
+                        e.originalEvent.stopPropagation();
+                        const expansionZoom = Math.min(supercluster.getClusterExpansionZoom(cluster.id), 20);
+                        mapRef.current?.flyTo({ center: [longitude, latitude], zoom: expansionZoom, duration: 600 });
+                      }}
+                      style={{
+                        width: size, height: size,
+                        background: 'rgba(59, 130, 246, 0.9)',
+                        color: 'white', borderRadius: '50%',
+                        display: 'flex', justifyContent: 'center', alignItems: 'center',
+                        fontWeight: 'bold', fontSize: '13px',
+                        border: '2px solid white', cursor: 'pointer',
+                        boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                        transition: 'transform 0.1s'
+                      }}
+                      onMouseOver={e => e.currentTarget.style.transform = 'scale(1.1)'}
+                      onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                    >
+                      {pointCount > 999 ? (pointCount / 1000).toFixed(1) + 'k' : pointCount}
+                    </div>
+                  </Marker>
+                );
+              }
+
+              // Single Point
+              const iconImg = _type === 'tiang' ? TIANG_B64 : cluster.properties.type === 'ODC' ? ODC_B64 : ODP_B64;
+              return (
+                <Marker key={`point-${cluster.properties.id || Math.random()}`} latitude={latitude} longitude={longitude}>
+                  <img 
+                    src={iconImg} 
+                    alt={_type} 
+                    style={{ 
+                      width: 26, height: 26, cursor: 'pointer', 
+                      filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))',
+                      transform: 'translateY(-13px)' // Anchor center-bottom visually
+                    }} 
+                    onClick={(e) => {
+                      e.originalEvent.stopPropagation();
+                      setSelected({ lon: longitude, lat: latitude, ...cluster.properties });
+                    }}
+                  />
+                </Marker>
+              );
+            })}
 
             {/* ── Popup ── */}
             {selected && (
-              <Popup longitude={selected.lon} latitude={selected.lat} anchor="bottom" closeButton={false} maxWidth="240px" onClose={() => setSelected(null)} offset={[0, -30]}>
+              <Popup longitude={selected.lon} latitude={selected.lat} anchor="bottom" closeButton={false} maxWidth="240px" onClose={() => setSelected(null)} offset={[0, -35]}>
                 <div>
                   <div style={{
                     background: selected._type === 'tiang' ? '#f8fafc' : selected.type === 'ODC' ? '#fff7ed' : '#f0fdf4',
@@ -448,7 +414,7 @@ export default function PetaJaringan() {
                     display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <img src={selected._type === 'tiang' ? TIANG_B64 : selected.type === 'ODC' ? ODC_B64 : ODP_B64} alt="" style={{ width: 16, height: 16 }} />
+                      <img src={selected._type === 'tiang' ? TIANG_B64 : selected.type === 'ODC' ? ODC_B64 : ODP_B64} alt="" style={{ width: 18, height: 18 }} />
                       <div>
                         <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>
                           {selected._type === 'tiang' ? 'TIANG' : selected.type}
