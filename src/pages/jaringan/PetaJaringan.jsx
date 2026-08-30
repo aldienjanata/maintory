@@ -14,14 +14,22 @@ const ICON_DEFS = [
   { name: 'icon-odc',   url: '/icon_odc.png' },
 ]
 
-// ── Base Style Kosong ─────────────────────────────────────────────────────────
-const EMPTY_STYLE = {
-  version: 8,
-  sources: {},
-  layers: []
-}
+const EMPTY_STYLE = { version: 8, sources: {}, layers: [] }
 
-// ── Toggle Switch ─────────────────────────────────────────────────────────────
+// ── Utility: Fix Koma ke Titik (Penyebab utama icon tidak muncul!) ───────────
+const parseCoord = (c) => {
+  if (!c) return 0;
+  // Ganti koma dengan titik, bersihkan spasi
+  const num = Number(String(c).replace(',', '.').trim());
+  return isNaN(num) ? 0 : num;
+};
+
+const isValidCoord = (lat, lon) => {
+  const lt = parseCoord(lat), ln = parseCoord(lon);
+  return lt !== 0 && ln !== 0;
+};
+
+// ── UI Components ─────────────────────────────────────────────────────────────
 function ToggleSwitch({ checked, onChange, color, label }) {
   return (
     <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '7px 0', borderBottom: '1px solid #f1f5f9' }}>
@@ -40,7 +48,6 @@ function ToggleSwitch({ checked, onChange, color, label }) {
   )
 }
 
-// ── Floating Layer Panel ──────────────────────────────────────────────────────
 function FloatingLayerPanel({ mapType, setMapType, showTiang, setShowTiang, showPerangkat, setShowPerangkat }) {
   const [open, setOpen] = useState(false)
   return (
@@ -91,7 +98,6 @@ function FloatingLayerPanel({ mapType, setMapType, showTiang, setShowTiang, show
   )
 }
 
-// ── Search Bar ────────────────────────────────────────────────────────────────
 function SearchBar({ onResult }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
@@ -139,65 +145,66 @@ function SearchBar({ onResult }) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function PetaJaringan() {
   const mapRef = useRef(null)
+  const geoControlRef = useRef(null)
 
   const [poles, setPoles]     = useState([])
   const [devices, setDevices] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   
-  // State sangat penting untuk memastikan Layer dirender HANYA setelah Icon siap
   const [iconsReady, setIconsReady] = useState(false)
 
   const [mapType, setMapType]             = useState('hybrid')
   const [showTiang, setShowTiang]         = useState(true)
   const [showPerangkat, setShowPerangkat] = useState(true)
 
+  // ── 1. Fetch Data (Dengan filter koordinat bersih) ─────────────────────────
   useEffect(() => {
     supabase.from('network_poles').select('*')
-      .then(({ data }) => { if (data) setPoles(data.filter(p => p.latitude && p.longitude)) })
+      .then(({ data }) => { if (data) setPoles(data.filter(p => isValidCoord(p.latitude, p.longitude))) })
     
     supabase.from('network_odp_odc').select('*')
-      .then(({ data }) => { if (data) setDevices(data.filter(d => d.latitude && d.longitude)) })
+      .then(({ data }) => { if (data) setDevices(data.filter(d => isValidCoord(d.latitude, d.longitude))) })
       .finally(() => setLoading(false))
   }, [])
 
-  // ── Map Load Handler (Auto-GPS & Preload WebGL Icons) ──────────────────────
+  // ── 2. Map Load Handler ─────────────────────────────────────────────────────
   const onMapLoad = useCallback((e) => {
     const map = e.target
 
-    // 1. Terbang ke lokasi pengguna saat ini (GPS)
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 16, duration: 2500 })
-        },
-        () => console.warn('Akses lokasi GPS ditolak/gagal'),
-        { enableHighAccuracy: true, timeout: 5000 }
-      )
-    }
+    // A. Trigger Auto GPS menggunakan kontrol bawaan (agar UI sinkron)
+    setTimeout(() => {
+      if (geoControlRef.current) {
+        geoControlRef.current.trigger()
+      }
+    }, 800) // Delay sedikit agar peta render penuh dulu
 
-    // 2. Preload semua PNG icons ke WebGL Texture memory
-    Promise.all(ICON_DEFS.map(({ name, url }) => {
-      return new Promise(resolve => {
-        map.loadImage(url, (err, img) => {
-          if (!err && !map.hasImage(name)) {
-            map.addImage(name, img)
-          }
-          resolve()
-        })
-      })
-    })).then(() => {
-      // SETELAH semua gambar di-load ke memory, baru perbolehkan render layer
-      setIconsReady(true)
+    // B. Muat PNG Icon secara Native HTML5 (Anti-gagal)
+    let loadedCount = 0
+    const totalIcons = ICON_DEFS.length
+    
+    ICON_DEFS.forEach(({ name, url }) => {
+      const img = new Image()
+      img.onload = () => {
+        if (!map.hasImage(name)) map.addImage(name, img)
+        loadedCount++
+        if (loadedCount === totalIcons) setIconsReady(true)
+      }
+      img.onerror = () => {
+        console.error(`Gagal memuat icon: ${url}`)
+        loadedCount++
+        if (loadedCount === totalIcons) setIconsReady(true)
+      }
+      img.src = url
     })
   }, [])
 
-  // ── GeoJSON ─────────────────────────────────────────────────────────────────
+  // ── 3. GeoJSON Builder (Pastikan tipe data murni Number) ───────────────────
   const polesGeoJSON = useMemo(() => ({
     type: 'FeatureCollection',
     features: poles.map(p => ({
       type: 'Feature',
-      geometry: { type: 'Point', coordinates: [Number(p.longitude), Number(p.latitude)] },
+      geometry: { type: 'Point', coordinates: [parseCoord(p.longitude), parseCoord(p.latitude)] },
       properties: { ...p, _type: 'tiang' }
     }))
   }), [poles])
@@ -206,7 +213,7 @@ export default function PetaJaringan() {
     type: 'FeatureCollection',
     features: devices.map(d => ({
       type: 'Feature',
-      geometry: { type: 'Point', coordinates: [Number(d.longitude), Number(d.latitude)] },
+      geometry: { type: 'Point', coordinates: [parseCoord(d.longitude), parseCoord(d.latitude)] },
       properties: { ...d, _type: 'device', _icon: d.type === 'ODC' ? 'icon-odc' : 'icon-odp' }
     }))
   }), [devices])
@@ -231,13 +238,13 @@ export default function PetaJaringan() {
     if (!e.features?.length) setSelected(null)
   }, [])
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Variables ───────────────────────────────────────────────────────────────
   const tiangCount = poles.length
   const odpCount   = devices.filter(d => d.type === 'ODP').length
   const odcCount   = devices.filter(d => d.type === 'ODC').length
 
   const center = poles.length > 0
-    ? { longitude: Number(poles[0].longitude), latitude: Number(poles[0].latitude), zoom: 14 }
+    ? { longitude: parseCoord(poles[0].longitude), latitude: parseCoord(poles[0].latitude), zoom: 14 }
     : { longitude: 109.245, latitude: -7.427, zoom: 13 }
 
   const interactiveLayers = iconsReady ? ['poles-clusters', 'poles-symbols', 'devices-clusters', 'devices-symbols'] : []
@@ -324,16 +331,22 @@ export default function PetaJaringan() {
               <Layer id="base-sat-layer" type="raster" layout={{ visibility: mapType === 'hybrid' ? 'visible' : 'none' }} />
             </Source>
 
-            {/* Built-in Controls */}
+            {/* Built-in Controls (Termasuk GPS) */}
             <NavigationControl position="bottom-right" visualizePitch showCompass showZoom />
-            <GeolocateControl position="bottom-right" trackUserLocation showUserHeading showAccuracyCircle fitBoundsOptions={{ maxZoom: 17 }} />
+            <GeolocateControl 
+              ref={geoControlRef}
+              position="bottom-right" 
+              trackUserLocation 
+              showUserHeading 
+              showAccuracyCircle 
+              fitBoundsOptions={{ maxZoom: 17 }} 
+            />
             <FullscreenControl position="top-right" />
             <ScaleControl position="bottom-left" unit="metric" />
 
-            {/* ── LAYER DATA (Hanya di-render JIKA icon sudah siap di memory) ── */}
+            {/* ── LAYER DATA (Hanya dirender jika koordinat valid & icon siap) ── */}
             {iconsReady && (
               <>
-                {/* ── Tiang: WebGL GeoJSON Symbol Layer ── */}
                 <Source id="poles" type="geojson" data={polesGeoJSON} cluster={true} clusterMaxZoom={16} clusterRadius={55}>
                   <Layer id="poles-clusters" type="circle"
                     filter={['has', 'point_count']}
@@ -353,7 +366,6 @@ export default function PetaJaringan() {
                   />
                 </Source>
 
-                {/* ── ODP/ODC: WebGL GeoJSON Symbol Layer ── */}
                 <Source id="devices" type="geojson" data={devicesGeoJSON} cluster={true} clusterMaxZoom={16} clusterRadius={55}>
                   <Layer id="devices-clusters" type="circle"
                     filter={['has', 'point_count']}
