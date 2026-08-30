@@ -473,9 +473,28 @@ export default function PetaJaringan() {
             })}
 
             {/* ── Popup ── */}
-            {selected && (
-              <Popup longitude={selected.lon} latitude={selected.lat} anchor="bottom" closeButton={false} closeOnClick={false} maxWidth="320px" offset={[0, -35]}>
-                <div style={{ padding: '16px', width: '280px', color: 'var(--text-primary)', background: 'var(--bg-card)', borderRadius: '16px', lineHeight: '1.5' }}>
+            {(() => {
+              if (!selected) return null;
+              
+              // Calculate dynamic popup offset to follow spiderfied icons
+              let popupOffset = [0, -45]; // Default height clearance for 40px selected icon
+              const key = `${selected.lon},${selected.lat}`;
+              const pts = pointGroups[key];
+              
+              if (pts && pts.length > 1 && spiderfiedCoord === key) {
+                const idx = pts.findIndex(p => p.properties.id === selected.id && p.properties._type === selected._type);
+                if (idx !== -1) {
+                  const angle = (idx / pts.length) * Math.PI * 2;
+                  const radius = 26;
+                  const ox = Math.cos(angle) * radius;
+                  const oy = Math.sin(angle) * radius;
+                  popupOffset = [ox, oy - 45];
+                }
+              }
+
+              return (
+                <Popup longitude={selected.lon} latitude={selected.lat} anchor="bottom" closeButton={false} closeOnClick={false} maxWidth="320px" offset={popupOffset}>
+                  <div style={{ padding: '16px', width: '280px', color: 'var(--text-primary)', background: 'var(--bg-card)', borderRadius: '16px', lineHeight: '1.5' }}>
                   
                   {/* Header */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px', marginBottom: '12px' }}>
@@ -523,7 +542,7 @@ export default function PetaJaringan() {
                   </div>
                 </div>
               </Popup>
-            )}
+            ); })()}
           </Map>
         </div>
       )}
