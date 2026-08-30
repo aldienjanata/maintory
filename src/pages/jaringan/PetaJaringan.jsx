@@ -268,8 +268,9 @@ export default function PetaJaringan() {
       <style>{`
         @keyframes pjSpin { to { transform: rotate(360deg); } }
         .maplibregl-ctrl-group { border-radius: 12px !important; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important; border: none !important; }
-        .maplibregl-popup-content { border-radius: 16px !important; padding: 0 !important; box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important; border: none !important; font-family: system-ui, -apple-system, sans-serif !important; -webkit-font-smoothing: antialiased; }
-        .maplibregl-popup-tip { border-top-color: #fff !important; }
+        .maplibregl-popup { z-index: 9999 !important; }
+        .maplibregl-popup-content { border-radius: 16px !important; padding: 0 !important; box-shadow: 0 10px 40px rgba(0,0,0,0.4) !important; border: none !important; font-family: system-ui, -apple-system, sans-serif !important; -webkit-font-smoothing: antialiased; }
+        .maplibregl-popup-tip { border-top-color: var(--bg-card, #fff) !important; }
         .maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin-bottom: 6px !important; }
         .maplibregl-ctrl-compass .maplibregl-ctrl-icon {
           background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23ea4335' d='M12 2.5L7.5 12 12 12z'/%3E%3Cpath fill='%239aa0a6' d='M12 21.5L7.5 12 12 12z'/%3E%3Cpath fill='%23d93025' d='M12 2.5L16.5 12 12 12z'/%3E%3Cpath fill='%2380868b' d='M12 21.5L16.5 12 12 12z'/%3E%3C/svg%3E") !important;
@@ -437,16 +438,17 @@ export default function PetaJaringan() {
                 }
 
                 const iconImg = pt.properties._type === 'tiang' ? TIANG_B64 : pt.properties.type === 'ODC' ? ODC_B64 : ODP_B64;
+                const isSelected = selected && selected._type === pt.properties._type && selected.id === pt.properties.id;
                 
                 return (
-                  <Marker key={`point-${pt.properties.id}`} latitude={lat} longitude={lng} style={{ zIndex: isSpiderfied ? 20 : 1 }}>
+                  <Marker key={`point-${pt.properties.id}`} latitude={lat} longitude={lng} style={{ zIndex: isSelected ? 50 : (isSpiderfied ? 20 : 1) }}>
                     <div style={{ position: 'relative' }}>
                       
                       {/* Spider Legs */}
                       {isSpiderfied && total > 1 && (
                         <svg style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 1, overflow: 'visible', pointerEvents: 'none', zIndex: -1 }}>
-                          <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke="white" strokeWidth="4" opacity="0.8" />
-                          <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke="#94a3b8" strokeWidth="2" opacity="0.8" />
+                          <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke={isSelected ? '#3b82f6' : 'white'} strokeWidth={isSelected ? '6' : '4'} opacity="0.9" />
+                          <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke={isSelected ? '#60a5fa' : '#94a3b8'} strokeWidth="2" opacity="0.9" />
                         </svg>
                       )}
 
@@ -454,10 +456,10 @@ export default function PetaJaringan() {
                         src={iconImg} 
                         alt={pt.properties._type} 
                         style={{ 
-                          width: 28, height: 28, cursor: 'pointer', 
-                          filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))',
+                          width: isSelected ? 40 : 28, height: isSelected ? 40 : 28, cursor: 'pointer', 
+                          filter: isSelected ? 'drop-shadow(0 0 10px rgba(59,130,246,1)) drop-shadow(0 0 20px rgba(59,130,246,0.6))' : 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))',
                           transform: `translate(calc(-50% + ${offsetX}px), calc(-100% + ${offsetY}px))`, // Offset relative to center-bottom
-                          transition: 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' // Bouncy animation
+                          transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' // Bouncy animation
                         }} 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -472,30 +474,30 @@ export default function PetaJaringan() {
 
             {/* ── Popup ── */}
             {selected && (
-              <Popup longitude={selected.lon} latitude={selected.lat} anchor="bottom" closeButton={false} closeOnClick={false} maxWidth="320px" offset={[0, -25]}>
-                <div style={{ padding: '16px', width: '280px', color: '#334155', lineHeight: '1.5' }}>
+              <Popup longitude={selected.lon} latitude={selected.lat} anchor="bottom" closeButton={false} closeOnClick={false} maxWidth="320px" offset={[0, -35]}>
+                <div style={{ padding: '16px', width: '280px', color: 'var(--text-primary)', background: 'var(--bg-card)', borderRadius: '16px', lineHeight: '1.5' }}>
                   
                   {/* Header */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
                       <div style={{
                         width: 34, height: 34, borderRadius: '10px', flexShrink: 0,
-                        background: selected._type === 'tiang' ? '#f1f5f9' : (selected.type === 'ODC' ? '#ffedd5' : '#dcfce7'),
+                        background: selected._type === 'tiang' ? 'rgba(148, 163, 184, 0.2)' : (selected.type === 'ODC' ? 'rgba(249, 115, 22, 0.2)' : 'rgba(34, 197, 94, 0.2)'),
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.5), 0 2px 5px rgba(0,0,0,0.05)'
+                        boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.1), 0 2px 5px rgba(0,0,0,0.1)'
                       }}>
                         <img src={selected._type === 'tiang' ? TIANG_B64 : selected.type === 'ODC' ? ODC_B64 : ODP_B64} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
                       </div>
                       <div>
-                        <div style={{ fontSize: '10px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>
+                        <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>
                           {selected._type === 'tiang' ? 'Tiang Jaringan' : selected.type}
                         </div>
-                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', wordBreak: 'break-word', lineHeight: '1.2' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)', wordBreak: 'break-word', lineHeight: '1.2' }}>
                           {selected._type === 'tiang' ? (selected.pole_id || '-') : (selected.device_id || '-')}
                         </div>
                       </div>
                     </div>
-                    <button onClick={() => setSelected(null)} style={{ background: 'var(--bg-card)', border: '1px solid #e2e8f0', borderRadius: '50%', cursor: 'pointer', padding: '4px', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s', marginTop: '-2px', marginRight: '-4px' }} onMouseOver={e => Object.assign(e.currentTarget.style, { background: '#f1f5f9', color: '#475569' })} onMouseOut={e => Object.assign(e.currentTarget.style, { background: 'var(--bg-card)', color: '#94a3b8' })}>
+                    <button onClick={() => setSelected(null)} style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '50%', cursor: 'pointer', padding: '4px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s', marginTop: '-2px', marginRight: '-4px' }} onMouseOver={e => Object.assign(e.currentTarget.style, { background: 'var(--bg-card)', color: 'var(--text-primary)' })} onMouseOut={e => Object.assign(e.currentTarget.style, { background: 'var(--bg-secondary)', color: 'var(--text-secondary)' })}>
                       <X size={14} />
                     </button>
                   </div>
@@ -507,15 +509,15 @@ export default function PetaJaringan() {
                       : [['Site', selected.site], ['Jenis Box', selected.box_type], ['Kapasitas', selected.capacity], ['Kabel Power', selected.power_cable_type], ['Core Power', selected.core_power], ['PON', selected.pon], ['Jarak ke OLT', selected.distance_to_olt], ['Tiang Induk', selected.parent_pole_id], ['Kecamatan', selected.kecamatan], ['Desa', selected.desa], ['Jalan', selected.jalan], ['Keterangan', selected.keterangan]]
                     ).filter(([, v]) => v && v !== '-').map(([k, v]) => (
                       <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                        <span style={{ color: '#64748b', flexShrink: 0, fontWeight: 500 }}>{k}</span>
-                        <span style={{ fontWeight: 700, color: '#1e293b', textAlign: 'right', wordBreak: 'break-word' }}>{v}</span>
+                        <span style={{ color: 'var(--text-secondary)', flexShrink: 0, fontWeight: 500 }}>{k}</span>
+                        <span style={{ fontWeight: 700, color: 'var(--text-primary)', textAlign: 'right', wordBreak: 'break-word' }}>{v}</span>
                       </div>
                     ))}
                   </div>
                   
                   {/* Footer Actions */}
-                  <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <a href={`https://www.google.com/maps?q=${selected.lat},${selected.lon}`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#2563eb', fontWeight: 700, textDecoration: 'none', fontSize: '12px', padding: '6px 12px', background: '#eff6ff', borderRadius: '20px', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = '#dbeafe'} onMouseOut={e => e.currentTarget.style.background = '#eff6ff'}>
+                  <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <a href={`https://www.google.com/maps?q=${selected.lat},${selected.lon}`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--primary)', fontWeight: 700, textDecoration: 'none', fontSize: '12px', padding: '6px 12px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '20px', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)'} onMouseOut={e => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}>
                       <MapIcon size={14} /> Buka di Maps
                     </a>
                   </div>
