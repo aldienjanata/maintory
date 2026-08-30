@@ -453,35 +453,24 @@ export default function PetaJaringan() {
                         </svg>
                       )}
 
-                      {/* Icon: Visual at exact position, large transparent hit area on top */}
-                      <div style={{
-                        position: 'absolute',
-                        transform: `translate(calc(-50% + ${offsetX}px), calc(-100% + ${offsetY}px))`,
-                        transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                      }}>
-                        {/* Actual icon image */}
-                        <img 
-                          src={iconImg} 
-                          alt={pt.properties._type} 
-                          style={{ 
-                            display: 'block',
-                            width: isSelected ? 42 : 28, height: isSelected ? 42 : 28,
-                            filter: isSelected ? 'drop-shadow(0 0 10px rgba(59,130,246,1)) drop-shadow(0 0 20px rgba(59,130,246,0.6))' : 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))',
-                            pointerEvents: 'none', // clicks pass through to the invisible overlay
-                          }} 
-                        />
-                        {/* Large invisible tap overlay perfectly aligned with icon */}
-                        <div style={{
-                          position: 'absolute',
-                          inset: '-14px',     // expands 14px on all sides beyond the icon
-                          cursor: 'pointer',
+                      <img 
+                        src={iconImg} 
+                        alt={pt.properties._type} 
+                        style={{ 
+                          width: isSelected ? 42 : 30,
+                          height: isSelected ? 42 : 30,
+                          cursor: 'pointer', 
+                          filter: isSelected
+                            ? 'drop-shadow(0 0 10px rgba(59,130,246,1)) drop-shadow(0 0 20px rgba(59,130,246,0.6))'
+                            : 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))',
+                          transform: `translate(calc(-50% + ${offsetX}px), calc(-100% + ${offsetY}px))`,
+                          transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                        }} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelected({ lon: lng, lat, ...pt.properties });
                         }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelected({ lon: lng, lat, ...pt.properties });
-                          }}
-                        />
-                      </div>
+                      />
                     </div>
                   </Marker>
                 )
