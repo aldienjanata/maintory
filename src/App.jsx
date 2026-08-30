@@ -20,6 +20,7 @@ import ActivityLogs from './pages/activity/ActivityLogs'
 import Settings from './pages/settings/Settings'
 import LaporanPemasangan from './pages/laporan/LaporanPemasangan'
 import BannerMaintenance from './pages/banner/BannerMaintenance'
+import PetaJaringan from './pages/jaringan/PetaJaringan'
 import DataTiang from './pages/jaringan/DataTiang'
 import DataOdpOdc from './pages/jaringan/DataOdpOdc'
 import KonversiTiang from './pages/jaringan/KonversiTiang'
@@ -98,6 +99,7 @@ function App() {
             <Route path="settings" element={<Settings />} />
             <Route path="laporan-pemasangan" element={<LaporanPemasangan />} />
             <Route path="banner-maintenance" element={<BannerMaintenance />} />
+            <Route path="jaringan/peta" element={<PetaJaringan />} />
             <Route path="jaringan/tiang" element={<DataTiang />} />
             <Route path="jaringan/odp-odc" element={<DataOdpOdc />} />
             <Route path="jaringan/konversi" element={<KonversiTiang />} />

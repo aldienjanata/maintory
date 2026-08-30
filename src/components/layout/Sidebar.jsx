@@ -19,7 +19,8 @@ import {
   Image,
   Antenna,
   RefreshCw,
-  ScanLine
+  ScanLine,
+  Map
 } from 'lucide-react'
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -44,6 +45,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { label: 'Generate Banner', path: '/banner-maintenance', icon: <Image />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin'] },
     { label: 'Scan Barcode', path: '/scanner', icon: <ScanLine />, section: 'OPERATIONS', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     
+    { label: 'Peta Jaringan', path: '/jaringan/peta', icon: <Map />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     { label: 'Data Tiang', path: '/jaringan/tiang', icon: <img src="/icon_tiang.png" alt="tiang" style={{ width: '18px', height: '18px', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.8 }} />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     { label: 'Data ODP & ODC', path: '/jaringan/odp-odc', icon: <img src="/icon_odp.png" alt="odp/odc" style={{ width: '18px', height: '18px', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.8 }} />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     { label: 'Konversi Data Jaringan FO', path: '/jaringan/konversi', icon: <RefreshCw />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
