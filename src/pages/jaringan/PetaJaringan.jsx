@@ -138,8 +138,8 @@ export default function PetaJaringan() {
   }, [poles, devices, showLines])
 
   return (
-    <div className="page-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <div className="page-header" style={{ marginBottom: 0, paddingBottom: '16px' }}>
+    <div className="page-container">
+      <div className="page-header" style={{ marginBottom: '16px' }}>
         <div className="page-header-left">
           <div className="page-icon">
             <MapIcon size={24} />
@@ -151,82 +151,74 @@ export default function PetaJaringan() {
         </div>
       </div>
 
-      {/* Custom Control Panel Terpisah (UI Percantik) */}
-      <div style={{
+      <style>{`.hide-scroll::-webkit-scrollbar { display: none; }`}</style>
+
+      {/* Custom Control Panel (UI Percantik, Horizontal Scroll untuk Mobile) */}
+      <div className="hide-scroll" style={{
         display: 'flex',
-        flexWrap: 'wrap',
-        gap: '20px',
-        padding: '12px 20px',
+        gap: '12px',
+        padding: '12px',
         backgroundColor: 'var(--bg-card)',
-        borderBottom: '1px solid var(--border-color)',
-        alignItems: 'center'
+        borderRadius: '12px',
+        border: '1px solid var(--border-color)',
+        alignItems: 'center',
+        overflowX: 'auto',
+        whiteSpace: 'nowrap',
+        marginBottom: '16px',
+        scrollbarWidth: 'none', // Firefox
+        msOverflowStyle: 'none', // IE
       }}>
         
         {/* Pilihan Mode Peta */}
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <span style={{ fontSize: '13px', fontWeight: 'bold', marginRight: '8px', color: 'var(--text-secondary)' }}>
-            MODE PETA:
-          </span>
+        <div style={{ display: 'inline-flex', background: 'rgba(0,0,0,0.1)', borderRadius: '8px', padding: '4px' }}>
           <button 
             onClick={() => setMapType('standard')}
-            className={`btn ${mapType === 'standard' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ padding: '6px 12px', fontSize: '13px', display: 'flex', gap: '6px', alignItems: 'center' }}
+            className={`btn btn-sm ${mapType === 'standard' ? 'btn-primary' : ''}`}
+            style={{ 
+              padding: '6px 12px', borderRadius: '6px', fontSize: '13px', display: 'flex', gap: '6px', alignItems: 'center', 
+              border: 'none', background: mapType === 'standard' ? '' : 'transparent', color: mapType === 'standard' ? '' : 'var(--text-secondary)' 
+            }}
           >
             <MapIcon size={14} /> Peta Jalan
           </button>
           <button 
             onClick={() => setMapType('hybrid')}
-            className={`btn ${mapType === 'hybrid' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ padding: '6px 12px', fontSize: '13px', display: 'flex', gap: '6px', alignItems: 'center' }}
+            className={`btn btn-sm ${mapType === 'hybrid' ? 'btn-primary' : ''}`}
+            style={{ 
+              padding: '6px 12px', borderRadius: '6px', fontSize: '13px', display: 'flex', gap: '6px', alignItems: 'center', 
+              border: 'none', background: mapType === 'hybrid' ? '' : 'transparent', color: mapType === 'hybrid' ? '' : 'var(--text-secondary)' 
+            }}
           >
-            <ImageIcon size={14} /> Satelit HD (Google Maps)
+            <ImageIcon size={14} /> Satelit HD
           </button>
         </div>
 
-        <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border-color)', display: 'block' }}></div>
+        <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border-color)', display: 'inline-block' }}></div>
 
-        {/* Pilihan Tampilan Data */}
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '13px', fontWeight: 'bold', marginRight: '4px', color: 'var(--text-secondary)' }}>
-            TAMPILKAN:
-          </span>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px' }}>
-            <input 
-              type="checkbox" 
-              checked={showTiang} 
-              onChange={e => setShowTiang(e.target.checked)} 
-              style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-            />
-            Titik Tiang
+        {/* Pilihan Tampilan Data (Chips) */}
+        <div style={{ display: 'inline-flex', gap: '8px' }}>
+          <label className={`btn btn-sm ${showTiang ? 'btn-primary' : ''}`} style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '13px', display: 'flex', gap: '6px', alignItems: 'center', border: '1px solid var(--border-color)', background: showTiang ? '' : 'transparent', color: showTiang ? '' : 'var(--text-primary)', cursor: 'pointer', margin: 0 }}>
+            <input type="checkbox" checked={showTiang} onChange={e => setShowTiang(e.target.checked)} style={{ display: 'none' }} />
+            {showTiang && <span style={{fontSize: '10px'}}>✔️</span>} Tiang
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px' }}>
-            <input 
-              type="checkbox" 
-              checked={showPerangkat} 
-              onChange={e => setShowPerangkat(e.target.checked)} 
-              style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-            />
-            Titik ODP & ODC
+          <label className={`btn btn-sm ${showPerangkat ? 'btn-primary' : ''}`} style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '13px', display: 'flex', gap: '6px', alignItems: 'center', border: '1px solid var(--border-color)', background: showPerangkat ? '' : 'transparent', color: showPerangkat ? '' : 'var(--text-primary)', cursor: 'pointer', margin: 0 }}>
+            <input type="checkbox" checked={showPerangkat} onChange={e => setShowPerangkat(e.target.checked)} style={{ display: 'none' }} />
+            {showPerangkat && <span style={{fontSize: '10px'}}>✔️</span>} ODP/ODC
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px' }}>
-            <input 
-              type="checkbox" 
-              checked={showLines} 
-              onChange={e => setShowLines(e.target.checked)} 
-              style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-            />
-            Garis Tarikan
+          <label className={`btn btn-sm ${showLines ? 'btn-primary' : ''}`} style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '13px', display: 'flex', gap: '6px', alignItems: 'center', border: '1px solid var(--border-color)', background: showLines ? '' : 'transparent', color: showLines ? '' : 'var(--text-primary)', cursor: 'pointer', margin: 0 }}>
+            <input type="checkbox" checked={showLines} onChange={e => setShowLines(e.target.checked)} style={{ display: 'none' }} />
+            {showLines && <span style={{fontSize: '10px'}}>✔️</span>} Garis
           </label>
         </div>
       </div>
 
       {loading ? (
-        <div className="loading-screen" style={{ flex: 1 }}>
+        <div className="loading-screen" style={{ height: '400px' }}>
           <div className="spinner"></div>
           <p className="text-secondary mt-2">Memuat peta & clustering data...</p>
         </div>
       ) : (
-        <div style={{ flex: 1, position: 'relative' }}>
+        <div style={{ height: 'calc(100vh - 240px)', minHeight: '500px', borderRadius: '12px', overflow: 'hidden', position: 'relative', border: '1px solid var(--border-color)' }}>
           <MapContainer 
             center={center} 
             zoom={userLocation ? 17 : 14} 
