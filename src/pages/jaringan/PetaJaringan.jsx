@@ -432,7 +432,8 @@ export default function PetaJaringan() {
                 
                 if (isSpiderfied && total > 1) {
                   const angle = (index / total) * Math.PI * 2;
-                  const radius = 26; // spread radius in pixels
+                  // Increase radius based on number of items to prevent cramping
+                  const radius = total > 5 ? 46 : (total > 3 ? 38 : 28);
                   offsetX = Math.cos(angle) * radius;
                   offsetY = Math.sin(angle) * radius;
                 }
@@ -442,30 +443,42 @@ export default function PetaJaringan() {
                 
                 return (
                   <Marker key={`point-${pt.properties.id}`} latitude={lat} longitude={lng} style={{ zIndex: isSelected ? 50 : (isSpiderfied ? 20 : 1) }}>
-                    <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'relative', width: 0, height: 0 }}>
                       
                       {/* Spider Legs */}
                       {isSpiderfied && total > 1 && (
                         <svg style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 1, overflow: 'visible', pointerEvents: 'none', zIndex: -1 }}>
-                          <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke={isSelected ? '#3b82f6' : 'white'} strokeWidth={isSelected ? '6' : '4'} opacity="0.9" />
+                          <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke={isSelected ? '#3b82f6' : 'var(--bg-card, white)'} strokeWidth={isSelected ? '6' : '4'} opacity="0.9" />
                           <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke={isSelected ? '#60a5fa' : '#94a3b8'} strokeWidth="2" opacity="0.9" />
                         </svg>
                       )}
 
-                      <img 
-                        src={iconImg} 
-                        alt={pt.properties._type} 
-                        style={{ 
-                          width: isSelected ? 40 : 28, height: isSelected ? 40 : 28, cursor: 'pointer', 
-                          filter: isSelected ? 'drop-shadow(0 0 10px rgba(59,130,246,1)) drop-shadow(0 0 20px rgba(59,130,246,0.6))' : 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))',
-                          transform: `translate(calc(-50% + ${offsetX}px), calc(-100% + ${offsetY}px))`, // Offset relative to center-bottom
-                          transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' // Bouncy animation
-                        }} 
+                      {/* Clickable Wrapper with Padding for Fat Thumbs */}
+                      <div 
+                        style={{
+                          position: 'absolute',
+                          left: 0, top: 0,
+                          padding: '12px', // Massive invisible tap area
+                          transform: `translate(calc(-50% + ${offsetX}px), calc(-100% + ${offsetY}px))`,
+                          transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                          cursor: 'pointer',
+                          display: 'flex', justifyContent: 'center', alignItems: 'center'
+                        }}
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelected({ lon: lng, lat, ...pt.properties });
                         }}
-                      />
+                      >
+                        <img 
+                          src={iconImg} 
+                          alt={pt.properties._type} 
+                          style={{ 
+                            width: isSelected ? 42 : 28, height: isSelected ? 42 : 28,
+                            filter: isSelected ? 'drop-shadow(0 0 12px rgba(59,130,246,1)) drop-shadow(0 0 24px rgba(59,130,246,0.8))' : 'drop-shadow(0 3px 6px rgba(0,0,0,0.5))',
+                            transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                          }} 
+                        />
+                      </div>
                     </div>
                   </Marker>
                 )
@@ -485,7 +498,7 @@ export default function PetaJaringan() {
                 const idx = pts.findIndex(p => p.properties.id === selected.id && p.properties._type === selected._type);
                 if (idx !== -1) {
                   const angle = (idx / pts.length) * Math.PI * 2;
-                  const radius = 26;
+                  const radius = pts.length > 5 ? 46 : (pts.length > 3 ? 38 : 28);
                   const ox = Math.cos(angle) * radius;
                   const oy = Math.sin(angle) * radius;
                   popupOffset = [ox, oy - 45];
