@@ -268,7 +268,7 @@ export default function PetaJaringan() {
       <style>{`
         @keyframes pjSpin { to { transform: rotate(360deg); } }
         .maplibregl-ctrl-group { border-radius: 12px !important; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important; border: none !important; }
-        .maplibregl-popup-content { border-radius: 0 !important; padding: 0 !important; box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important; border: 1px solid #999 !important; font-family: Arial, sans-serif !important; min-width: 240px; }
+        .maplibregl-popup-content { border-radius: 16px !important; padding: 0 !important; box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important; border: none !important; font-family: system-ui, -apple-system, sans-serif !important; -webkit-font-smoothing: antialiased; }
         .maplibregl-popup-tip { border-top-color: #fff !important; }
         .maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin-bottom: 6px !important; }
         .maplibregl-ctrl-compass .maplibregl-ctrl-icon {
@@ -329,7 +329,7 @@ export default function PetaJaringan() {
             onLoad={onMapLoad}
             onMove={updateBounds}
             onZoom={updateBounds}
-            onClick={() => setSpiderfiedCoord(null)}
+            onClick={() => { setSpiderfiedCoord(null); setSelected(null); }}
             maxZoom={22}
             style={{ width: '100%', height: '100%' }}
             preserveDrawingBuffer={false}
@@ -472,50 +472,52 @@ export default function PetaJaringan() {
 
             {/* ── Popup ── */}
             {selected && (
-              <Popup longitude={selected.lon} latitude={selected.lat} anchor="bottom" closeButton={true} closeOnClick={false} maxWidth="280px" onClose={() => setSelected(null)} offset={[0, -25]}>
-                <div style={{ padding: '16px 18px', fontSize: '13px', color: '#000', lineHeight: '1.5' }}>
-                  <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', paddingRight: '14px' }}>
-                    {selected._type === 'tiang' ? (selected.pole_id || '-') : (selected.device_id || '-')}
+              <Popup longitude={selected.lon} latitude={selected.lat} anchor="bottom" closeButton={false} closeOnClick={false} maxWidth="320px" offset={[0, -25]}>
+                <div style={{ padding: '16px', width: '280px', color: '#334155', lineHeight: '1.5' }}>
+                  
+                  {/* Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <div style={{
+                        width: 34, height: 34, borderRadius: '10px', flexShrink: 0,
+                        background: selected._type === 'tiang' ? '#f1f5f9' : (selected.type === 'ODC' ? '#ffedd5' : '#dcfce7'),
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.5), 0 2px 5px rgba(0,0,0,0.05)'
+                      }}>
+                        <img src={selected._type === 'tiang' ? TIANG_B64 : selected.type === 'ODC' ? ODC_B64 : ODP_B64} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '10px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '2px' }}>
+                          {selected._type === 'tiang' ? 'Tiang Jaringan' : selected.type}
+                        </div>
+                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', wordBreak: 'break-word', lineHeight: '1.2' }}>
+                          {selected._type === 'tiang' ? (selected.pole_id || '-') : (selected.device_id || '-')}
+                        </div>
+                      </div>
+                    </div>
+                    <button onClick={() => setSelected(null)} style={{ background: 'var(--bg-card)', border: '1px solid #e2e8f0', borderRadius: '50%', cursor: 'pointer', padding: '4px', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s', marginTop: '-2px', marginRight: '-4px' }} onMouseOver={e => Object.assign(e.currentTarget.style, { background: '#f1f5f9', color: '#475569' })} onMouseOut={e => Object.assign(e.currentTarget.style, { background: 'var(--bg-card)', color: '#94a3b8' })}>
+                      <X size={14} />
+                    </button>
                   </div>
                   
-                  <div style={{ marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {selected._type === 'tiang' ? (
-                      <>
-                        {selected.site && <div>Site: {selected.site}</div>}
-                        {selected.kecamatan && <div>Kecamatan: {selected.kecamatan}</div>}
-                        {selected.kabupaten && <div>Kabupaten: {selected.kabupaten}</div>}
-                        {selected.desa && <div>Desa: {selected.desa}</div>}
-                        {selected.jalan && <div>Jalan/gang: {selected.jalan}</div>}
-                        {selected.status && <div>Status: {selected.status}</div>}
-                        {selected.keterangan && <div>Keterangan: {selected.keterangan}</div>}
-                      </>
-                    ) : (
-                      <>
-                        {selected.site && <div>Site: {selected.site}</div>}
-                        <div>Jenis: {selected.type}</div>
-                        {selected.box_type && <div>Jenis Box: {selected.box_type}</div>}
-                        {selected.capacity && <div>Kapasitas: {selected.capacity}</div>}
-                        {selected.power_cable_type && <div>Jenis Kabel Power: {selected.power_cable_type}</div>}
-                        {selected.core_power && <div>Core Power: {selected.core_power}</div>}
-                        {selected.pon && <div>PON: {selected.pon}</div>}
-                        {selected.distance_to_olt && <div>Jarak ke OLT/Server: {selected.distance_to_olt}</div>}
-                        {selected.parent_pole_id && <div>Tiang Induk: {selected.parent_pole_id}</div>}
-                        {selected.kecamatan && <div>Kecamatan: {selected.kecamatan}</div>}
-                        {selected.desa && <div>Desa: {selected.desa}</div>}
-                        {selected.jalan && <div>Jalan/gang: {selected.jalan}</div>}
-                        {selected.keterangan && <div>Keterangan: {selected.keterangan}</div>}
-                      </>
-                    )}
+                  {/* Body Fields */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                    {(selected._type === 'tiang'
+                      ? [['Site', selected.site], ['Desa', selected.desa], ['Jalan', selected.jalan], ['Kabupaten', selected.kabupaten], ['Status', selected.status], ['Keterangan', selected.keterangan]]
+                      : [['Site', selected.site], ['Jenis Box', selected.box_type], ['Kapasitas', selected.capacity], ['Kabel Power', selected.power_cable_type], ['Core Power', selected.core_power], ['PON', selected.pon], ['Jarak ke OLT', selected.distance_to_olt], ['Tiang Induk', selected.parent_pole_id], ['Kecamatan', selected.kecamatan], ['Desa', selected.desa], ['Jalan', selected.jalan], ['Keterangan', selected.keterangan]]
+                    ).filter(([, v]) => v && v !== '-').map(([k, v]) => (
+                      <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                        <span style={{ color: '#64748b', flexShrink: 0, fontWeight: 500 }}>{k}</span>
+                        <span style={{ fontWeight: 700, color: '#1e293b', textAlign: 'right', wordBreak: 'break-word' }}>{v}</span>
+                      </div>
+                    ))}
                   </div>
                   
-                  <div>
-                    <a href={`https://www.google.com/maps?q=${selected.lat},${selected.lon}`} target="_blank" rel="noreferrer" style={{ color: '#1a0dab', textDecoration: 'underline' }}>
-                      Lihat di Google Maps
+                  {/* Footer Actions */}
+                  <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <a href={`https://www.google.com/maps?q=${selected.lat},${selected.lon}`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#2563eb', fontWeight: 700, textDecoration: 'none', fontSize: '12px', padding: '6px 12px', background: '#eff6ff', borderRadius: '20px', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = '#dbeafe'} onMouseOut={e => e.currentTarget.style.background = '#eff6ff'}>
+                      <MapIcon size={14} /> Buka di Maps
                     </a>
-                  </div>
-                  
-                  <div style={{ marginTop: '8px', color: '#1a0dab' }}>
-                    Directions: <span style={{ textDecoration: 'underline', cursor: 'pointer' }}>To here</span> - <span style={{ textDecoration: 'underline', cursor: 'pointer' }}>From here</span>
                   </div>
                 </div>
               </Popup>
