@@ -443,42 +443,33 @@ export default function PetaJaringan() {
                 
                 return (
                   <Marker key={`point-${pt.properties.id}`} latitude={lat} longitude={lng} style={{ zIndex: isSelected ? 50 : (isSpiderfied ? 20 : 1) }}>
-                    <div style={{ position: 'relative', width: 0, height: 0 }}>
+                    <div style={{ position: 'relative' }}>
                       
                       {/* Spider Legs */}
                       {isSpiderfied && total > 1 && (
                         <svg style={{ position: 'absolute', top: 0, left: 0, width: 1, height: 1, overflow: 'visible', pointerEvents: 'none', zIndex: -1 }}>
-                          <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke={isSelected ? '#3b82f6' : 'var(--bg-card, white)'} strokeWidth={isSelected ? '6' : '4'} opacity="0.9" />
+                          <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke={isSelected ? '#3b82f6' : 'white'} strokeWidth={isSelected ? '6' : '4'} opacity="0.9" />
                           <line x1={0} y1={0} x2={offsetX} y2={offsetY} stroke={isSelected ? '#60a5fa' : '#94a3b8'} strokeWidth="2" opacity="0.9" />
                         </svg>
                       )}
 
-                      {/* Clickable Wrapper with Padding for Fat Thumbs */}
-                      <div 
-                        style={{
-                          position: 'absolute',
-                          left: 0, top: 0,
+                      <img 
+                        src={iconImg} 
+                        alt={pt.properties._type} 
+                        style={{ 
+                          boxSizing: 'content-box',
                           padding: '12px', // Massive invisible tap area
-                          transform: `translate(calc(-50% + ${offsetX}px), calc(-100% + ${offsetY}px))`,
-                          transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                          cursor: 'pointer',
-                          display: 'flex', justifyContent: 'center', alignItems: 'center'
-                        }}
+                          width: isSelected ? 42 : 28, height: isSelected ? 42 : 28, cursor: 'pointer', 
+                          filter: isSelected ? 'drop-shadow(0 0 10px rgba(59,130,246,1)) drop-shadow(0 0 20px rgba(59,130,246,0.6))' : 'drop-shadow(0 3px 6px rgba(0,0,0,0.4))',
+                          // adjust translate by 12px down and 12px right to compensate for padding
+                          transform: `translate(calc(-50% + ${offsetX}px), calc(-100% + 12px + ${offsetY}px))`, 
+                          transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' // Bouncy animation
+                        }} 
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelected({ lon: lng, lat, ...pt.properties });
                         }}
-                      >
-                        <img 
-                          src={iconImg} 
-                          alt={pt.properties._type} 
-                          style={{ 
-                            width: isSelected ? 42 : 28, height: isSelected ? 42 : 28,
-                            filter: isSelected ? 'drop-shadow(0 0 12px rgba(59,130,246,1)) drop-shadow(0 0 24px rgba(59,130,246,0.8))' : 'drop-shadow(0 3px 6px rgba(0,0,0,0.5))',
-                            transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-                          }} 
-                        />
-                      </div>
+                      />
                     </div>
                   </Marker>
                 )
