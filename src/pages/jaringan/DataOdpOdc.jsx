@@ -1353,11 +1353,13 @@ export default function DataOdpOdc() {
           <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>Jaringan Fiber — Pencatatan & Manajemen ODP/ODC</p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {['admin', 'superadmin', 'teknisi'].includes(role) && (
+            <button className="btn btn-primary btn-sm" onClick={() => { setEditingId(null); setForm({...EMPTY_FORM}); setIsModalOpen(true); setProximityWarning(null) }} title="Tambah Data ODP/ODC Baru">
+              <Plus size={14} /> Tambah
+            </button>
+          )}
           {['admin', 'superadmin'].includes(role) && (
             <>
-              <button className="btn btn-primary btn-sm" onClick={() => { setEditingId(null); setForm({...EMPTY_FORM}); setIsModalOpen(true); setProximityWarning(null) }} title="Tambah Data ODP/ODC Baru">
-                <Plus size={14} /> Tambah
-              </button>
               <button className="btn btn-secondary btn-sm" onClick={() => setIsFormatModalOpen(true)} title="Pengaturan Format ID ODP/ODC">
                 <SettingsIcon size={14} /> Format ID
               </button>
@@ -1380,7 +1382,7 @@ export default function DataOdpOdc() {
             {excelMenuOpen && (
               <>
                 <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setExcelMenuOpen(false)} />
-                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 100, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '180px', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 100, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '180px', overflow: 'hidden' }}>
                   <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }} onClick={() => handleExportExcel('all')}>Export Semua (ODP & ODC)</button>
                   <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }} onClick={() => handleExportExcel('ODP')}>Export Hanya ODP</button>
                   <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)' }} onClick={() => handleExportExcel('ODC')}>Export Hanya ODC</button>
@@ -1518,7 +1520,7 @@ export default function DataOdpOdc() {
                 <th>Keterangan</th>
                 <th style={{ width: '100px' }}>Input Oleh</th>
                 <th style={{ cursor: 'pointer', width: '100px' }} onClick={() => handleSort('created_at')}><div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>Tgl Input <SortIcon col="created_at" /></div></th>
-                {['admin', 'superadmin'].includes(role) && <th style={{ width: '80px' }}>Aksi</th>}
+                {['admin', 'superadmin', 'teknisi'].includes(role) && <th style={{ width: '80px' }}>Aksi</th>}
               </tr>
             </thead>
             <tbody>
@@ -1579,7 +1581,7 @@ export default function DataOdpOdc() {
                   </td>
                   <td style={{ fontSize: '11px' }}><div style={{ fontWeight: 500 }}>{getUserName(device.created_by)}</div>{device.updated_by && device.updated_by !== device.created_by && <div style={{ color: 'var(--text-secondary)', fontSize: '10px' }}>Edit: {getUserName(device.updated_by)}</div>}</td>
                   <td style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{device.created_at ? format(new Date(device.created_at), 'dd MMM yy', { locale: localeId }) : '-'}</td>
-                  {['admin', 'superadmin'].includes(role) && (
+                  {['admin', 'superadmin', 'teknisi'].includes(role) && (
                     <td><div style={{ display: 'flex', gap: '4px' }}>
                       {!isDismantled && <button className="btn btn-secondary btn-sm" style={{ padding: '4px 7px' }} onClick={() => openEdit(device)}><Edit2 size={12} /></button>}
                       {!isDismantled && <button className="btn btn-sm" title="Cabut ODP/ODC" style={{ padding: '4px 7px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.25)' }} onClick={() => { setCabutModal(device); setCabutNotes(''); setCabutDate(format(new Date(), 'yyyy-MM-dd')) }}><Scissors size={12} /></button>}
@@ -1603,8 +1605,15 @@ export default function DataOdpOdc() {
                   {device.parent_odc && <div style={{ fontSize: '10px', color: '#6366f1', marginTop: '1px' }}>Induk: {device.parent_odc}</div>}
                   <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{SITES.find(s => s.value === device.site)?.label} · <span style={{ color: device.type === 'ODC' ? '#6366f1' : 'var(--success)', fontWeight: 600 }}>{device.type}{device.jenis_box ? ` · ${device.jenis_box}` : ''}{device.kapasitas ? ` · ${device.kapasitas}` : ''}</span></div>
                 </div>
-                {['admin', 'superadmin'].includes(role) && (
-                  <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}><button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => openEdit(device)}><Edit2 size={12} /></button><button className="btn btn-sm" style={{ padding: '4px 8px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.25)' }} onClick={() => setConfirmDelete(device)}><Trash2 size={12} /></button></div>
+                {['admin', 'superadmin', 'teknisi'].includes(role) && (
+                  <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                    {!device.status || device.status !== 'dismantled' ? (
+                      <button className="btn btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => openEdit(device)}><Edit2 size={12} /></button>
+                    ) : null}
+                    {role === 'superadmin' && (
+                      <button className="btn btn-sm" style={{ padding: '4px 8px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.25)' }} onClick={() => setConfirmDelete(device)}><Trash2 size={12} /></button>
+                    )}
+                  </div>
                 )}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '12px' }}>
