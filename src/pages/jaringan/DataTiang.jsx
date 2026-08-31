@@ -1203,7 +1203,17 @@ export default function DataTiang() {
             </div>
           ))}
         </div>
-        <style>{`@media (max-width: 768px) { .desktop-table { display: none !important; } .mobile-cards { display: block !important; } }`}</style>
+        <style>{`
+          @media (max-width: 768px) { 
+            .desktop-table { display: none !important; } 
+            .mobile-cards { display: block !important; } 
+            .responsive-grid-2 { grid-template-columns: 1fr !important; }
+            .modal { max-height: 85dvh !important; }
+          }
+          @media (min-width: 769px) {
+            .responsive-grid-2 { grid-template-columns: 1fr 1fr !important; }
+          }
+        `}</style>
         
         <Pagination
           page={page}
@@ -1217,7 +1227,7 @@ export default function DataTiang() {
       {/* ══════ MODAL TAMBAH/EDIT ══════ */}
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="modal" style={{ width: '680px', maxWidth: '96vw', maxHeight: '93vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div className="modal" style={{ width: '680px', maxWidth: '96vw', maxHeight: '90dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div className="modal-header">
               <div>
                 <h3 style={{ margin: 0 }}>{editingId ? 'Edit Data Tiang' : 'Tambah Tiang Baru'}</h3>
@@ -1227,12 +1237,12 @@ export default function DataTiang() {
             </div>
             <div className="modal-body" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <div><label className="form-label">Site <span style={{ color: 'var(--danger)' }}>*</span></label><select className="form-input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}>{SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
                   <div><label className="form-label">Jenis Tiang <span style={{ color: 'var(--danger)' }}>*</span></label><select className="form-input" value={form.pole_type} onChange={e => setForm(f => ({ ...f, pole_type: e.target.value }))}>{POLE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2px' }}><span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>📍 Lokasi Administratif</span></div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <SearchableSelect
                     label="Provinsi"
                     value={form.provinsi}
@@ -1248,7 +1258,7 @@ export default function DataTiang() {
                     placeholder="Cari/ketik kabupaten..."
                   />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <SearchableSelect
                     label="Kecamatan"
                     required
@@ -1274,7 +1284,7 @@ export default function DataTiang() {
                     <button className="btn btn-secondary btn-sm" style={{ whiteSpace: 'nowrap', flexShrink: 0 }} onClick={handleExtractCoords} type="button"><MapPin size={13} /> Ambil Koord</button>
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <div><label className="form-label">Longitude</label><input className="form-input" type="number" step="any" value={form.longitude} onChange={e => setForm(f => ({ ...f, longitude: e.target.value }))} placeholder="109.2345678" /></div>
                   <div><label className="form-label">Latitude</label><input className="form-input" type="number" step="any" value={form.latitude} onChange={e => setForm(f => ({ ...f, latitude: e.target.value }))} placeholder="-7.4321234" /></div>
                 </div>
