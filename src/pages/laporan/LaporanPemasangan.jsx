@@ -40,24 +40,30 @@ function normalizeIdPelanggan(rawInput, suffix) {
   return val + suffix
 }
 
+
+function cleanString(raw) {
+  if (!raw) return ''
+  return raw.replace(/[^a-zA-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase()
+}
+
 function normalizeRTRW(raw) {
   if (!raw || !raw.trim()) return ''
-  const s = raw.trim()
-  const match = s.match(/(?:rt\s*)?(\d+)\s*[/\-]\s*(?:rw\s*)?(\d+)/i)
-  if (match) return `RT ${match[1].padStart(2,'0')} RW ${match[2].padStart(2,'0')}`
-  return s.toUpperCase()
+  let s = raw.trim()
+  const match = s.match(/(?:rt\.?\s*)?(\d+)\s*(?:[/\-]|rw\.?\s*)+\s*(\d+)/i)
+  if (match) return `RT ${match[1].padStart(3,'0')} RW ${match[2].padStart(3,'0')}`
+  return cleanString(s)
 }
 
 function normalizeDesa(raw) {
   if (!raw || !raw.trim()) return ''
-  const s = raw.trim().toUpperCase()
+  const s = cleanString(raw)
   if (s.startsWith('DESA ') || s.startsWith('KELURAHAN ') || s.startsWith('KEL ')) return s
   return 'DESA ' + s
 }
 
 function normalizeKecamatan(raw) {
   if (!raw || !raw.trim()) return ''
-  let s = raw.trim().toUpperCase()
+  let s = cleanString(raw)
   if (s.startsWith('KECAMATAN ')) return s
   if (s.startsWith('KEC ')) return s.replace('KEC ', 'KECAMATAN ')
   return 'KECAMATAN ' + s
@@ -65,7 +71,7 @@ function normalizeKecamatan(raw) {
 
 function buildAlamat(jalan, rtRw, desa, kecamatan) {
   const parts = []
-  if (jalan && jalan.trim()) parts.push(jalan.trim().toUpperCase())
+  if (jalan && jalan.trim()) parts.push(cleanString(jalan))
   const rtrwNorm = normalizeRTRW(rtRw)
   if (rtrwNorm) parts.push(rtrwNorm)
   const desaNorm = normalizeDesa(desa)
@@ -413,19 +419,19 @@ export default function LaporanPemasangan() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <span style={{ ...hintStyle, display: 'block', marginBottom: '4px' }}>Jalan / Dusun</span>
-              <input type="text" className="form-input" placeholder="Jl. Kerinci / Dusun Krajan" value={form.jalan} onChange={e => set('jalan', e.target.value)} />
+              <input type="text" className="form-input" placeholder="Jl. Kerinci / Dusun Krajan" value={form.jalan} onChange={e => set('jalan', e.target.value)} onBlur={() => set('jalan', cleanString(form.jalan))} />
             </div>
             <div>
               <span style={{ ...hintStyle, display: 'block', marginBottom: '4px' }}>RT / RW</span>
-              <input type="text" className="form-input" placeholder="01/02" value={form.rtRw} onChange={e => set('rtRw', e.target.value)} />
+              <input type="text" className="form-input" placeholder="01/02" value={form.rtRw} onChange={e => set('rtRw', e.target.value)} onBlur={() => set('rtRw', normalizeRTRW(form.rtRw))} />
             </div>
             <div>
               <span style={{ ...hintStyle, display: 'block', marginBottom: '4px' }}>Desa / Kelurahan</span>
-              <input type="text" className="form-input" placeholder="Mujur" value={form.desa} onChange={e => set('desa', e.target.value)} />
+              <input type="text" className="form-input" placeholder="Mujur" value={form.desa} onChange={e => set('desa', e.target.value)} onBlur={() => set('desa', normalizeDesa(form.desa))} />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
               <span style={{ ...hintStyle, display: 'block', marginBottom: '4px' }}>Kecamatan</span>
-              <input type="text" className="form-input" placeholder="Kroya" value={form.kecamatan} onChange={e => set('kecamatan', e.target.value)} />
+              <input type="text" className="form-input" placeholder="Kroya" value={form.kecamatan} onChange={e => set('kecamatan', e.target.value)} onBlur={() => set('kecamatan', normalizeKecamatan(form.kecamatan))} />
             </div>
           </div>
           <p style={hintStyle}>ℹ️ RT/RW dan Desa akan diformat otomatis (RT 01 RW 02, DESA ...)</p>
