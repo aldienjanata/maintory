@@ -387,7 +387,7 @@ export default function SerialNumber() {
       try {
         showProgress('Membaca File', 'Menganalisis isi Excel...', 10)
         const { read, utils } = await import('xlsx')
-        const wb = read(evt.target.result, { type: 'binary' })
+        const wb = read(evt.target.result, { type: 'binary', cellDates: true })
         const data = utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]])
         if (!data.length) throw new Error('File kosong')
         
@@ -415,14 +415,28 @@ export default function SerialNumber() {
             const key = `${bId}_${tName.toLowerCase()}`
             tId = typeMap[key]
           }
-          return { serial_number: sn, date_in: row['Tanggal Masuk (yyyy-mm-dd)'] || format(new Date(), 'yyyy-MM-dd'), status: 'tersedia', note: String(row['Note'] || '').trim(), brand_id: bId || null, type_id: tId, created_by: profile.id }
+          
+          let parsedDate = format(new Date(), 'yyyy-MM-dd')
+          const rawDate = row['Tanggal Masuk (yyyy-mm-dd)']
+          if (rawDate instanceof Date) {
+            parsedDate = format(rawDate, 'yyyy-MM-dd')
+          } else if (typeof rawDate === 'number') {
+            const d = new Date(Math.round((rawDate - 25569) * 86400 * 1000))
+            if (!isNaN(d)) parsedDate = format(d, 'yyyy-MM-dd')
+          } else if (typeof rawDate === 'string') {
+            const d = new Date(rawDate)
+            if (!isNaN(d)) parsedDate = format(d, 'yyyy-MM-dd')
+          }
+
+          return { serial_number: sn, date_in: parsedDate, status: 'tersedia', note: String(row['Note'] || '').trim(), brand_id: bId || null, type_id: tId, created_by: profile.id }
         }).filter(Boolean)
         
         let inserted = 0
         const batchSize = 50
         for (let i = 0; i < toInsert.length; i += batchSize) {
           const batch = toInsert.slice(i, i + batchSize)
-          await supabase.from('serial_numbers').insert(batch)
+          const { error } = await supabase.from('serial_numbers').upsert(batch, { onConflict: 'serial_number', ignoreDuplicates: true })
+          if (error) throw new Error(`Gagal menyimpan batch ${i/batchSize + 1}: ` + error.message)
           inserted += batch.length
           showProgress('Menyimpan ke Database', `Menyimpan ${inserted} dari ${toInsert.length} SN...`, 35 + (inserted / toInsert.length) * 65)
         }
