@@ -418,14 +418,16 @@ export default function SerialNumber() {
           
           let parsedDate = format(new Date(), 'yyyy-MM-dd')
           const rawDate = row['Tanggal Masuk (yyyy-mm-dd)']
+          const toDateStr = (d) => `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`
           if (rawDate instanceof Date) {
-            parsedDate = format(rawDate, 'yyyy-MM-dd')
+            parsedDate = toDateStr(rawDate)
           } else if (typeof rawDate === 'number') {
+            // Excel serial: days since Dec 30, 1899
             const d = new Date(Math.round((rawDate - 25569) * 86400 * 1000))
-            if (!isNaN(d)) parsedDate = format(d, 'yyyy-MM-dd')
-          } else if (typeof rawDate === 'string') {
+            if (!isNaN(d)) parsedDate = toDateStr(d)
+          } else if (typeof rawDate === 'string' && rawDate.trim()) {
             const d = new Date(rawDate)
-            if (!isNaN(d)) parsedDate = format(d, 'yyyy-MM-dd')
+            if (!isNaN(d)) parsedDate = toDateStr(d)
           }
 
           return { serial_number: sn, date_in: parsedDate, status: 'tersedia', note: String(row['Note'] || '').trim(), brand_id: bId || null, type_id: tId, created_by: profile.id }
