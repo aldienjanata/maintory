@@ -95,13 +95,22 @@ export default function SerialNumber() {
           type: 'out' 
         })),
       ...(dispItems || [])
-        .map(di => ({
-          date: di.dispatch?.dispatch_date || '-',
-          action: di.dispatch?.status === 'selesai' ? 'Terpakai (Bon Barang)' : `Dibawa Teknisi (${di.dispatch?.status || '-'})`,
-          note: `Lokasi: ${di.dispatch?.location || '-'} | ${workTypeLabels[di.dispatch?.work_type] || di.dispatch?.work_type || '-'} | Teknisi: ${(di.dispatch?.technician_ids || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')}`,
-          qty: 1,
-          type: di.dispatch?.status === 'selesai' ? 'out' : 'pending'
-        })),
+        .filter(di => {
+          if (di.dispatch?.status === 'selesai') {
+            return Number(di.quantity_returned) > 0 || Number(di.quantity_used) === 0
+          }
+          return true
+        })
+        .map(di => {
+          const isSelesai = di.dispatch?.status === 'selesai'
+          return {
+            date: di.dispatch?.dispatch_date || '-',
+            action: isSelesai ? 'Batal Pakai (Bon Barang)' : `Dibawa Teknisi (${di.dispatch?.status || '-'})`,
+            note: `Lokasi: ${di.dispatch?.location || '-'} | ${workTypeLabels[di.dispatch?.work_type] || di.dispatch?.work_type || '-'} | Teknisi: ${(di.dispatch?.technician_ids || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')}`,
+            qty: 1,
+            type: isSelesai ? 'in' : 'pending'
+          }
+        }),
       ...(replacements || [])
         .map(r => ({
           date: r.replacement_date || '-',
