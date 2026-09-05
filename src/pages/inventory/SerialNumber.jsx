@@ -65,12 +65,17 @@ export default function SerialNumber() {
     
     const { data: logs } = await supabase.from('inventory_log').select('*, user:users(full_name)').eq('item_type', 'sn').eq('item_id', item.id).order('log_date', { ascending: true })
     const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians, work_type, note)').eq('item_type', 'ont').eq('serial_number_id', item.id).order('created_at', { ascending: true })
-    const { data: dispItems } = await supabase.from('dispatch_items').select('*, dispatch:dispatches(dispatch_date, location, technician_ids, work_type, status)').eq('item_type', 'ont').eq('serial_number_id', item.id)
+    const { data: dispItems } = await supabase.from('dispatch_items').select('*, dispatch:dispatches(dispatch_date, location, technician_ids, work_type, status, note)').eq('item_type', 'ont').eq('serial_number_id', item.id)
+    const { data: replacements } = await supabase.from('ont_replacements').select('*, technician:users(full_name)').eq('new_serial_number_id', item.id)
     
     const { data: usersData } = await supabase.from('users').select('id, full_name')
     const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
 
-    const workTypeLabels = { 'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3', 'maintenance': 'Maintenance', 'odc_odp': 'Instalasi ODC/ODP' }
+    const workTypeLabels = {
+      'ikr_psb': 'IKR / PSB', 'mt': 'Maintenance', 'pt2': 'PT2 / PT3',
+      'maintenance': 'Maintenance', 'odc_odp': 'Instalasi ODC/ODP',
+      'pergantian_ont': 'Pergantian ONT', 'pasang_baru': 'Pasang Baru'
+    }
 
     const combined = [
       ...(logs || []).map(l => ({ 
@@ -82,20 +87,26 @@ export default function SerialNumber() {
         type: 'in' 
       })),
       ...(expItems || [])
-        .filter(ei => !ei.expense?.note?.includes('Bon Barang'))
         .map(ei => ({ 
           date: ei.expense?.expense_date || '-', 
-          action: 'Keluar', 
-          note: `Lokasi: ${ei.expense?.site || '-'} | ${workTypeLabels[ei.expense?.work_type] || ei.expense?.work_type || '-'} | Teknisi: ${(ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')}`, 
+          action: ei.expense?.note?.includes('Bon Barang') ? 'Bon Barang' : 'Pemakaian', 
+          note: `${workTypeLabels[ei.expense?.work_type] || ei.expense?.work_type || '-'} | Lokasi: ${ei.expense?.site || '-'} | Teknisi: ${(ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')}`, 
           qty: 1, 
           type: 'out' 
         })),
       ...(dispItems || [])
-        .filter(di => di.dispatch?.status === 'selesai' && Number(di.quantity) > 0)
         .map(di => ({
           date: di.dispatch?.dispatch_date || '-',
-          action: 'Keluar',
+          action: di.dispatch?.status === 'selesai' ? 'Terpakai (Bon Barang)' : `Dibawa Teknisi (${di.dispatch?.status || '-'})`,
           note: `Lokasi: ${di.dispatch?.location || '-'} | ${workTypeLabels[di.dispatch?.work_type] || di.dispatch?.work_type || '-'} | Teknisi: ${(di.dispatch?.technician_ids || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')}`,
+          qty: 1,
+          type: di.dispatch?.status === 'selesai' ? 'out' : 'pending'
+        })),
+      ...(replacements || [])
+        .map(r => ({
+          date: r.replacement_date || '-',
+          action: 'Pergantian ONT',
+          note: `Pelanggan: ${r.customer_name || '-'} | Lokasi: ${r.location || '-'} | Teknisi: ${r.technician?.full_name || '-'}`,
           qty: 1,
           type: 'out'
         }))

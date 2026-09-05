@@ -60,30 +60,22 @@ export default function HistoryModal({ isOpen, onClose, item, data, loading, tit
             <div className="empty-state"><History size={32} /><p>Belum ada riwayat transaksi</p></div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {paginatedData.map((r, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: r.type === 'in' ? 'var(--accent-dim)' : 'var(--bg-primary)', border: `1px solid ${r.type === 'in' ? 'var(--accent)' : 'var(--border)'}`, borderRadius: '8px' }}>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: r.type === 'in' ? 'var(--accent)' : 'var(--warning)', flexShrink: 0 }} />
+              {paginatedData.map((r, i) => {
+                const isIn = r.type === 'in'
+                const isPending = r.type === 'pending'
+                const dotColor = isIn ? 'var(--accent)' : isPending ? 'var(--warning)' : 'var(--danger)'
+                const bgColor = isIn ? 'var(--accent-dim)' : isPending ? 'rgba(255,180,0,0.08)' : 'var(--bg-primary)'
+                const borderColor = isIn ? 'var(--accent)' : isPending ? 'var(--warning)' : 'var(--border)'
+                return (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '12px 14px', background: bgColor, border: `1px solid ${borderColor}`, borderRadius: '8px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: dotColor, flexShrink: 0, marginTop: '5px' }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>{r.date} — {r.action}</div>
-                    
-                    {r.type === 'in' ? (
-                      <>
-                        <div className="text-secondary" style={{ fontSize: '12px' }}>{r.note || '-'}</div>
-                        {r.user && <div className="text-secondary" style={{ fontSize: '11px', marginTop: '2px' }}>oleh {r.user}</div>}
-                      </>
-                    ) : (
-                      <>
-                        {r.workType && <div style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: 500 }}>Pekerjaan: {r.workType}</div>}
-                        <div className="text-secondary" style={{ fontSize: '12px' }}>Lokasi: {r.note || '-'}</div>
-                        {r.technicianNames && <div className="text-secondary" style={{ fontSize: '11px', marginTop: '2px' }}>Teknisi: {r.technicianNames}</div>}
-                      </>
-                    )}
+                    <div className="text-secondary" style={{ fontSize: '12px', lineHeight: '1.5' }}>{r.note || '-'}</div>
+                    {r.user && <div className="text-secondary" style={{ fontSize: '11px', marginTop: '2px' }}>oleh {r.user}</div>}
                   </div>
-                  <span className={`badge ${r.type === 'in' ? 'badge-accent' : 'badge-warning'}`}>
-                    {r.type === 'in' ? '+' : '-'}{r.qty} {unit}
-                  </span>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </div>
