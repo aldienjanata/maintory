@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, Edit2, X, Package, TrendingDown, TrendingUp, FileDown, Upload, Download, History } from 'lucide-react'
+import { Search, Plus, Trash2, Edit2, X, Package, TrendingDown, TrendingUp, FileDown, Upload, Download, History, PackagePlus } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import HistoryModal from '../../components/HistoryModal'
@@ -43,6 +43,10 @@ export default function StokGudang() {
   const [historyData, setHistoryData] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+
+  const [isAddStockOpen, setIsAddStockOpen] = useState(false)
+  const [addStockItem, setAddStockItem] = useState(null)
+  const [addStockForm, setAddStockForm] = useState({ qty: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
 
   useEffect(() => { fetchItems() }, [])
 
@@ -202,41 +206,68 @@ export default function StokGudang() {
 
   const openEdit = (item) => {
     setEditItem(item)
-    setForm({ item_name: item.item_name, initial_stock: item.initial_stock, unit: item.unit, item_type: item.item_type })
+    setForm({ item_name: item.item_name, unit: item.unit, item_type: item.item_type })
     setIsModalOpen(true)
   }
 
+  const openAddStock = (item) => {
+    setAddStockItem(item)
+    setAddStockForm({ qty: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
+    setIsAddStockOpen(true)
+  }
+
+  const handleAddStock = async () => {
+    const qty = Number(addStockForm.qty)
+    if (!qty || qty <= 0) { toast.error('Jumlah tambah stok harus lebih dari 0'); return }
+    if (!addStockForm.date) { toast.error('Tanggal masuk wajib diisi'); return }
+    setSaving(true)
+    try {
+      const newStock = Number(addStockItem.initial_stock || 0) + qty
+      const { error } = await supabase.from('warehouses').update({ initial_stock: newStock, updated_at: new Date().toISOString() }).eq('id', addStockItem.id)
+      if (error) throw error
+      await supabase.from('inventory_log').insert({
+        log_date: addStockForm.date,
+        item_type: 'stok_gudang',
+        item_id: addStockItem.id,
+        action: 'masuk',
+        quantity: qty,
+        note: addStockForm.note || `Tambah stok ${qty} ${addStockItem.unit}`,
+        created_by: profile.id
+      })
+      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Tambah Stok', detail: `Tambah ${qty} ${addStockItem.unit} ke ${addStockItem.item_name}` })
+      toast.success(`Stok ${addStockItem.item_name} berhasil ditambah ${qty} ${addStockItem.unit}`)
+      setIsAddStockOpen(false)
+      fetchItems()
+    } catch (err) {
+      toast.error('Gagal tambah stok: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleSave = async () => {
-    if (!form.item_name || (form.item_type === 'other' && form.initial_stock === '')) {
+    if (!form.item_name || (!editItem && form.item_type === 'other' && form.initial_stock === '')) {
       toast.error('Nama dan stok awal wajib diisi')
       return
     }
-    const finalForm = { ...form, initial_stock: form.item_type !== 'other' ? 0 : form.initial_stock }
+    const finalForm = editItem
+      ? { item_name: form.item_name, unit: form.unit, item_type: form.item_type }
+      : { ...form, initial_stock: form.item_type !== 'other' ? 0 : Number(form.initial_stock) }
     setSaving(true)
     try {
       if (editItem) {
         const { error } = await supabase.from('warehouses').update({ ...finalForm, updated_at: new Date().toISOString() }).eq('id', editItem.id)
         if (error) throw error
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Edit Stok', detail: `Edit item: ${form.item_name}` })
-        toast.success('Data stok berhasil diperbarui')
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Edit Item', detail: `Edit item: ${form.item_name}` })
+        toast.success('Data item berhasil diperbarui')
       } else {
-        const existingItem = items.find(i => i.item_name.toLowerCase() === form.item_name.toLowerCase())
-        if (existingItem) {
-          const addedStock = Number(finalForm.initial_stock || 0)
-          const newStock = Number(existingItem.initial_stock || 0) + addedStock
-          const { error } = await supabase.from('warehouses').update({ initial_stock: newStock, updated_at: new Date().toISOString() }).eq('id', existingItem.id)
-          if (error) throw error
-          await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Tambah Stok', detail: `Tambah ${addedStock} ${form.unit || 'pcs'} ke ${form.item_name} (Stok lama: ${existingItem.initial_stock})` })
-          toast.success('Stok berhasil ditambahkan ke item yang sudah ada')
-        } else {
-          const { data: newWh, error } = await supabase.from('warehouses').insert({ ...finalForm, created_by: profile.id }).select().single()
-          if (error) throw error
-          if (form.item_type === 'other') {
-            await supabase.from('inventory_log').insert({ log_date: format(new Date(), 'yyyy-MM-dd'), item_type: 'stok_gudang', item_id: newWh.id, action: 'masuk', quantity: Number(form.initial_stock), note: 'Stok awal', created_by: profile.id })
-          }
-          await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Buat Item Baru', detail: `Buat item baru: ${form.item_name} dengan stok awal ${form.initial_stock}` })
-          toast.success('Item stok berhasil ditambahkan')
+        const { data: newWh, error } = await supabase.from('warehouses').insert({ ...finalForm, created_by: profile.id }).select().single()
+        if (error) throw error
+        if (form.item_type === 'other') {
+          await supabase.from('inventory_log').insert({ log_date: format(new Date(), 'yyyy-MM-dd'), item_type: 'stok_gudang', item_id: newWh.id, action: 'masuk', quantity: Number(form.initial_stock), note: 'Stok awal', created_by: profile.id })
         }
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Buat Item Baru', detail: `Buat item baru: ${form.item_name} stok awal ${form.initial_stock}` })
+        toast.success('Item stok berhasil ditambahkan')
       }
       setIsModalOpen(false)
       fetchItems()
@@ -543,8 +574,15 @@ export default function StokGudang() {
                             {item.item_type === 'other' && (
                               <button className="btn-icon" title="Riwayat" onClick={() => fetchHistory(item)}><History size={15} /></button>
                             )}
-                            <button className="btn-icon" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
-                            <button className="btn-icon text-danger" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
+                            {item.item_type === 'other' && (
+                              <button className="btn-icon text-success" title="Tambah Stok" onClick={() => openAddStock(item)}><PackagePlus size={15} /></button>
+                            )}
+                            {role === 'superadmin' && (
+                              <button className="btn-icon" title="Edit" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
+                            )}
+                            {role === 'superadmin' && (
+                              <button className="btn-icon text-danger" title="Hapus" onClick={() => handleDelete(item)}><Trash2 size={15} /></button>
+                            )}
                           </div>
                         </td>
                       )}
@@ -579,8 +617,15 @@ export default function StokGudang() {
                             {item.item_type === 'other' && (
                               <button className="btn btn-secondary btn-sm" onClick={() => fetchHistory(item)}><History size={14} /> Riwayat</button>
                             )}
-                            <button className="btn btn-secondary btn-sm" onClick={() => openEdit(item)}><Edit2 size={14} /> Edit</button>
-                            <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
+                            {item.item_type === 'other' && (
+                              <button className="btn btn-secondary btn-sm text-success" onClick={() => openAddStock(item)}><PackagePlus size={14} /> Tambah Stok</button>
+                            )}
+                            {role === 'superadmin' && (
+                              <button className="btn btn-secondary btn-sm" onClick={() => openEdit(item)}><Edit2 size={14} /> Edit</button>
+                            )}
+                            {role === 'superadmin' && (
+                              <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDelete(item)}><Trash2 size={14} /> Hapus</button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -603,7 +648,7 @@ export default function StokGudang() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Tambah/Edit Modal */}
       {isModalOpen && createPortal(
         <div className="modal-overlay">
           <div className="modal">
@@ -643,15 +688,17 @@ export default function StokGudang() {
                 />
               </div>
               <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">Stok Awal <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input className="form-input" type="number" min="0" placeholder="0" value={form.item_type !== 'other' ? '0' : form.initial_stock} onChange={e => setForm(f => ({ ...f, initial_stock: e.target.value }))} disabled={form.item_type !== 'other'} />
-                  {form.item_type !== 'other' && (
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block', lineHeight: '1.4' }}>
-                      Stok {form.item_type === 'ont' ? 'ONT' : 'Dropcore'} dihitung otomatis dari sub-menu {form.item_type === 'ont' ? 'Serial Number' : 'Dropcore Haspel'}.
-                    </span>
-                  )}
-                </div>
+                {!editItem && (
+                  <div className="form-group">
+                    <label className="form-label">Stok Awal <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input className="form-input" type="number" min="0" placeholder="0" value={form.item_type !== 'other' ? '0' : (form.initial_stock ?? '')} onChange={e => setForm(f => ({ ...f, initial_stock: e.target.value }))} disabled={form.item_type !== 'other'} />
+                    {form.item_type !== 'other' && (
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block', lineHeight: '1.4' }}>
+                        Stok {form.item_type === 'ont' ? 'ONT' : 'Dropcore'} dihitung otomatis dari sub-menu {form.item_type === 'ont' ? 'Serial Number' : 'Dropcore Haspel'}.
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div className="form-group">
                   <label className="form-label">Satuan</label>
                   <select className="form-input filter-select" style={{ height: 'auto', padding: '9px 12px' }} value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}>
@@ -661,9 +708,10 @@ export default function StokGudang() {
               </div>
               <div className="form-group">
                 <label className="form-label">Tipe Item</label>
-                <select className="form-input filter-select" style={{ height: 'auto', padding: '9px 12px' }} value={form.item_type} onChange={e => handleTypeChange(e.target.value)}>
+                <select className="form-input filter-select" style={{ height: 'auto', padding: '9px 12px' }} value={form.item_type} onChange={e => handleTypeChange(e.target.value)} disabled={!!editItem}>
                   {ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
+                {editItem && <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>Tipe item tidak bisa diubah. Gunakan tombol Tambah Stok (+) untuk menambah stok.</span>}
               </div>
             </div>
             <div className="modal-footer">
@@ -676,6 +724,47 @@ export default function StokGudang() {
         </div>,
         document.body
       )}
+
+      {/* Modal Tambah Stok */}
+      {isAddStockOpen && addStockItem && createPortal(
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3><PackagePlus size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} />Tambah Stok</h3>
+              <button className="btn-icon" onClick={() => setIsAddStockOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ padding: '12px', borderRadius: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Item</div>
+                <div style={{ fontWeight: 700, fontSize: '15px' }}>{addStockItem.item_name}</div>
+                <div style={{ fontSize: '13px', marginTop: '6px' }}>
+                  Stok saat ini: <strong style={{ color: addStockItem.display_current <= 0 ? 'var(--danger)' : addStockItem.display_current <= 5 ? 'var(--warning)' : 'var(--accent)' }}>{addStockItem.display_current} {addStockItem.unit}</strong>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Jumlah Tambah <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <input className="form-input" type="number" min="1" placeholder="Masukkan jumlah..." value={addStockForm.qty} onChange={e => setAddStockForm(f => ({ ...f, qty: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Tanggal Masuk <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <input className="form-input" type="date" value={addStockForm.date} onChange={e => setAddStockForm(f => ({ ...f, date: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Keterangan <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>(opsional)</span></label>
+                <input className="form-input" type="text" placeholder="Contoh: Pembelian September 2026, Stok awal..." value={addStockForm.note} onChange={e => setAddStockForm(f => ({ ...f, note: e.target.value }))} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setIsAddStockOpen(false)}>Batal</button>
+              <button className="btn btn-primary" onClick={handleAddStock} disabled={saving}>
+                {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : 'Tambah Stok'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       <HistoryModal
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
@@ -688,4 +777,5 @@ export default function StokGudang() {
     </div>
   )
 }
+
 
