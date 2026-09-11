@@ -351,8 +351,10 @@ export default function BannerMaintenance() {
 
             {/* BG Photo */}
             <img src={photo || '/default-bg.jpg'} alt="Background" crossOrigin="anonymous" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', zIndex: 1 }} />
-            {/* Gradient Overlay */}
+            {/* Gradient Overlay (Main Left-to-Right) */}
             <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 2, background: 'linear-gradient(90deg, rgba(255,255,255,1) 0%, rgba(255,255,255,0.95) 35%, rgba(255,255,255,0.7) 55%, rgba(255,255,255,0) 75%)' }} />
+            {/* Top Gradient Overlay for Header Readability */}
+            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '180px', zIndex: 2, background: 'linear-gradient(180deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0) 100%)' }} />
 
             {/* Content */}
             <div style={{ position: 'absolute', inset: 0, zIndex: 3, padding: '40px 48px 75px', display: 'flex', flexDirection: 'column' }}>
@@ -371,8 +373,8 @@ export default function BannerMaintenance() {
 
                 {/* Typography */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div style={{ fontSize: '56px', fontWeight: 900, color: '#0F172A', lineHeight: 1, letterSpacing: '-1.5px' }}>{titleTop}</div>
-                  <div style={{ fontSize: '120px', fontWeight: 900, color: '#DC2626', fontStyle: 'italic', lineHeight: '0.9', letterSpacing: '-4px', textShadow: '6px 6px 0 rgba(0,0,0,0.08)' }}>{titleHuge}</div>
+                  <div style={{ fontSize: '56px', fontWeight: 900, color: '#DC2626', lineHeight: 1, letterSpacing: '-1.5px' }}>{titleTop}</div>
+                  <div style={{ fontSize: '130px', fontWeight: 900, color: '#0F172A', lineHeight: '0.9', letterSpacing: '-4px', textShadow: '6px 6px 0 rgba(0,0,0,0.08)' }}>{titleHuge}</div>
                   <div>
                     <div style={{ background: '#0F172A', color: 'white', padding: '10px 24px', fontSize: '34px', fontWeight: 900, display: 'inline-block', borderRadius: '10px', letterSpacing: '0.5px' }}>{subtitleRibbon}</div>
                   </div>
@@ -399,7 +401,7 @@ export default function BannerMaintenance() {
                   )}
 
                   {/* Yellow Warning Box */}
-                  <div style={{ background: '#FACC15', padding: '16px 20px', borderRadius: '18px', display: 'flex', alignItems: 'flex-start', gap: '20px', boxShadow: '0 8px 24px rgba(250,204,21,0.4)', border: '4px solid white', maxWidth: '740px', width: 'fit-content' }}>
+                  <div style={{ background: '#FACC15', padding: '14px 20px', borderRadius: '16px', display: 'flex', alignItems: 'flex-start', gap: '18px', boxShadow: '0 8px 24px rgba(250,204,21,0.4)', border: '4px solid white', maxWidth: '740px', width: 'fit-content' }}>
                     <div style={{ background: 'white', width: '76px', minWidth: '76px', height: '76px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 0 0 3px #DC2626', flexShrink: 0 }}>
                       <AlertTriangle size={42} strokeWidth={2.5} color="#DC2626" />
                     </div>
