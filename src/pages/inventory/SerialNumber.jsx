@@ -26,6 +26,7 @@ export default function SerialNumber() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isBulkMode, setIsBulkMode] = useState(false)
   const [bulkText, setBulkText] = useState('')
+  const [bulkNote, setBulkNote] = useState('')
   const [expandedId, setExpandedId] = useState(null)
   const [editItem, setEditItem] = useState(null)
   const [form, setForm] = useState({ brand_id: '', brand_name: '', type_id: '', type_name: '', serial_number: '', date_in: format(new Date(), 'yyyy-MM-dd'), note: '', status: 'tersedia' })
@@ -249,18 +250,19 @@ export default function SerialNumber() {
       }
       
       const existing = items.filter(i => lines.includes(i.serial_number)).map(i => i.serial_number)
-      const toInsert = lines.filter(sn => !existing.includes(sn)).map(sn => ({ brand_id: brandId, type_id: typeId, serial_number: sn, date_in: form.date_in, status: 'tersedia', created_by: profile.id }))
+      const toInsert = lines.filter(sn => !existing.includes(sn)).map(sn => ({ brand_id: brandId, type_id: typeId, serial_number: sn, date_in: form.date_in, status: 'tersedia', note: bulkNote.trim() || null, created_by: profile.id }))
       
       if (toInsert.length > 0) {
         const { data: insertedSns, error } = await supabase.from('serial_numbers').insert(toInsert).select()
         if (error) throw error
-        await supabase.from('inventory_log').insert(insertedSns.map(sn => ({ log_date: form.date_in, item_type: 'sn', item_id: sn.id, action: 'masuk', quantity: 1, note: 'Input massal via text', created_by: profile.id })))
+        await supabase.from('inventory_log').insert(insertedSns.map(sn => ({ log_date: form.date_in, item_type: 'sn', item_id: sn.id, action: 'masuk', quantity: 1, note: bulkNote.trim() || 'Input massal via text', created_by: profile.id })))
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Input Massal SN', detail: `${toInsert.length} SN ditambahkan` })
       }
       
       toast.success(`${toInsert.length} berhasil ditambah, ${existing.length} sudah ada.`)
       setIsModalOpen(false)
       setBulkText('')
+      setBulkNote('')
       fetchAll()
     } catch (err) {
       toast.error('Gagal: ' + err.message)
@@ -687,7 +689,11 @@ export default function SerialNumber() {
               ) : (
                 <div className="form-group">
                   <label className="form-label">Daftar Serial Number (satu per baris)</label>
-                  <textarea className="form-input" rows={8} placeholder={"ZXHN12345\nZXHN67890"} value={bulkText} onChange={e => setBulkText(e.target.value)} style={{ fontFamily: 'monospace', resize: 'vertical' }} />
+                  <textarea className="form-input" rows={6} placeholder={"ZXHN12345\nZXHN67890"} value={bulkText} onChange={e => setBulkText(e.target.value)} style={{ fontFamily: 'monospace', resize: 'vertical' }} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Note / Keterangan <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsional)</span></label>
+                  <input type="text" className="form-input" placeholder="Contoh: Transfer dari gudang pusat" value={bulkNote} onChange={e => setBulkNote(e.target.value)} />
                 </div>
               )}
             </div>
