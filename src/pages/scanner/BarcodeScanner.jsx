@@ -582,7 +582,11 @@ export default function BarcodeScanner() {
                 <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{s.label}</span>
               </div>
             ))}
-            <div style={{ marginLeft: window.innerWidth <= 480 ? 0 : 'auto', width: window.innerWidth <= 480 ? '100%' : 'auto', display: 'flex', gap: '6px', alignItems: 'center', justifyContent: window.innerWidth <= 480 ? 'space-between' : 'flex-end', flexWrap: 'wrap', marginTop: window.innerWidth <= 480 ? '8px' : 0 }}>
+            <div className="search-box" style={{ flex: '1', minWidth: '150px', maxWidth: '300px', marginLeft: 'auto' }}>
+              <Search size={14} className="search-icon" />
+              <input type="text" placeholder="Cari barcode / catatan..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            </div>
+            <div style={{ width: window.innerWidth <= 480 ? '100%' : 'auto', display: 'flex', gap: '6px', alignItems: 'center', justifyContent: window.innerWidth <= 480 ? 'space-between' : 'flex-end', flexWrap: 'wrap', marginTop: window.innerWidth <= 480 ? '8px' : 0 }}>
               <div style={{ display: 'flex', gap: '6px' }}>
                 {can(role, 'scanner.delete') && (<>
                   <button className={`btn btn-sm ${selectMode ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setSelectMode(!selectMode); setSelected(new Set()) }}><CheckSquare size={13} /> <span className="hide-on-mobile">{selectMode ? 'Batal' : 'Pilih'}</span></button>
@@ -603,7 +607,6 @@ export default function BarcodeScanner() {
             </button>
             {showFilters && (
               <div style={{ marginTop: '10px', padding: '12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', alignItems: 'end' }}>
-                <div><label style={{fontSize:'11px', color:'var(--text-muted)', display:'block', marginBottom:'4px'}}>Cari</label><div className="search-box" style={{ width: '100%' }}><Search size={14} className="search-icon" /><input type="text" placeholder="Barcode..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div></div>
                 <div><label style={{fontSize:'11px', color:'var(--text-muted)', display:'block', marginBottom:'4px'}}>Kategori</label><select className="form-input" style={{width:'100%', padding:'6px 10px', fontSize:'13px'}} value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}><option value="all">Semua</option>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                 <div><label style={{fontSize:'11px', color:'var(--text-muted)', display:'block', marginBottom:'4px'}}>Tgl Pertama (Dari)</label><input type="date" className="form-input" style={{ padding: '6px 10px', fontSize: '13px', width: '100%' }} value={filterFirstFrom} onChange={e => setFilterFirstFrom(e.target.value)} /></div>
                 <div><label style={{fontSize:'11px', color:'var(--text-muted)', display:'block', marginBottom:'4px'}}>Tgl Pertama (Sampai)</label><input type="date" className="form-input" style={{ padding: '6px 10px', fontSize: '13px', width: '100%' }} value={filterFirstTo} onChange={e => setFilterFirstTo(e.target.value)} /></div>
