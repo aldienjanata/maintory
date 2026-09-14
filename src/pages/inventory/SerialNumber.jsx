@@ -687,14 +687,16 @@ export default function SerialNumber() {
                   )}
                 </>
               ) : (
-                <div className="form-group">
-                  <label className="form-label">Daftar Serial Number (satu per baris)</label>
-                  <textarea className="form-input" rows={6} placeholder={"ZXHN12345\nZXHN67890"} value={bulkText} onChange={e => setBulkText(e.target.value)} style={{ fontFamily: 'monospace', resize: 'vertical' }} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Note / Keterangan <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsional)</span></label>
-                  <input type="text" className="form-input" placeholder="Contoh: Transfer dari gudang pusat" value={bulkNote} onChange={e => setBulkNote(e.target.value)} />
-                </div>
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Daftar Serial Number (satu per baris)</label>
+                    <textarea className="form-input" rows={6} placeholder={"ZXHN12345\nZXHN67890"} value={bulkText} onChange={e => setBulkText(e.target.value)} style={{ fontFamily: 'monospace', resize: 'vertical' }} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Note / Keterangan <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opsional)</span></label>
+                    <input type="text" className="form-input" placeholder="Contoh: Transfer dari gudang pusat" value={bulkNote} onChange={e => setBulkNote(e.target.value)} />
+                  </div>
+                </>
               )}
             </div>
             <div className="modal-footer">
