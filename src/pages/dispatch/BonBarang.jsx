@@ -490,23 +490,11 @@ export default function BonBarang() {
           const reqLoc = isItemRequiresLocation(it.warehouse_item?.item_name)
           const qUsed = Number(lapor?.qty_used || 0)
           if (reqLoc && qUsed > 0) {
-            const itemName = (it.warehouse_item?.item_name || '').toLowerCase()
             const urls = (lapor?.share_lokasi || '').split(/(?=https?:\/\/)/gi).map(u => u.trim().replace(/,$/, '')).filter(Boolean)
-            const isClosureOrKaset = itemName.includes('closure') || itemName.includes('kaset')
-            if (isClosureOrKaset) {
-              // Closure/kaset: minimal 1 URL titik lokasi
-              if (urls.length === 0) {
-                toast.error(`Barang "${it.warehouse_item?.item_name}" terpakai, wajib sertakan minimal 1 link Google Maps lokasi pemasangan.`)
-                setLaporSaving(false)
-                return
-              }
-            } else {
-              // Tiang, ODP, dll: jumlah URL harus sama persis dengan qty
-              if (urls.length !== qUsed) {
-                toast.error(`Barang "${it.warehouse_item?.item_name}" terpakai ${qUsed}, mohon sertakan tepat ${qUsed} link URL Maps yang dipisahkan dengan spasi/koma.`)
-                setLaporSaving(false)
-                return
-              }
+            if (urls.length !== qUsed) {
+              toast.error(`Barang "${it.warehouse_item?.item_name}" terpakai ${qUsed}, mohon sertakan tepat ${qUsed} link URL Maps yang dipisahkan dengan spasi/koma.`)
+              setLaporSaving(false)
+              return
             }
           }
         }
@@ -1921,13 +1909,7 @@ export default function BonBarang() {
                               <div style={{ marginTop: '4px' }}>
                                 <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px', color: '#e67e22' }}>📍 Share Lokasi (Google Maps URL)</label>
                                 <input type="text" className="form-input" style={{ height: '36px', fontSize: '12px' }} placeholder="Pisahkan dengan spasi jika lebih dari satu link..." value={laporForm[it.id]?.share_lokasi || ''} onChange={e => setLaporForm({ ...laporForm, [it.id]: { ...laporForm[it.id], share_lokasi: e.target.value } })} />
-                                <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                                  {(() => {
-                                    const n = (it.warehouse_item?.item_name || '').toLowerCase()
-                                    if (n.includes('closure') || n.includes('kaset')) return "Wajib lampirkan minimal 1 link lokasi pemasangan."
-                                    return "Wajib lampirkan jumlah link sesuai qty yang terpakai."
-                                  })()}
-                                </div>
+                                <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '4px' }}>Wajib lampirkan jumlah link sesuai qty yang terpakai.</div>
                               </div>
                             )}
                           </div>
