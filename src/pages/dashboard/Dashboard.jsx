@@ -195,14 +195,27 @@ export default function Dashboard() {
   }
 
   const StatCard = ({ title, value, icon: Icon, colorVar, subLabel }) => (
-    <div className="stat-card stat-card-compact">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div className="stat-card-icon" style={{ background: `${colorVar}20`, width: '40px', height: '40px', flexShrink: 0 }}>
-          <Icon size={20} style={{ color: colorVar }} />
+    <div className="stat-card" style={{ 
+      padding: '20px', 
+      borderRadius: '16px', 
+      background: `linear-gradient(135deg, var(--bg-card) 0%, rgba(255,255,255,0.02) 100%)`, 
+      border: `1px solid ${colorVar}30`, 
+      position: 'relative', 
+      overflow: 'hidden', 
+      boxShadow: '0 4px 20px rgba(0,0,0,0.1)' 
+    }}>
+      {/* Background Icon Watermark */}
+      <Icon size={110} style={{ position: 'absolute', right: '-20px', bottom: '-20px', color: colorVar, opacity: 0.08, transform: 'rotate(-15deg)', zIndex: 0 }} />
+      <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div className="stat-card-label" style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text-secondary)' }}>{title}</div>
+          <div style={{ background: `${colorVar}15`, padding: '8px', borderRadius: '10px' }}>
+            <Icon size={18} style={{ color: colorVar }} />
+          </div>
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="stat-card-value" style={{ color: colorVar, fontSize: '22px' }}>{value}</div>
-          <div className="stat-card-label" style={{ fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+        <div>
+          <div className="stat-card-value" style={{ color: colorVar, fontSize: '32px', fontWeight: 800, lineHeight: 1 }}>{value}</div>
+          {subLabel && <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>{subLabel}</div>}
         </div>
       </div>
     </div>
@@ -258,11 +271,18 @@ export default function Dashboard() {
 
       {/* ===== ALERT: Maintenance Belum Close ===== */}
       {overdueTickets.length > 0 && (
-        <div className="card mb-3" style={{ borderColor: 'rgba(248, 81, 73, 0.4)', background: 'rgba(248, 81, 73, 0.04)', padding: '12px 14px' }}>
-          <div className="flex justify-between items-center mb-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={18} style={{ color: 'var(--danger)' }} />
-              <span className="font-semibold" style={{ color: 'var(--danger)', fontSize: '13.5px' }}>
+        <div className="card mb-4" style={{ 
+          borderColor: 'rgba(248, 81, 73, 0.3)', 
+          background: 'linear-gradient(to right, rgba(248, 81, 73, 0.08), rgba(248, 81, 73, 0.02))', 
+          padding: '16px 20px',
+          boxShadow: '0 4px 12px rgba(248,81,73,0.05)'
+        }}>
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2.5">
+              <div style={{ background: 'var(--danger)', borderRadius: '50%', padding: '6px', display: 'flex' }}>
+                <AlertTriangle size={16} style={{ color: 'white' }} />
+              </div>
+              <span className="font-semibold" style={{ color: 'var(--danger)', fontSize: '14.5px', letterSpacing: '0.2px' }}>
                 {overdueTickets.length} Tiket Kemarin Belum Selesai
               </span>
             </div>
@@ -270,16 +290,16 @@ export default function Dashboard() {
               <button
                 className="btn btn-ghost btn-sm"
                 onClick={() => setShowAllAlerts(!showAllAlerts)}
-                style={{ color: 'var(--danger)', flexShrink: 0, padding: '2px 6px', fontSize: '11px' }}
+                style={{ color: 'var(--danger)', flexShrink: 0, padding: '4px 8px', fontSize: '11.5px', background: 'rgba(248,81,73,0.1)' }}
               >
-                {showAllAlerts ? <ChevronUp size={14} /> : <><ChevronDown size={14} /> +{overdueTickets.length - 3}</>}
+                {showAllAlerts ? <ChevronUp size={14} /> : <><ChevronDown size={14} /> Tampilkan Semua (+{overdueTickets.length - 3})</>}
               </button>
             )}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {visibleAlerts.map((ticket) => (
-              <div key={ticket.id} className="alert-ticket-row">
+              <div key={ticket.id} className="alert-ticket-row" style={{ padding: '12px 16px', background: 'var(--bg-primary)', borderColor: 'var(--border)', borderRadius: '10px', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1, minWidth: 0 }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: ticket.status === 'pending' ? 'rgba(255,170,0,0.1)' : 'var(--danger-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <span style={{ fontSize: '10px', fontWeight: 700, color: ticket.status === 'pending' ? '#ffaa00' : 'var(--danger)' }}>#{ticket.ticket_number}</span>
@@ -372,12 +392,12 @@ export default function Dashboard() {
               <Wrench size={10} /> Mingguan
             </span>
           </div>
-          <div style={{ height: '240px' }}>
+          <div style={{ height: '280px', marginTop: '10px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={maintenanceChartData} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="var(--text-secondary)" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} opacity={0.5} />
+                <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={11.5} tickLine={false} axisLine={false} dy={10} />
+                <YAxis stroke="var(--text-secondary)" fontSize={11.5} tickLine={false} axisLine={false} allowDecimals={false} dx={-10} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px', color: 'var(--text-secondary)' }} />
                 <Bar dataKey="Masuk" fill="var(--accent)" radius={[4, 4, 0, 0]} />
@@ -398,24 +418,24 @@ export default function Dashboard() {
                 {statusFilter === 'hari' ? 'Hari ini' : statusFilter === 'bulan' ? `Bulan ${format(new Date(), 'MMMM yyyy', { locale: id })}` : statusFilter === 'tahun' ? `Tahun ${format(new Date(), 'yyyy')}` : 'Semua data'}
               </p>
             </div>
-            <div style={{ display: 'flex', gap: '4px' }}>
+            <div style={{ display: 'flex', background: 'var(--bg-primary)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border)', gap: '2px' }}>
               {[['hari', 'Hari Ini'], ['bulan', 'Bulan Ini'], ['tahun', 'Tahun Ini'], ['semua', 'Semua']].map(([key, label]) => (
-                <button key={key} onClick={() => setStatusFilter(key)} style={{ padding: '3px 8px', borderRadius: '6px', border: '1px solid var(--border)', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: statusFilter === key ? 'var(--accent)' : 'var(--bg-primary)', color: statusFilter === key ? '#fff' : 'var(--text-secondary)', transition: 'all 0.15s' }}>
+                <button key={key} onClick={() => setStatusFilter(key)} style={{ padding: '5px 12px', borderRadius: '6px', border: 'none', fontSize: '11.5px', fontWeight: 600, cursor: 'pointer', background: statusFilter === key ? 'var(--bg-card)' : 'transparent', color: statusFilter === key ? 'var(--text-primary)' : 'var(--text-secondary)', boxShadow: statusFilter === key ? '0 2px 5px rgba(0,0,0,0.06)' : 'none', transition: 'all 0.2s ease' }}>
                   {label}
                 </button>
               ))}
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ width: '120px', height: '120px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '30px', padding: '10px 0' }}>
+            <div style={{ width: '160px', height: '160px', flexShrink: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={maintenanceByStatus}
                     cx="50%"
                     cy="50%"
-                    innerRadius={35}
-                    outerRadius={55}
+                    innerRadius={45}
+                    outerRadius={75}
                     dataKey="value"
                     strokeWidth={0}
                   >
@@ -423,21 +443,21 @@ export default function Dashboard() {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} />
+                  <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, paddingRight: '20px' }}>
               {maintenanceByStatus.map((item, i) => (
-                <div key={item.name} className="flex items-center justify-between" style={{ marginBottom: '10px' }}>
-                  <div className="flex items-center gap-2">
-                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: item.color, flexShrink: 0 }} />
-                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{item.name}</span>
+                <div key={item.name} className="flex items-center justify-between" style={{ marginBottom: '14px' }}>
+                  <div className="flex items-center gap-3">
+                    <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: item.color, flexShrink: 0, boxShadow: `0 0 10px ${item.color}60` }} />
+                    <span style={{ fontSize: '13.5px', color: 'var(--text-secondary)', fontWeight: 500 }}>{item.name}</span>
                   </div>
-                  <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>{item.value}</span>
+                  <span style={{ fontWeight: 800, fontSize: '17px', color: 'var(--text-primary)' }}>{item.value}</span>
                 </div>
               ))}
-              <div className="flex items-center justify-between" style={{ borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '4px' }}>
+              <div className="flex items-center justify-between" style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', marginTop: '6px' }}>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Total</span>
                 <span style={{ fontWeight: 700, color: 'var(--accent)' }}>
                   {maintenanceByStatus.reduce((s, i) => s + i.value, 0)}
