@@ -28,7 +28,7 @@ const POLE_TYPES = [
   { value: 'tiang_9m', label: 'Tiang 9 m' },
 ]
 const EMPTY_FORM = {
-  site: 'banyumas', pole_type: 'tiang_7m',
+  site: 'banyumas', pole_type: 'tiang_7m', pole_id_manual: '',
   provinsi: 'Jawa Tengah', kabupaten: 'Banyumas',
   kecamatan: '', desa: '', maps_url: '',
   longitude: '', latitude: '', keterangan: '',
@@ -413,7 +413,7 @@ export default function DataTiang() {
         if (error) throw error
         toast.success('Data tiang diperbarui!')
       } else {
-        const poleId = generatePoleId(form.site, form.desa, poles, idFormat)
+        const poleId = form.pole_id_manual?.trim() || generatePoleId(form.site, form.desa, poles, idFormat)
         const { error } = await supabase.from('network_poles').insert({ ...payload, pole_id: poleId, created_by: profile.id })
         if (error) throw error
         toast.success(`Tiang ${poleId} ditambahkan!`)
@@ -796,6 +796,7 @@ export default function DataTiang() {
           
           mapped.push({
             _rowNo: i + 2,
+            pole_id_manual: (r['ID Tiang'] || '').trim(),
             site: (r['Site'] || 'banyumas').toLowerCase().trim(),
             pole_type: (r['Jenis Tiang'] || 'tiang_7m').toLowerCase().trim(),
             provinsi: r['Provinsi'] || '', kabupaten: r['Kabupaten/Kota'] || '',
@@ -854,12 +855,15 @@ export default function DataTiang() {
 
       showProgress('Menyiapkan ID', `Database punya ${freshPoles.length} tiang. Membuat pole ID...`, 15)
       const payloads = valid.map(row => {
-        const key = `${row.site}_${row.desa.toUpperCase().trim()}`
-        counts[key] = (counts[key] || 0) + 1
-        
-        const siteCode = SITE_CODE[row.site] || 'BMS'
-        const desaSlug = row.desa.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '').substring(0, 15)
-        const poleId = idFormat.replace(/{SITE_CODE}/g, siteCode).replace(/{DESA}/g, desaSlug).replace(/{NO}/g, String(counts[key]).padStart(3, '0'))
+        let poleId = row.pole_id_manual;
+        if (!poleId) {
+          const key = `${row.site}_${row.desa.toUpperCase().trim()}`
+          counts[key] = (counts[key] || 0) + 1
+          
+          const siteCode = SITE_CODE[row.site] || 'BMS'
+          const desaSlug = row.desa.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '').substring(0, 15)
+          poleId = idFormat.replace(/{SITE_CODE}/g, siteCode).replace(/{DESA}/g, desaSlug).replace(/{NO}/g, String(counts[key]).padStart(3, '0'))
+        }
 
         return {
           site: row.site, pole_type: row.pole_type, pole_id: poleId, provinsi: row.provinsi,
@@ -1241,6 +1245,12 @@ export default function DataTiang() {
                   <div><label className="form-label">Site <span style={{ color: 'var(--danger)' }}>*</span></label><select className="form-input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}>{SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
                   <div><label className="form-label">Jenis Tiang <span style={{ color: 'var(--danger)' }}>*</span></label><select className="form-input" value={form.pole_type} onChange={e => setForm(f => ({ ...f, pole_type: e.target.value }))}>{POLE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
                 </div>
+                {!editingId && (
+                  <div>
+                    <label className="form-label">ID Tiang <span style={{ color: 'var(--text-muted)', fontWeight: 'normal' }}>(Opsional)</span></label>
+                    <input type="text" className="form-input" placeholder="Kosongi untuk generate otomatis..." value={form.pole_id_manual} onChange={e => setForm(f => ({ ...f, pole_id_manual: e.target.value }))} style={{ fontFamily: 'monospace' }} />
+                  </div>
+                )}
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2px' }}><span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>📍 Lokasi Administratif</span></div>
                 <div className="responsive-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <SearchableSelect

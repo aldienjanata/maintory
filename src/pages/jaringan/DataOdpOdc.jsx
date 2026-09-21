@@ -41,6 +41,7 @@ const ODC_CAPACITIES = [
 ]
 const EMPTY_FORM = {
   site: 'banyumas', type: 'ODP', jenis_box: '', kapasitas: '',
+  device_id_manual: '',
   pole_id: '', divisi: '',
   jenis_kabel_power: '', core_power: '', jarak_ke_olt: '', pon: '',
   provinsi: 'Jawa Tengah', kabupaten: 'Banyumas',
@@ -545,7 +546,7 @@ export default function DataOdpOdc() {
         const poleInfo = linked_pole_id ? ` (Tiang: ${networkPoles.find(p => p.id === linked_pole_id)?.pole_id || linked_pole_id})` : ''
         toast.success(`Data ODP/ODC diperbarui!${newDeviceId ? ` ID otomatis disesuaikan menjadi ${newDeviceId}` : ''}${poleInfo}`)
       } else {
-        const deviceId = generateDeviceId(form.site, form.desa, form.type, devices, idFormat, form.parent_odc)
+        const deviceId = form.device_id_manual?.trim() || generateDeviceId(form.site, form.desa, form.type, devices, idFormat, form.parent_odc)
         const { error } = await supabase.from('network_odp_odc').insert({ ...payload, device_id: deviceId, created_by: profile.id })
         if (error) throw error
         const poleInfo = linked_pole_id ? ` → Terpasang di Tiang: ${networkPoles.find(p => p.id === linked_pole_id)?.pole_id || linked_pole_id}` : ''
@@ -1007,7 +1008,7 @@ export default function DataOdpOdc() {
           }
 
           // if not from template, check standard 'device_id' or 'ID' column
-          if (!device_id) device_id = String(r['device_id'] || r['ID'] || '')
+          if (!device_id) device_id = String(r['ID ODP/ODC'] || r['device_id'] || r['ID'] || '')
 
           let siteStr = String(r['site'] || r['Site'] || 'Banyumas').toLowerCase()
           let siteVal = SITES.find(s => s.label.toLowerCase() === siteStr || s.value === siteStr)?.value || 'banyumas'
@@ -1682,7 +1683,14 @@ export default function DataOdpOdc() {
                       </select>
                     </div>
                   )}
-
+                </div>
+                {!editingId && (
+                  <div>
+                    <label className="form-label">ID ODP/ODC <span style={{ color: 'var(--text-muted)', fontWeight: 'normal' }}>(Opsional — kosongi untuk generate otomatis)</span></label>
+                    <input type="text" className="form-input" placeholder="Kosongi untuk generate otomatis..." value={form.device_id_manual} onChange={e => setForm(f => ({ ...f, device_id_manual: e.target.value }))} style={{ fontFamily: 'monospace' }} />
+                  </div>
+                )}
+                <div className="responsive-grid-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
                   <div>
                     <label className="form-label">Jenis Box</label>
                     <select className="form-input" value={form.jenis_box} onChange={e => setForm(f => ({ ...f, jenis_box: e.target.value }))}>
