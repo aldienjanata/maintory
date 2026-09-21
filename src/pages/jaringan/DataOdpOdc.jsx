@@ -22,7 +22,7 @@ const SITES = [
   { value: 'cilacap', label: 'Cilacap' },
   { value: 'cilacap_herman', label: 'Cilacap (Herman)' },
 ]
-const SITE_CODE = { banyumas: 'BMS', cilacap: 'CLP', cilacap_herman: 'CLH' }
+const SITE_CODE = { banyumas: 'BMS', cilacap: 'CLP', cilacap_herman: 'CLH', rowokele: 'RWK', kebumen: 'KBM' }
 const DEVICE_TYPES = [
   { value: 'ODP', label: 'ODP (Optical Distribution Point)' },
   { value: 'ODC', label: 'ODC (Optical Distribution Cabinet)' },

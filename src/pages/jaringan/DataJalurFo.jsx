@@ -10,11 +10,13 @@ import { id as localeId } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
 
 const SITES = [
-  { value: 'banyumas', label: 'Banyumas' },
-  { value: 'cilacap', label: 'Cilacap' },
-  { value: 'cilacap_herman', label: 'Cilacap (Herman)' },
+  { value: 'banyumas', label: 'Site Banyumas' },
+  { value: 'cilacap', label: 'Site Cilacap' },
+  { value: 'cilacap_herman', label: 'Site Cilacap-Herman' },
+  { value: 'rowokele', label: 'Site Rowokele' },
+  { value: 'kebumen', label: 'Site Kebumen' },
 ]
-const SITE_CODE = { banyumas: 'BMS', cilacap: 'CLP', cilacap_herman: 'CLH' }
+const SITE_CODE = { banyumas: 'BMS', cilacap: 'CLP', cilacap_herman: 'CLH', rowokele: 'RWK', kebumen: 'KBM' }
 
 const TIPE_KABEL = [
   { value: 'ADSS', label: 'ADSS' },

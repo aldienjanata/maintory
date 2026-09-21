@@ -258,9 +258,11 @@ export default function KonversiTiang() {
   const urlStopRef = useRef(false)
 
   const SITES = [
-    { value: 'banyumas', label: 'Banyumas' },
-    { value: 'cilacap', label: 'Cilacap' },
-    { value: 'cilacap_herman', label: 'Cilacap (Herman)' },
+    { value: 'banyumas', label: 'Site Banyumas' },
+    { value: 'cilacap', label: 'Site Cilacap' },
+    { value: 'cilacap_herman', label: 'Site Cilacap-Herman' },
+    { value: 'rowokele', label: 'Site Rowokele' },
+    { value: 'kebumen', label: 'Site Kebumen' },
   ]
   const POLE_TYPES = [
     { value: 'tiang_7m', label: 'Tiang 7 m' },
