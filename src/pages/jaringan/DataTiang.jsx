@@ -579,7 +579,7 @@ export default function DataTiang() {
         let from = 0
         const step = 1000
         while (true) {
-          let query = supabase.from('network_poles').select('id').range(from, from + step - 1)
+          let query = supabase.from('network_poles').select('id').range(from, from + step - 1).order('id')
           if (filter) query = query.eq(filter.col, filter.val)
           
           const { data, error } = await query
