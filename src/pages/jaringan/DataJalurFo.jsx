@@ -484,10 +484,6 @@ export default function DataJalurFo() {
             <button className="btn btn-primary btn-sm" onClick={openAdd}><Plus size={14} /> Tambah</button>
           )}
           <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate}><FileSpreadsheet size={14} /> Template</button>
-          {['admin', 'superadmin'].includes(role) && (
-            <button className="btn btn-secondary btn-sm" onClick={() => importRef.current?.click()}><Upload size={14} /> Import</button>
-          )}
-          <input ref={importRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleImportFile} />
           <div style={{ position: 'relative', display: 'inline-block' }}>
             <button className="btn btn-secondary btn-sm" onClick={() => setExcelMenuOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Download size={14} /> Excel <ChevronDown size={13} style={{ transform: excelMenuOpen ? 'rotate(180deg)' : 'none', transition: '0.15s' }} />
