@@ -14,13 +14,12 @@ const style = document.createElement('style')
 style.textContent = `@keyframes slideUp { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }`
 document.head.appendChild(style)
 
-// Hapus initial loader saat React sudah mount
+// Hapus splash screen saat React sudah siap
 const removeInitialLoader = () => {
-  const loader = document.getElementById('initial-loader')
-  if (loader) {
-    loader.style.transition = 'opacity 0.3s'
-    loader.style.opacity = '0'
-    setTimeout(() => { loader.remove() }, 350)
+  const splash = document.getElementById('splash')
+  if (splash) {
+    splash.classList.add('hiding')
+    setTimeout(() => { splash.remove() }, 400)
   }
 }
 
