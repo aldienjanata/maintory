@@ -12,7 +12,21 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
-        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024 // 6 MiB
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, // 6 MiB
+        // Jangan cache index.html — selalu fetch dari network agar tidak stale
+        navigateFallback: null,
+        runtimeCaching: [
+          {
+            // Navigasi (request HTML page) → NetworkFirst supaya selalu fresh
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              networkTimeoutSeconds: 5,
+              cacheName: 'navigate-cache',
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
       manifest: {
         name: 'Maintory',
