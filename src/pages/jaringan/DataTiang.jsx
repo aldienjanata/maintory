@@ -701,6 +701,7 @@ export default function DataTiang() {
     // Row 3: Contoh Maps URL saja (koordinat dikosongkan → auto-isi)
     const template = [
       {
+        'ID Tiang': '', // Kosongkan untuk auto-generate, isi jika sudah punya ID sendiri
         'Site': 'BANYUMAS', 'Jenis Tiang': 'tiang_7m', 'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'CILACAP',
         'Kecamatan': 'KROYA', 'Desa/Kelurahan': 'MUJUR', 'Jalan/Gang/Dusun': 'Gg. BIMA',
         'Maps URL': '', // kosong → otomatis dibuat dari koordinat
@@ -711,6 +712,7 @@ export default function DataTiang() {
         'Keterangan': 'Contoh: isi DMS saja, Decimal & Maps URL otomatis terisi'
       },
       {
+        'ID Tiang': 'NAT/BMS/TIANG/TANJUNG/002', // Contoh isi ID sendiri
         'Site': 'BANYUMAS', 'Jenis Tiang': 'tiang_9m', 'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'BANYUMAS',
         'Kecamatan': 'PURWOKERTO SELATAN', 'Desa/Kelurahan': 'TANJUNG', 'Jalan/Gang/Dusun': 'Jl. Pahlawan',
         'Maps URL': '',
@@ -718,11 +720,11 @@ export default function DataTiang() {
         'Longitude ( Decimal )': '109.2345678',
         'Latitude ( dms )': '', // kosong → otomatis diisi dari Decimal
         'Longitude ( dms )': '',
-        'Keterangan': 'Contoh: isi Decimal saja, DMS & Maps URL otomatis terisi'
+        'Keterangan': 'Contoh: isi ID sendiri + Decimal, DMS & Maps URL otomatis terisi'
       },
     ]
     const ws = XLSX.utils.json_to_sheet(template)
-    ws['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 22 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 50 }]
+    ws['!cols'] = [{ wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 22 }, { wch: 18 }, { wch: 22 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 50 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Template')
     XLSX.writeFile(wb, `Template Import Tiang ${format(new Date(), 'dd-MM-yyyy')}.xlsx`)
