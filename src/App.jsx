@@ -24,6 +24,11 @@ import PetaJaringan from './pages/jaringan/PetaJaringan'
 import DataTiang from './pages/jaringan/DataTiang'
 import DataOdpOdc from './pages/jaringan/DataOdpOdc'
 import KonversiTiang from './pages/jaringan/KonversiTiang'
+import DataCoilan from './pages/jaringan/DataCoilan'
+import DataKasetFo from './pages/jaringan/DataKasetFo'
+import DataServer from './pages/jaringan/DataServer'
+import DataClosure from './pages/jaringan/DataClosure'
+import DataJalurFo from './pages/jaringan/DataJalurFo'
 import BarcodeScanner from './pages/scanner/BarcodeScanner'
 import OwnerLogin from './pages/owner/OwnerLogin'
 import OwnerPanel from './pages/owner/OwnerPanel'
@@ -113,6 +118,11 @@ function App() {
             <Route path="jaringan/tiang" element={<DataTiang />} />
             <Route path="jaringan/odp-odc" element={<DataOdpOdc />} />
             <Route path="jaringan/konversi" element={<KonversiTiang />} />
+            <Route path="jaringan/coilan" element={<DataCoilan />} />
+            <Route path="jaringan/kaset-fo" element={<DataKasetFo />} />
+            <Route path="jaringan/server" element={<DataServer />} />
+            <Route path="jaringan/closure" element={<DataClosure />} />
+            <Route path="jaringan/jalur-fo" element={<DataJalurFo />} />
             <Route path="scanner" element={<BarcodeScanner />} />
           </Route>
         </Routes>
