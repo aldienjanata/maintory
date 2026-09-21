@@ -23,6 +23,16 @@ const removeInitialLoader = () => {
   }
 }
 
+// FALLBACK: paksa hapus splash maksimal 8 detik (jaga-jaga kalau auth lambat/timeout)
+setTimeout(removeInitialLoader, 8000)
+
+// Force unregister service worker lama yang agresif cache HTML
+// Agar NetworkFirst config yang baru bisa berlaku
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(reg => reg.update())
+  })
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
