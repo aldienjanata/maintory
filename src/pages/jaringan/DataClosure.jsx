@@ -759,49 +759,6 @@ export default function DataClosure() {
         </div>
       )}
 
-      {/* IMPORT PREVIEW MODAL */}
-      {isImportModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsImportModalOpen(false)}>
-          <div className="modal" style={{ maxWidth: '900px', width: '100%' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Preview Import ({importRows.length} baris)</h3>
-              <button className="btn-icon" onClick={() => setIsImportModalOpen(false)}><X size={18} /></button>
-            </div>
-            <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-              <div style={{ overflowX: 'auto' }}>
-                <table className="table" style={{ fontSize: '12px', minWidth: '600px' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ width: '36px' }}>
-                        <input type="checkbox" checked={importRows.length > 0 && importRows.every(r => r._selected)} onChange={e => setImportRows(rows => rows.map(r => ({ ...r, _selected: e.target.checked })))} />
-                      </th>
-                      <th>Baris</th><th>ID Manual</th><th>Kecamatan</th><th>Desa</th><th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {importRows.map((r, i) => (
-                      <tr key={i} style={{ background: r._error ? 'rgba(239,68,68,0.06)' : undefined }}>
-                        <td><input type="checkbox" checked={!!r._selected && !r._error} disabled={!!r._error} onChange={e => setImportRows(rows => rows.map((row, ri) => ri === i ? { ...row, _selected: e.target.checked } : row))} /></td>
-                        <td style={{ color: 'var(--text-secondary)' }}>{r._rowNo}</td>
-                        <td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{r.closure_id_manual || <span style={{ color: 'var(--text-secondary)' }}>auto</span>}</td>
-                        <td>{r.kecamatan}</td>
-                        <td>{r.desa}</td>
-                        <td>{r._error ? <span style={{ color: 'var(--danger)', fontSize: '11px' }}>{r._error}</span> : <span style={{ color: 'var(--success)', fontSize: '11px' }}>OK</span>}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setIsImportModalOpen(false)}>Batal</button>
-              <button className="btn btn-primary" onClick={processImport} disabled={saving}>
-                {saving ? 'Mengimport...' : 'Import ' + importRows.filter(r => r._selected && !r._error).length + ' data'}
-              </button>
-            </div>
           </div>
-        </div>
-      )}
-    </div>
   )
 }
