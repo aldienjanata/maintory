@@ -476,7 +476,7 @@ export default function DataJalurFo() {
           <p className="text-secondary">Kelola data jalur kabel fiber optik jaringan</p>
         </div>
         <div className="flex gap-2">
-          {can(role, 'create_network') && (
+          {['admin', 'superadmin', 'teknisi'].includes(role) && (
             <button className="btn-primary" onClick={openAdd}>
               <Plus size={16} /> Tambah Jalur
             </button>
@@ -491,7 +491,7 @@ export default function DataJalurFo() {
                 <button onClick={() => { handleExport(); setExcelMenuOpen(false) }}>
                   <Download size={14} /> Export Semua ({filtered.length})
                 </button>
-                {can(role, 'create_network') && (
+                {['admin', 'superadmin', 'teknisi'].includes(role) && (
                   <>
                     <button onClick={() => { handleDownloadTemplate(); setExcelMenuOpen(false) }}>
                       <Download size={14} /> Download Template
@@ -644,10 +644,10 @@ export default function DataJalurFo() {
                     <td className="text-sm">{format(new Date(item.created_at), 'dd MMM yyyy', { locale: localeId })}</td>
                     <td>
                       <div className="flex gap-2">
-                        {can(role, 'edit_network') && (
+                        {['admin', 'superadmin', 'teknisi'].includes(role) && (
                           <button className="btn-icon" onClick={() => openEdit(item)} title="Edit"><Edit2 size={16} /></button>
                         )}
-                        {can(role, 'delete_network') && (
+                        {role === 'superadmin' && (
                           <button className="btn-icon text-danger" onClick={() => setConfirmDelete(item)} title="Hapus"><Trash2 size={16} /></button>
                         )}
                       </div>
