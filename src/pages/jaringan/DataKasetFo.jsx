@@ -476,7 +476,7 @@ export default function DataKasetFo() {
           return newItem
         })
 
-        const { error } = await supabase.from('network_kaset_fo').insert(payload)
+        const { error } = await supabase.from('network_kaset_fo').upsert(payload, { onConflict: 'kaset_id' })
         if (error) throw error
       }
       

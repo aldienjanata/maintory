@@ -442,7 +442,7 @@ export default function DataServer() {
 
         if (payloads.length === 0) return toast.error('Tidak ada data valid yang bisa diimport!')
         
-        const { error } = await supabase.from('network_server').insert(payloads)
+        const { error } = await supabase.from('network_server').upsert(payloads, { onConflict: 'server_id' })
         if (error) throw error
         toast.success(`${payloads.length} Server berhasil diimport!`)
         fetchData()

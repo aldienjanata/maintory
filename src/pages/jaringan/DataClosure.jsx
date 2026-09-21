@@ -450,7 +450,7 @@ export default function DataClosure() {
 
         if (payloads.length === 0) return toast.error('Tidak ada data valid yang bisa diimport!')
         
-        const { error } = await supabase.from('network_closure').insert(payloads)
+        const { error } = await supabase.from('network_closure').upsert(payloads, { onConflict: 'closure_id' })
         if (error) throw error
         toast.success(`${payloads.length} Closure berhasil diimport!`)
         fetchData()

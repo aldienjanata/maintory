@@ -476,7 +476,7 @@ export default function DataCoilan() {
           return newItem
         })
 
-        const { error } = await supabase.from('network_coilan').insert(payload)
+        const { error } = await supabase.from('network_coilan').upsert(payload, { onConflict: 'coilan_id' })
         if (error) throw error
       }
       

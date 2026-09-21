@@ -1233,7 +1233,7 @@ export default function DataOdpOdc() {
         const percent = 20 + ((i / payloads.length) * 80)
         showProgress('Menyimpan Data', `Mengirim baris ${i + 1} hingga ${Math.min(i + chunkSize, payloads.length)} ke server...`, percent)
         const chunk = payloads.slice(i, i + chunkSize)
-        const { error } = await supabase.from('network_odp_odc').insert(chunk)
+        const { error } = await supabase.from('network_odp_odc').upsert(chunk, { onConflict: 'device_id' })
         if (error) throw error
         successCount += chunk.length
       }
