@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import toast from 'react-hot-toast'
 import Pagination from '../../components/common/Pagination'
-import { Plus, X, Edit2, Trash2, MapPin, Search, Download, ChevronDown, ChevronUp, ExternalLink, Upload, FileSpreadsheet, AlertTriangle, Settings as SettingsIcon } from 'lucide-react'
+import { Plus, X, Edit2, Trash2, MapPin, Search, Download, ChevronDown, ChevronUp, ExternalLink, Upload, FileSpreadsheet, AlertTriangle, Settings as SettingsIcon, CheckSquare, Square, Eraser } from 'lucide-react'
 import { format } from 'date-fns'
 import { id as localeId } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
@@ -504,396 +504,338 @@ export default function DataKasetFo() {
   }, [items, form.kecamatan])
 
   return (
-    <div className="p-4 max-w-[1600px] mx-auto space-y-4">
+    <div className="page-container">
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center border border-indigo-100">
-            <img src="/icon_kaset_fo.png" alt="Kaset FO" className="w-6 h-6 object-contain" onError={(e) => { e.target.onerror = null; e.target.src = '/icon_odp.png' }} />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-slate-800">Data Kaset FO</h1>
-            <p className="text-sm text-slate-500">Kelola inventaris Kaset Fiber Optic</p>
-          </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' }}>
+        <div>
+          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px', fontSize: '20px', fontWeight: 700 }}>
+            <img src="/icon_kaset_fo.png" alt="kaset" style={{ width: "24px", height: "24px", objectFit: "contain", filter: "brightness(0) invert(1)", opacity: 0.8 }} />
+            Data Kaset FO
+          </h2>
+          <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>Jaringan Fiber — Pencatatan & Manajemen Data Kaset FO</p>
         </div>
-        
-        <div className="flex flex-wrap items-center gap-2">
-          {role === 'superadmin' && (
-            <div className="relative">
-              <button onClick={() => setBulkMenuOpen(!bulkMenuOpen)} className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 font-medium text-sm transition-colors border border-rose-200">
-                <Trash2 size={16} /> Aksi Massal <ChevronDown size={14} className={`transform transition-transform ${bulkMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {bulkMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setBulkMenuOpen(false)}></div>
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 z-20 py-2">
-                    <button onClick={() => { setBulkMenuOpen(false); openBulkDeleteModal('selected') }} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
-                      <Trash2 size={14} /> Hapus yang Dipilih ({selectedIds.size})
-                    </button>
-                    <div className="h-px bg-slate-100 my-1"></div>
-                    <button onClick={() => { setBulkMenuOpen(false); openBulkDeleteModal('all') }} className="w-full text-left px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 font-medium flex items-center gap-2">
-                      <AlertTriangle size={14} /> Kosongkan Semua Data
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {['admin', 'superadmin', 'teknisi'].includes(role) && (
+            <button className="btn btn-primary btn-sm" onClick={openAdd}><Plus size={14} /> Tambah</button>
           )}
-
-          <div className="relative">
-            <button onClick={() => setExcelMenuOpen(!excelMenuOpen)} className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 font-medium text-sm transition-colors border border-emerald-200">
-              <FileSpreadsheet size={16} /> Excel <ChevronDown size={14} className={`transform transition-transform ${excelMenuOpen ? 'rotate-180' : ''}`} />
+          <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate}><FileSpreadsheet size={14} /> Template</button>
+          {['admin', 'superadmin'].includes(role) && (
+            <button className="btn btn-secondary btn-sm" onClick={() => importRef.current?.click()}><Upload size={14} /> Import</button>
+          )}
+          <input ref={importRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={handleImportFile} />
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setExcelMenuOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Download size={14} /> Excel <ChevronDown size={13} style={{ transform: excelMenuOpen ? 'rotate(180deg)' : 'none', transition: '0.15s' }} />
             </button>
             {excelMenuOpen && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setExcelMenuOpen(false)}></div>
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 z-20 overflow-hidden py-1">
-                  <button onClick={() => { setExcelMenuOpen(false); handleExportExcel() }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"><Download size={14}/> Export ke Excel</button>
-                  <button onClick={() => { setExcelMenuOpen(false); handleDownloadTemplate() }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"><FileSpreadsheet size={14}/> Unduh Template</button>
-                  <button onClick={() => { setExcelMenuOpen(false); importRef.current?.click() }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"><Upload size={14}/> Import Excel</button>
-                  <input type="file" ref={importRef} accept=".xlsx,.xls" className="hidden" onChange={handleImportFile} />
+                <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setExcelMenuOpen(false)} />
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 100, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '180px', overflow: 'hidden' }}>
+                  <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => { setExcelMenuOpen(false); handleExportExcel() }}><Download size={13} /> Export ke Excel</button>
                 </div>
               </>
             )}
           </div>
-          
-          <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm transition-colors shadow-sm shadow-indigo-200">
-            <Plus size={16} /> Tambah Data
-          </button>
         </div>
       </div>
 
-      {/* FILTER BAR */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm flex flex-col md:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type="text" placeholder="Cari Kaset ID, Desa, Kec, Keterangan..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-sm" />
-        </div>
-        <select value={filterSite} onChange={(e) => { setFilterSite(e.target.value); setPage(1) }} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 min-w-[140px]">
-          <option value="">Semua Site</option>
-          {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
-        <select value={filterKecamatan} onChange={(e) => { setFilterKecamatan(e.target.value); setFilterDesa(''); setPage(1) }} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 min-w-[150px]">
-          <option value="">Semua Kecamatan</option>
-          {kecamatanList.map(k => <option key={k} value={k}>{k}</option>)}
-        </select>
-        <select value={filterDesa} onChange={(e) => { setFilterDesa(e.target.value); setPage(1) }} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 min-w-[150px]" disabled={!filterKecamatan}>
-          <option value="">Semua Desa</option>
-          {desaList.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
+      {/* SUMMARY CARDS */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginBottom: '16px' }}>
+        {[
+          { label: 'Total Data', value: items.length, color: 'var(--accent)' },
+          { label: 'Kecamatan', value: kecamatanList.length, color: 'var(--success)' },
+          { label: 'Hasil Filter', value: filtered.length, color: 'var(--purple)' },
+        ].map(card => (
+          <div key={card.label} className="card" style={{ padding: '12px 14px', borderTop: '3px solid ' + card.color }}>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: card.color }}>{card.value}</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{card.label}</div>
+          </div>
+        ))}
       </div>
+
+      {/* FILTERS */}
+      <div className="card" style={{ padding: '12px 14px', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ position: 'relative', flex: '1 1 auto', minWidth: '200px', maxWidth: '350px' }}>
+            <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', pointerEvents: 'none' }} />
+            <input className="form-input" style={{ paddingLeft: '30px', height: '34px', fontSize: '13px', width: '100%' }} placeholder="Cari data, ID, Desa..." value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setPage(1) }} />
+          </div>
+          <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '110px', width: 'auto' }} value={filterSite} onChange={e => { setFilterSite(e.target.value); setPage(1) }}><option value="">Semua Site</option>{SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}</select>
+          <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '140px', width: 'auto' }} value={filterKecamatan} onChange={e => { setFilterKecamatan(e.target.value); setFilterDesa(''); setPage(1) }}><option value="">Semua Kecamatan</option>{kecamatanList.map(k => <option key={k} value={k}>{k}</option>)}</select>
+          <select className="form-input" style={{ height: '34px', fontSize: '13px', minWidth: '140px', width: 'auto' }} value={filterDesa} onChange={e => { setFilterDesa(e.target.value); setPage(1) }}><option value="">Semua Desa</option>{desaList.map(d => <option key={d} value={d}>{d}</option>)}</select>
+          {(filterSite || filterKecamatan || filterDesa || searchQuery)
+            ? <button className="btn btn-secondary btn-sm" style={{ height: '34px' }} onClick={() => { setFilterSite(''); setFilterKecamatan(''); setFilterDesa(''); setSearchQuery(''); setPage(1) }}>Reset</button>
+            : <div style={{ fontSize: '11px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', marginLeft: 'auto' }}>{filtered.length} data</div>
+          }
+        </div>
+      </div>
+
+      {/* BULK DELETE (superadmin) */}
+      {role === 'superadmin' && (
+        <div style={{ position: 'relative', display: 'inline-block', marginBottom: '10px' }}>
+          <button className="btn btn-sm" style={{ background: 'rgba(239,68,68,0.12)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.3)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setBulkMenuOpen(o => !o)}>
+            <Trash2 size={13} /> Hapus Massal
+            {selectedIds.size > 0 && <span style={{ background: 'var(--danger)', color: '#fff', borderRadius: '20px', padding: '0 6px', fontSize: '10px', fontWeight: 700 }}>{selectedIds.size}</span>}
+            <ChevronDown size={13} style={{ transform: bulkMenuOpen ? 'rotate(180deg)' : 'none', transition: '0.15s' }} />
+          </button>
+          {bulkMenuOpen && (
+            <>
+              <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setBulkMenuOpen(false)} />
+              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 100, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '220px', overflow: 'hidden' }}>
+                {selectedIds.size > 0 && (
+                  <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => { setBulkMenuOpen(false); openBulkDeleteModal('selected') }}>
+                    <CheckSquare size={14} /> Hapus Yang Dipilih ({selectedIds.size})
+                  </button>
+                )}
+                <div style={{ height: '1px', background: 'var(--border)', margin: '2px 0' }} />
+                <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'rgba(239,68,68,0.08)', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--danger)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => { setBulkMenuOpen(false); openBulkDeleteModal('all') }}>
+                  <Trash2 size={14} /> Hapus SEMUA DATA KASET FO
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* TABLE */}
-      <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden flex flex-col">
-        <div className="overflow-x-auto min-h-[400px]">
-          <table className="w-full text-sm text-left whitespace-nowrap">
-            <thead className="bg-slate-50 text-slate-600 font-medium border-b border-slate-200/80">
-              <tr>
-                {role === 'superadmin' && (
-                  <th className="px-4 py-3 w-10 text-center">
-                    <input type="checkbox" checked={paginated.length > 0 && paginated.every(p => selectedIds.has(p.id))} onChange={toggleSelectAll} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
-                  </th>
-                )}
-                <th className="px-4 py-3 w-14 text-center">No</th>
-                <th className="px-4 py-3 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('kaset_id')}><div className="flex items-center gap-2">Kaset ID <SortIcon col="kaset_id" /></div></th>
-                <th className="px-4 py-3 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('jumlah_core')}><div className="flex items-center gap-2">Jumlah Core <SortIcon col="jumlah_core" /></div></th>
-                <th className="px-4 py-3">ODP/ODC Terkait</th>
-                <th className="px-4 py-3 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('kecamatan')}><div className="flex items-center gap-2">Kecamatan <SortIcon col="kecamatan" /></div></th>
-                <th className="px-4 py-3 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('desa')}><div className="flex items-center gap-2">Desa <SortIcon col="desa" /></div></th>
-                <th className="px-4 py-3">Lokasi (Lat/Lon)</th>
-                <th className="px-4 py-3 text-center">Maps</th>
-                <th className="px-4 py-3">Keterangan</th>
-                <th className="px-4 py-3">Dibuat Oleh</th>
-                <th className="px-4 py-3 cursor-pointer hover:bg-slate-100" onClick={() => handleSort('created_at')}><div className="flex items-center gap-2">Tanggal <SortIcon col="created_at" /></div></th>
-                <th className="px-4 py-3 text-center sticky right-0 bg-slate-50 border-l border-slate-200">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {loading ? (
-                <tr><td colSpan="13" className="px-4 py-8 text-center text-slate-500">Memuat data...</td></tr>
-              ) : paginated.length === 0 ? (
-                <tr><td colSpan="13" className="px-4 py-8 text-center text-slate-500">Tidak ada data ditemukan</td></tr>
-              ) : (
-                paginated.map((item, idx) => {
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {loading ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Memuat data...</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Tidak ada data ditemukan</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="table" style={{ minWidth: '900px', fontSize: '13px' }}>
+              <thead>
+                <tr>
+                  {role === 'superadmin' && (
+                    <th style={{ width: '36px', textAlign: 'center', cursor: 'pointer' }} onClick={toggleSelectAll}>
+                      {paginated.length > 0 && paginated.every(p => selectedIds.has(p.id))
+                        ? <CheckSquare size={14} style={{ color: 'var(--accent)' }} />
+                        : <Square size={14} style={{ opacity: 0.4 }} />}
+                    </th>
+                  )}
+                  <th style={{ width: '40px' }}>No</th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kaset_id')}>Kaset ID <SortIcon col="kaset_id" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('jumlah_core')}>Jumlah Core <SortIcon col="jumlah_core" /></th>
+                  <th>ODP/ODC Terkait</th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kecamatan')}>Kecamatan <SortIcon col="kecamatan" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('desa')}>Desa <SortIcon col="desa" /></th>
+                  <th>Lokasi (Lat/Lon)</th>
+                  <th>Maps</th>
+                  <th>Keterangan</th>
+                  <th>Dibuat Oleh</th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('created_at')}>Tanggal <SortIcon col="created_at" /></th>
+                  <th style={{ width: '80px' }}>Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.map((item, idx) => {
                   const linkedDev = devices.find(d => d.id === item.device_ref)
-                  const isSelected = selectedIds.has(item.id)
                   return (
-                    <tr key={item.id} className={`hover:bg-indigo-50/30 transition-colors ${isSelected ? 'bg-indigo-50/50' : ''}`}>
+                    <tr key={item.id} style={{ background: selectedIds.has(item.id) ? 'rgba(59,130,246,0.06)' : undefined }}>
                       {role === 'superadmin' && (
-                        <td className="px-4 py-3 text-center">
-                          <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(item.id)} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
+                        <td style={{ textAlign: 'center', cursor: 'pointer' }} onClick={() => toggleSelect(item.id)}>
+                          {selectedIds.has(item.id) ? <CheckSquare size={14} style={{ color: 'var(--accent)' }} /> : <Square size={14} style={{ opacity: 0.4 }} />}
                         </td>
                       )}
-                      <td className="px-4 py-3 text-center text-slate-500">{(page - 1) * perPage + idx + 1}</td>
-                      <td className="px-4 py-3 font-medium text-slate-900">{item.kaset_id}</td>
-                      <td className="px-4 py-3">{item.jumlah_core || '-'}</td>
-                      <td className="px-4 py-3">
-                        {linkedDev ? (
-                          <div className="flex items-center gap-1.5 text-slate-600 bg-slate-100 px-2 py-1 rounded w-max">
-                            <span className="font-medium text-xs">{linkedDev.device_id}</span>
-                          </div>
-                        ) : '-'}
+                      <td style={{ color: 'var(--text-secondary)' }}>{(page - 1) * perPage + idx + 1}</td>
+                      <td><span style={{ fontFamily: 'monospace', fontSize: '12px', background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: '4px' }}>{item.kaset_id}</span></td>
+                      <td>{item.jumlah_core ? item.jumlah_core : '-'}</td>
+                      <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{linkedDev ? linkedDev.device_id : '-'}</td>
+                      <td>{item.kecamatan || '-'}</td>
+                      <td>{item.desa || '-'}</td>
+                      <td style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        {item.latitude && item.longitude ? (Number(item.latitude).toFixed(5) + ', ' + Number(item.longitude).toFixed(5)) : '-'}
                       </td>
-                      <td className="px-4 py-3">{item.kecamatan || '-'}</td>
-                      <td className="px-4 py-3">{item.desa || '-'}</td>
-                      <td className="px-4 py-3 text-xs text-slate-500 font-mono">
-                        {item.latitude && item.longitude ? `${item.latitude}, ${item.longitude}` : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-center">
+                      <td>
                         {item.maps_url ? (
-                          <a href={item.maps_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors">
-                            <MapPin size={16} />
+                          <a href={item.maps_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <MapPin size={12} /><ExternalLink size={11} />
                           </a>
                         ) : '-'}
                       </td>
-                      <td className="px-4 py-3 max-w-[200px] truncate" title={item.keterangan}>{item.keterangan || '-'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col">
-                          <span className="font-medium">{getUserName(item.created_by)}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-500 text-xs">{format(new Date(item.created_at), 'dd MMM yyyy HH:mm', { locale: localeId })}</td>
-                      <td className="px-4 py-3 sticky right-0 bg-white border-l border-slate-100 shadow-[-4px_0_12px_rgba(0,0,0,0.02)]">
-                        <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => openEdit(item)} className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Edit"><Edit2 size={16} /></button>
-                          {(role === 'superadmin') && (
-                            <button onClick={() => setConfirmDelete(item)} className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Hapus"><Trash2 size={16} /></button>
+                      <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: '12px' }}>{item.keterangan || '-'}</td>
+                      <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{getUserName(item.created_by)}</td>
+                      <td style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-'}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          {['admin', 'superadmin', 'teknisi'].includes(role) && (
+                            <button className="btn btn-sm" style={{ padding: '4px 7px', background: 'rgba(59,130,246,0.1)', color: 'var(--accent)', border: '1px solid rgba(59,130,246,0.25)' }} onClick={() => openEdit(item)}><Edit2 size={12} /></button>
+                          )}
+                          {role === 'superadmin' && (
+                            <button className="btn btn-sm" style={{ padding: '4px 7px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.25)' }} onClick={() => setConfirmDelete(item)}><Trash2 size={12} /></button>
                           )}
                         </div>
                       </td>
                     </tr>
                   )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="p-4 border-t border-slate-200/80 bg-slate-50">
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-        </div>
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* MODAL ADD/EDIT */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <h2 className="text-xl font-bold text-slate-800">{editingId ? 'Edit Data Kaset FO' : 'Tambah Data Kaset FO'}</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-xl"><X size={20} /></button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Basic Info */}
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-slate-700 pb-2 border-b border-slate-100">Informasi Dasar</h3>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Site Wilayah *</label>
-                    <select value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500">
-                      {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </select>
-                  </div>
-                  {!editingId && (
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Kaset ID (Opsional)</label>
-                      <input type="text" value={form.kaset_id_manual} onChange={e => setForm(f => ({ ...f, kaset_id_manual: e.target.value.toUpperCase() }))} placeholder="Kosongkan untuk Auto-Generate" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 placeholder:text-slate-400" />
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Jumlah Core</label>
-                    <input type="number" value={form.jumlah_core} onChange={e => setForm(f => ({ ...f, jumlah_core: e.target.value }))} placeholder="Misal: 12" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 placeholder:text-slate-400" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">ODP/ODC Terkait</label>
-                    <SearchableSelect
-                      value={form.device_ref}
-                      onChange={val => setForm(f => ({ ...f, device_ref: val }))}
-                      options={devices.map(p => ({ value: p.id, label: p.device_id + (p.desa ? ` (${p.desa})` : '') }))}
-                      placeholder="Pilih ODP/ODC..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Keterangan</label>
-                    <textarea rows="3" value={form.keterangan} onChange={e => setForm(f => ({ ...f, keterangan: e.target.value }))} placeholder="Catatan tambahan..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 placeholder:text-slate-400" />
-                  </div>
-                </div>
+      {/* PAGINATION */}
+      {totalPages > 1 && (
+        <div style={{ marginTop: '12px' }}>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </div>
+      )}
 
-                {/* Lokasi */}
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-slate-700 pb-2 border-b border-slate-100">Lokasi / Alamat</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Provinsi</label>
-                      <SearchableSelect
-                        value={form.provinsi}
-                        onChange={val => setForm(f => ({ ...f, provinsi: val, kabupaten: '', kecamatan: '', desa: '' }))}
-                        options={provinsiOpts.length > 0 ? provinsiOpts.map(p => ({ value: p, label: p })) : [{ value: 'Jawa Tengah', label: 'Jawa Tengah' }]}
-                        placeholder="Pilih/Ketik Provinsi"
-                        creatable
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Kabupaten/Kota</label>
-                      <SearchableSelect
-                        value={form.kabupaten}
-                        onChange={val => setForm(f => ({ ...f, kabupaten: val, kecamatan: '', desa: '' }))}
-                        options={kabupatenOpts.length > 0 ? kabupatenOpts.map(p => ({ value: p, label: p })) : [{ value: 'Banyumas', label: 'Banyumas' }, { value: 'Cilacap', label: 'Cilacap' }]}
-                        placeholder="Pilih/Ketik Kab/Kota"
-                        creatable
-                      />
-                    </div>
+      {/* CONFIRM DELETE MODAL */}
+      {confirmDelete && (
+        <div className="modal-overlay" onClick={() => setConfirmDelete(null)}>
+          <div className="modal" style={{ maxWidth: '420px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header"><h3>Hapus Data</h3><button className="btn-icon" onClick={() => setConfirmDelete(null)}><X size={18} /></button></div>
+            <div className="modal-body" style={{ textAlign: 'center', padding: '24px' }}>
+              <Trash2 size={40} style={{ color: 'var(--danger)', marginBottom: '12px' }} />
+              <p style={{ marginBottom: '8px' }}>Hapus data ini?</p>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Tindakan ini tidak bisa dibatalkan.</p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setConfirmDelete(null)}>Batal</button>
+              <button className="btn btn-primary" style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => handleDelete(confirmDelete)}>Hapus</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BULK DELETE CONFIRM MODAL */}
+      {bulkDeleteModal && (
+        <div className="modal-overlay" onClick={() => setBulkDeleteModal(null)}>
+          <div className="modal" style={{ maxWidth: '440px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header"><h3>Konfirmasi Hapus Massal</h3><button className="btn-icon" onClick={() => setBulkDeleteModal(null)}><X size={18} /></button></div>
+            <div className="modal-body">
+              <p style={{ marginBottom: '12px' }}>Anda akan menghapus: <strong style={{ color: 'var(--danger)' }}>{bulkDeleteModal.label}</strong></p>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>Ketik <strong>{bulkDeleteModal.mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS'}</strong> untuk konfirmasi:</p>
+              <input className="form-input" value={bulkDeleteConfirmText} onChange={e => setBulkDeleteConfirmText(e.target.value)} placeholder={bulkDeleteModal.mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS'} autoFocus />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setBulkDeleteModal(null)}>Batal</button>
+              <button className="btn btn-primary" style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={handleBulkDelete}>Hapus</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD / EDIT MODAL */}
+      {isModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
+          <div className="modal" style={{ maxWidth: '640px', width: '100%' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{editingId ? 'Edit Data' : 'Tambah Data'}</h3>
+              <button className="btn-icon" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              <div className="responsive-grid-2">
+                <div className="form-group">
+                  <label className="form-label">Site *</label>
+                  <select className="form-input" value={form.site} onChange={e => setForm(f => ({ ...f, site: e.target.value }))}>
+                    {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+                {!editingId && (
+                  <div className="form-group">
+                    <label className="form-label">ID Kaset Manual</label>
+                    <input className="form-input" placeholder="Biarkan kosong untuk auto-generate" value={form.kaset_id_manual || ''} onChange={e => setForm(f => ({ ...f, kaset_id_manual: e.target.value }))} />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Kecamatan *</label>
-                      <SearchableSelect
-                        value={form.kecamatan}
-                        onChange={val => setForm(f => ({ ...f, kecamatan: val, desa: '' }))}
-                        options={kecamatanOpts.map(p => ({ value: p, label: p }))}
-                        placeholder="Ketik Kecamatan..."
-                        creatable
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Desa/Kelurahan *</label>
-                      <SearchableSelect
-                        value={form.desa}
-                        onChange={val => setForm(f => ({ ...f, desa: val }))}
-                        options={desaOpts.map(p => ({ value: p, label: p }))}
-                        placeholder="Ketik Desa..."
-                        creatable
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Jalan/Gang/Dusun</label>
-                    <input type="text" value={form.jalan} onChange={e => setForm(f => ({ ...f, jalan: e.target.value }))} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1 flex justify-between">
-                      <span>Maps URL</span>
-                      <button type="button" onClick={handleExtractCoords} className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">Extract Lat/Lon</button>
-                    </label>
-                    <input type="text" value={form.maps_url} onChange={e => setForm(f => ({ ...f, maps_url: e.target.value }))} placeholder="Paste link Google Maps..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Latitude</label>
-                      <input type="text" value={form.latitude} onChange={e => setForm(f => ({ ...f, latitude: e.target.value }))} placeholder="-7.xxxxx" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 font-mono" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Longitude</label>
-                      <input type="text" value={form.longitude} onChange={e => setForm(f => ({ ...f, longitude: e.target.value }))} placeholder="109.xxxxx" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 font-mono" />
-                    </div>
-                  </div>
+                )}
+                <div className="form-group">
+                  <label className="form-label">Jumlah Core</label>
+                  <input className="form-input" type="number" placeholder="cth: 12" value={form.jumlah_core} onChange={e => setForm(f => ({ ...f, jumlah_core: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">ODP/ODC Terkait (Opsional)</label>
+                  <SearchableSelect value={form.device_ref} onChange={val => setForm(f => ({ ...f, device_ref: val }))} options={devices.map(d => ({ value: d.id, label: d.device_id + (d.desa ? ' - ' + d.desa : '') }))} placeholder="Pilih ODP/ODC..." />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Kecamatan *</label>
+                  <SearchableSelect value={form.kecamatan} onChange={val => setForm(f => ({ ...f, kecamatan: val, desa: '' }))} options={kecamatanOpts.map(k => ({ value: k, label: k }))} placeholder="Ketik atau pilih kecamatan..." allowNew />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Desa/Kelurahan *</label>
+                  <SearchableSelect value={form.desa} onChange={val => setForm(f => ({ ...f, desa: val }))} options={desaOpts.map(d => ({ value: d, label: d }))} placeholder="Ketik atau pilih desa..." allowNew />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Jalan/Dusun/Gang</label>
+                  <input className="form-input" placeholder="Jalan/Dusun/Gang" value={form.jalan} onChange={e => setForm(f => ({ ...f, jalan: e.target.value }))} />
                 </div>
               </div>
+              <div className="form-group">
+                <label className="form-label">Google Maps URL</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input className="form-input" placeholder="Paste link Google Maps..." value={form.maps_url} onChange={e => setForm(f => ({ ...f, maps_url: e.target.value }))} style={{ flex: 1 }} />
+                  <button className="btn btn-secondary btn-sm" onClick={handleExtractCoords} type="button"><MapPin size={14} /> Ekstrak</button>
+                </div>
+              </div>
+              <div className="responsive-grid-2">
+                <div className="form-group">
+                  <label className="form-label">Latitude</label>
+                  <input className="form-input" placeholder="-7.xxxx" value={form.latitude} onChange={e => setForm(f => ({ ...f, latitude: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Longitude</label>
+                  <input className="form-input" placeholder="109.xxxx" value={form.longitude} onChange={e => setForm(f => ({ ...f, longitude: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Keterangan</label>
+                <textarea className="form-input" rows={3} placeholder="Catatan tambahan..." value={form.keterangan} onChange={e => setForm(f => ({ ...f, keterangan: e.target.value }))} />
+              </div>
             </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Menyimpan...' : editingId ? 'Simpan Perubahan' : 'Tambah Data'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
-            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-2xl">
-              <button onClick={() => setIsModalOpen(false)} className="px-5 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-xl transition-colors">Batal</button>
-              <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50">
-                {saving ? 'Menyimpan...' : 'Simpan Data'}
+      {/* IMPORT PREVIEW MODAL */}
+      {isImportModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsImportModalOpen(false)}>
+          <div className="modal" style={{ maxWidth: '900px', width: '100%' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Preview Import ({importRows.length} baris)</h3>
+              <button className="btn-icon" onClick={() => setIsImportModalOpen(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="table" style={{ fontSize: '12px', minWidth: '600px' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '36px' }}>
+                        <input type="checkbox" checked={importRows.length > 0 && importRows.every(r => r._selected)} onChange={e => setImportRows(rows => rows.map(r => ({ ...r, _selected: e.target.checked })))} />
+                      </th>
+                      <th>Baris</th><th>ID Manual</th><th>Kecamatan</th><th>Desa</th><th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importRows.map((r, i) => (
+                      <tr key={i} style={{ background: r._error ? 'rgba(239,68,68,0.06)' : undefined }}>
+                        <td><input type="checkbox" checked={!!r._selected && !r._error} disabled={!!r._error} onChange={e => setImportRows(rows => rows.map((row, ri) => ri === i ? { ...row, _selected: e.target.checked } : row))} /></td>
+                        <td style={{ color: 'var(--text-secondary)' }}>{r._rowNo}</td>
+                        <td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{r.kaset_id_manual || <span style={{ color: 'var(--text-secondary)' }}>auto</span>}</td>
+                        <td>{r.kecamatan}</td>
+                        <td>{r.desa}</td>
+                        <td>{r._error ? <span style={{ color: 'var(--danger)', fontSize: '11px' }}>{r._error}</span> : <span style={{ color: 'var(--success)', fontSize: '11px' }}>OK</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setIsImportModalOpen(false)}>Batal</button>
+              <button className="btn btn-primary" onClick={processImport} disabled={saving}>
+                {saving ? 'Mengimport...' : 'Import ' + importRows.filter(r => r._selected && !r._error).length + ' data'}
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* MODAL CONFIRM DELETE */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
-            <h3 className="text-lg font-bold text-slate-800 mb-2">Hapus Data?</h3>
-            <p className="text-slate-600 text-sm mb-6">Apakah Anda yakin ingin menghapus data <b>{confirmDelete.kaset_id}</b>? Data yang dihapus tidak dapat dikembalikan.</p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors">Batal</button>
-              <button onClick={() => handleDelete(confirmDelete)} className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 font-medium transition-colors">Ya, Hapus</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL BULK DELETE */}
-      {bulkDeleteModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
-            <div className="flex items-center gap-3 text-rose-600 mb-4">
-              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center"><AlertTriangle size={20} /></div>
-              <h3 className="text-lg font-bold text-slate-800">Konfirmasi Hapus Massal</h3>
-            </div>
-            <p className="text-slate-600 text-sm mb-4">
-              Anda akan menghapus secara permanen <b>{bulkDeleteModal.label}</b>. 
-              Tindakan ini sangat berisiko dan tidak dapat dibatalkan.
-            </p>
-            <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 mb-5">
-              <p className="text-xs text-rose-800 font-medium mb-2">Ketik <b>{bulkDeleteModal.mode === 'all' ? 'HAPUS SEMUA' : 'HAPUS'}</b> untuk melanjutkan:</p>
-              <input type="text" value={bulkDeleteConfirmText} onChange={e => setBulkDeleteConfirmText(e.target.value)} className="w-full px-3 py-2 border border-rose-300 rounded bg-white text-sm focus:outline-none focus:border-rose-500" placeholder="Ketik di sini..." />
-            </div>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setBulkDeleteModal(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium transition-colors">Batal</button>
-              <button onClick={handleBulkDelete} className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 font-medium transition-colors">Konfirmasi Hapus</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL IMPORT */}
-      {isImportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <h2 className="text-xl font-bold text-slate-800">Review Import Data Kaset FO</h2>
-              <button onClick={() => setIsImportModalOpen(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-xl"><X size={20} /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-0">
-              <table className="w-full text-sm text-left whitespace-nowrap">
-                <thead className="bg-slate-50 text-slate-600 font-medium border-b border-slate-200 sticky top-0 z-10">
-                  <tr>
-                    <th className="px-4 py-3 w-10 text-center"><input type="checkbox" checked={importRows.length > 0 && importRows.every(r => r._selected || r._error)} onChange={e => { const checked = e.target.checked; setImportRows(prev => prev.map(r => r._error ? r : { ...r, _selected: checked })) }} className="rounded border-slate-300" /></th>
-                    <th className="px-4 py-3">Baris</th>
-                    <th className="px-4 py-3">Kaset ID</th>
-                    <th className="px-4 py-3">ODP/ODC ID</th>
-                    <th className="px-4 py-3">Site</th>
-                    <th className="px-4 py-3">Kecamatan / Desa</th>
-                    <th className="px-4 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {importRows.map((r, i) => (
-                    <tr key={i} className={r._error ? 'bg-rose-50/50' : (!r._selected ? 'opacity-50' : '')}>
-                      <td className="px-4 py-2 text-center">
-                        <input type="checkbox" disabled={!!r._error} checked={r._selected} onChange={e => { const checked = e.target.checked; setImportRows(prev => { const n = [...prev]; n[i]._selected = checked; return n }) }} className="rounded border-slate-300" />
-                      </td>
-                      <td className="px-4 py-2 font-medium">{r._rowNo}</td>
-                      <td className="px-4 py-2">{r.kaset_id_manual || <span className="text-slate-400 italic">Auto-generate</span>}</td>
-                      <td className="px-4 py-2">
-                        {r.device_ref_raw ? (r.device_ref ? <span className="text-emerald-600">Terhubung ({r.device_ref_raw})</span> : <span className="text-amber-600">Tidak ketemu ({r.device_ref_raw})</span>) : '-'}
-                      </td>
-                      <td className="px-4 py-2 uppercase">{r.site}</td>
-                      <td className="px-4 py-2">{r.kecamatan || '-'} / {r.desa || '-'}</td>
-                      <td className="px-4 py-2">
-                        {r._error ? <span className="text-xs font-medium text-rose-600 px-2 py-1 bg-rose-100 rounded">{r._error}</span> : <span className="text-xs font-medium text-emerald-600 px-2 py-1 bg-emerald-100 rounded">Siap Import</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between rounded-b-2xl">
-              <p className="text-sm text-slate-600">Terpilih: <b>{importRows.filter(r => r._selected && !r._error).length}</b> dari {importRows.length} baris</p>
-              <div className="flex gap-3">
-                <button onClick={() => setIsImportModalOpen(false)} className="px-5 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-xl transition-colors">Batal</button>
-                <button onClick={processImport} disabled={saving || importRows.filter(r => r._selected && !r._error).length === 0} className="px-5 py-2 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50">
-                  {saving ? 'Memproses...' : 'Import Data'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   )
 }

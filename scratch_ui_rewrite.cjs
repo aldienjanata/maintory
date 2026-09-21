@@ -1,469 +1,28 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
-import SearchableSelect from '../../components/ui/SearchableSelect'
-import { supabase } from '../../lib/supabase'
-import { useAuth } from '../../contexts/AuthContext'
-import toast from 'react-hot-toast'
-import Pagination from '../../components/common/Pagination'
-import { Plus, X, Edit2, Trash2, Search, Download, ChevronDown, ChevronUp, ExternalLink, Server, Upload, FileSpreadsheet, CheckSquare, Square, Eraser } from 'lucide-react'
-import { format } from 'date-fns'
-import * as XLSX from 'xlsx'
+const fs = require('fs');
 
-const SITES = [
-  { value: 'banyumas', label: 'Banyumas' },
-  { value: 'cilacap', label: 'Cilacap' },
-  { value: 'cilacap_herman', label: 'Cilacap (Herman)' },
-]
-const SITE_CODE = { banyumas: 'BMS', cilacap: 'CLP', cilacap_herman: 'CLH' }
+function replaceReturn(file, componentName, icon, generateIdLabel, generateIdFuncStr, deviceFields, tableHeaders, tableRowCells, isDeviceRef = false, extraProps = '') {
+  const code = fs.readFileSync('src/pages/jaringan/' + file + '.jsx', 'utf8');
+  const lines = code.split('\n');
+  const returnIdx = lines.findIndex(l => l.trim() === 'return (');
+  const logicSection = lines.slice(0, returnIdx).join('\n');
 
-const EMPTY_FORM = {
-  site: 'banyumas', server_id_manual: '', nama_server: '',
-  provinsi: 'Jawa Tengah', kabupaten: 'Banyumas', kecamatan: '', desa: '', jalan: '',
-  maps_url: '', longitude: '', latitude: '', keterangan: ''
-}
+  let bulkDeleteText = "SEMUA DATA";
+  if (file === 'DataServer') bulkDeleteText = 'SEMUA DATA SERVER';
+  if (file === 'DataClosure') bulkDeleteText = 'SEMUA DATA CLOSURE';
+  if (file === 'DataJalurFo') bulkDeleteText = 'SEMUA JALUR FO';
+  if (file === 'DataCoilan') bulkDeleteText = 'SEMUA DATA COILAN';
+  if (file === 'DataKasetFo') bulkDeleteText = 'SEMUA DATA KASET FO';
 
-const DEFAULT_FORMAT = 'NAT/{SITE_CODE}/SERVER/{DESA}/{NO}'
-
-function generateItemId(site, desa, existingItems, formatTemplate = DEFAULT_FORMAT) {
-  if (!desa) return ''
-  const siteCode = SITE_CODE[site] || 'BMS'
-  const desaSlug = desa.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '').substring(0, 15)
-  
-  const sameItems = existingItems.filter(
-    p => p.site === site && p.desa?.toUpperCase().trim() === desa.toUpperCase().trim() && p.server_id
-  )
-  
-  let maxNo = 0
-  for (const p of sameItems) {
-    const match = p.server_id.match(/\/(\d+)$/)
-    if (match && match[1]) {
-      const num = parseInt(match[1], 10)
-      if (num > maxNo) maxNo = num
-    }
-  }
-  
-  if (maxNo === 0) maxNo = sameItems.length
-  const no = String(maxNo + 1).padStart(3, '0')
-  
-  return formatTemplate
-    .replace(/{SITE_CODE}/g, siteCode)
-    .replace(/{DESA}/g, desaSlug)
-    .replace(/{NO}/g, no)
-}
-
-function parseMapsUrl(url) {
-  if (!url) return { lat: '', lon: '' }
-  const m = url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/)
-  if (m) return { lat: m[1], lon: m[2] }
-  const m2 = url.match(/[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/)
-  if (m2) return { lat: m2[1], lon: m2[2] }
-  return { lat: '', lon: '' }
-}
-
-export default function DataServer() {
-  const { profile } = useAuth()
-  const role = profile?.role || 'teknisi'
-  const importRef = useRef(null)
-
-  const [items, setItems] = useState([])
-  const [users, setUsers] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  // Filters
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filterSite, setFilterSite] = useState('')
-  const [filterKecamatan, setFilterKecamatan] = useState('')
-  const [filterDesa, setFilterDesa] = useState('')
-
-  // Sorting
-  const [sortKey, setSortKey] = useState('created_at')
-  const [sortDir, setSortDir] = useState('desc')
-
-  // Modals
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState(EMPTY_FORM)
-  const [saving, setSaving] = useState(false)
-  
-  const [confirmDelete, setConfirmDelete] = useState(null)
-  
-  // Bulk Delete (superadmin only)
-  const [selectedIds, setSelectedIds] = useState(new Set())
-  const [bulkDeleteModal, setBulkDeleteModal] = useState(null)
-  const [bulkDeleteConfirmText, setBulkDeleteConfirmText] = useState('')
-  const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
-
-  // Pagination
-  const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(20)
-
-  useEffect(() => { fetchData() }, [])
-
-  const fetchData = async () => {
-    setLoading(true)
-    try {
-      let allItems = []
-      let from = 0
-      const step = 1000
-      
-      while (true) {
-        const { data, error } = await supabase
-          .from('network_server')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .order('id', { ascending: true })
-          .range(from, from + step - 1)
-          
-        if (error) throw error
-        if (data && data.length > 0) {
-          allItems = [...allItems, ...data]
-          if (data.length < step) break
-          from += step
-        } else {
-          break
-        }
-      }
-
-      const { data: usersData } = await supabase.from('users').select('id, full_name')
-      
-      setItems(allItems)
-      if (usersData) setUsers(usersData)
-    } catch { 
-      toast.error('Gagal memuat data') 
-    } finally { 
-      setLoading(false) 
-    }
-  }
-
-  const getUserName = (uid) => users.find(u => u.id === uid)?.full_name || '-'
-
-  const kecamatanList = useMemo(() => [...new Set(items.map(p => p.kecamatan).filter(Boolean))].sort(), [items])
-  const desaList = useMemo(() => {
-    let list = items
-    if (filterKecamatan) list = list.filter(p => p.kecamatan === filterKecamatan)
-    return [...new Set(list.map(p => p.desa).filter(Boolean))].sort()
-  }, [items, filterKecamatan])
-
-  // CASCADING OPTIONS UNTUK FORM TAMBAH/EDIT
-  const provinsiOpts = useMemo(() => [...new Set(items.map(p => p.provinsi).filter(Boolean))].sort(), [items])
-  const kabupatenOpts = useMemo(() => {
-    let list = items
-    if (form.provinsi) list = list.filter(p => p.provinsi === form.provinsi)
-    return [...new Set(list.map(p => p.kabupaten).filter(Boolean))].sort()
-  }, [items, form.provinsi])
-  const kecamatanOpts = useMemo(() => {
-    let list = items
-    if (form.kabupaten) list = list.filter(p => p.kabupaten === form.kabupaten)
-    return [...new Set(list.map(p => p.kecamatan).filter(Boolean))].sort()
-  }, [items, form.kabupaten])
-  const desaOpts = useMemo(() => {
-    let list = items
-    if (form.kecamatan) list = list.filter(p => p.kecamatan === form.kecamatan)
-    return [...new Set(list.map(p => p.desa).filter(Boolean))].sort()
-  }, [items, form.kecamatan])
-
-  const filtered = useMemo(() => {
-    let data = [...items]
-    if (filterSite) data = data.filter(p => p.site === filterSite)
-    if (filterKecamatan) data = data.filter(p => p.kecamatan === filterKecamatan)
-    if (filterDesa) data = data.filter(p => p.desa === filterDesa)
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase()
-      data = data.filter(p => 
-        p.server_id?.toLowerCase().includes(q) || 
-        p.nama_server?.toLowerCase().includes(q) || 
-        p.desa?.toLowerCase().includes(q) || 
-        p.kecamatan?.toLowerCase().includes(q)
-      )
-    }
-    data.sort((a, b) => {
-      let va = a[sortKey] ?? '', vb = b[sortKey] ?? ''
-      if (va === vb) {
-        let ida = a.server_id ?? '', idb = b.server_id ?? ''
-        return ida > idb ? 1 : (ida < idb ? -1 : 0)
-      }
-      return sortDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1)
-    })
-    return data
-  }, [items, filterSite, filterKecamatan, filterDesa, searchQuery, sortKey, sortDir])
-
-  const paginated = useMemo(() => filtered.slice((page - 1) * perPage, page * perPage), [filtered, page, perPage])
-  const totalPages = Math.ceil(filtered.length / perPage)
-
-  const handleSort = (key) => {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortKey(key); setSortDir('asc') }
-  }
-  const SortIcon = ({ col }) => sortKey !== col ? <ChevronDown size={11} style={{ opacity: 0.3 }} /> : sortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />
-
-  const openAdd = () => { setEditingId(null); setForm(EMPTY_FORM); setIsModalOpen(true) }
-  const openEdit = (item) => {
-    setEditingId(item.id)
-    setForm({
-      site: item.site || 'banyumas',
-      nama_server: item.nama_server || '',
-      provinsi: item.provinsi || '', kabupaten: item.kabupaten || '',
-      kecamatan: item.kecamatan || '', desa: item.desa || '', jalan: item.jalan || '',
-      maps_url: item.maps_url || '', longitude: item.longitude || '',
-      latitude: item.latitude || '', keterangan: item.keterangan || ''
-    })
-    setIsModalOpen(true)
-  }
-
-  const handleExtractCoords = () => {
-    const coords = parseMapsUrl(form.maps_url)
-    if (coords.lat && coords.lon) {
-      setForm(f => ({ ...f, latitude: coords.lat, longitude: coords.lon }))
-      toast.success('Koordinat berhasil diekstrak!')
-    } else toast.error('Koordinat tidak ditemukan. Masukkan manual.')
-  }
-
-  const handleSave = async () => {
-    if (!form.nama_server.trim()) return toast.error('Nama Server wajib diisi!')
-    if (!form.kecamatan.trim()) return toast.error('Kecamatan wajib diisi!')
-    if (!form.desa.trim()) return toast.error('Desa/Kelurahan wajib diisi!')
-    
-    setSaving(true)
-    try {
-      const lat = form.latitude ? Number(form.latitude) : null
-      const lon = form.longitude ? Number(form.longitude) : null
-
-      const payload = {
-        site: form.site,
-        nama_server: form.nama_server,
-        provinsi: form.provinsi,
-        kabupaten: form.kabupaten,
-        kecamatan: form.kecamatan,
-        desa: form.desa,
-        jalan: form.jalan,
-        maps_url: form.maps_url,
-        longitude: lon,
-        latitude: lat,
-        keterangan: form.keterangan,
-        updated_by: profile.id,
-      }
-      
-      if (editingId) {
-        const existingItem = items.find(d => d.id === editingId)
-        let newItemId = null
-        if (existingItem) {
-          const siteChanged = existingItem.site !== form.site
-          const desaChanged = (existingItem.desa || '').toUpperCase() !== (form.desa || '').toUpperCase()
-          if (siteChanged || desaChanged) {
-            newItemId = generateItemId(form.site, form.desa, items)
-            payload.server_id = newItemId
-          }
-        }
-        const { error } = await supabase.from('network_server').update(payload).eq('id', editingId)
-        if (error) throw error
-        toast.success(`Data Server diperbarui!${newItemId ? ` ID otomatis disesuaikan menjadi ${newItemId}` : ''}`)
-      } else {
-        const itemId = form.server_id_manual?.trim() || generateItemId(form.site, form.desa, items)
-        const { error } = await supabase.from('network_server').insert({ ...payload, server_id: itemId, created_by: profile.id })
-        if (error) throw error
-        toast.success(`${itemId} ditambahkan!`)
-      }
-      setIsModalOpen(false)
-      fetchData()
-    } catch (e) { 
-      toast.error(e.message || 'Terjadi kesalahan') 
-    } finally { 
-      setSaving(false)
-    }
-  }
-
-  const handleDelete = async (item) => {
-    try {
-      const { error } = await supabase.from('network_server').delete().eq('id', item.id)
-      if (error) throw error
-      toast.success('Data server dihapus')
-      setConfirmDelete(null)
-      fetchData()
-    } catch { toast.error('Gagal menghapus data') }
-  }
-
-  // BULK DELETE
-  const toggleSelect = (id) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-  const toggleSelectAll = () => {
-    const allVisibleSelected = paginated.length > 0 && paginated.every(p => selectedIds.has(p.id))
-    if (allVisibleSelected) {
-      setSelectedIds(prev => {
-        const n = new Set(prev)
-        paginated.forEach(p => n.delete(p.id))
-        return n
-      })
-    } else {
-      setSelectedIds(prev => {
-        const n = new Set(prev)
-        paginated.forEach(p => n.add(p.id))
-        return n
-      })
-    }
-  }
-  const clearSelection = () => setSelectedIds(new Set())
-
-  const openBulkDeleteModal = (mode) => {
-    if (mode === 'selected') {
-      if (selectedIds.size === 0) return toast.error('Tidak ada data yang dipilih!')
-      setBulkDeleteModal({ mode, label: `${selectedIds.size} server yang dipilih`, filter: null })
-    } else if (mode === 'all') {
-      setBulkDeleteModal({ mode, label: `SELURUH DATA SERVER`, filter: null })
-    }
-    setBulkDeleteConfirmText('')
-  }
-
-  const handleBulkDelete = async () => {
-    if (!bulkDeleteModal) return
-    const { mode, filter } = bulkDeleteModal
-    const required = mode.startsWith('all') ? 'HAPUS SEMUA' : 'HAPUS'
-    if (bulkDeleteConfirmText.trim().toUpperCase() !== required) {
-      return toast.error(`Ketik "${required}" untuk konfirmasi!`)
-    }
-    setBulkDeleteModal(null)
-    
-    try {
-      let targetIds = []
-      if (mode === 'selected') {
-        targetIds = [...selectedIds]
-      } else {
-        const { data, error } = await supabase.from('network_server').select('id')
-        if (error) throw error
-        targetIds = data.map(d => d.id)
-      }
-
-      if (targetIds.length === 0) return toast.error('Tidak ada data yang cocok untuk dihapus!')
-
-      const chunkSize = 200
-      for (let i = 0; i < targetIds.length; i += chunkSize) {
-        const chunk = targetIds.slice(i, i + chunkSize)
-        const { error } = await supabase.from('network_server').delete().in('id', chunk)
-        if (error) throw error
-      }
-
-      toast.success(`${targetIds.length} server berhasil dihapus!`)
-      setSelectedIds(new Set())
-      fetchData()
-    } catch (e) {
-      toast.error('Gagal menghapus: ' + e.message)
-    }
-  }
-
-  // EXPORT / IMPORT
-  const handleExportExcel = () => {
-    if (filtered.length === 0) return toast.error('Tidak ada data')
-    const rows = filtered.map((p, i) => ({
-      'No': i + 1, 'Site': SITES.find(s => s.value === p.site)?.label || p.site,
-      'Server ID': p.server_id || '', 'Nama Server': p.nama_server || '',
-      'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
-      'Desa/Kelurahan': p.desa || '', 'Jalan': p.jalan || '', 'Maps URL': p.maps_url || '',
-      'Latitude': p.latitude || '', 'Longitude': p.longitude || '',
-      'Keterangan': p.keterangan || '', 'Diinput Oleh': getUserName(p.created_by),
-      'Edit Oleh': getUserName(p.updated_by), 'Tanggal Input': p.created_at ? format(new Date(p.created_at), 'dd/MM/yyyy HH:mm') : '',
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Data Server')
-    XLSX.writeFile(wb, `Data Server ${format(new Date(), 'dd-MM-yyyy')}.xlsx`)
-    toast.success('Export Excel berhasil!')
-  }
-
-  const handleDownloadTemplate = () => {
-    const template = [
-      {
-        'Server ID': '', 'Nama Server': 'Server Pusat Kroya', 'Site': 'BANYUMAS',
-        'Provinsi': 'JAWA TENGAH', 'Kabupaten/Kota': 'CILACAP',
-        'Kecamatan': 'KROYA', 'Desa/Kelurahan': 'MUJUR', 'Jalan': 'Gg. BIMA',
-        'Maps URL': '', 'Latitude': '-7.625345', 'Longitude': '109.245233',
-        'Keterangan': 'Server ID boleh dikosongkan, akan otomatis dibuatkan'
-      }
-    ]
-    const ws = XLSX.utils.json_to_sheet(template)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Template')
-    XLSX.writeFile(wb, `Template Import Server ${format(new Date(), 'dd-MM-yyyy')}.xlsx`)
-    toast.success('Template berhasil diunduh!')
-  }
-
-  const handleImportFile = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = async (ev) => {
-      try {
-        const wb = XLSX.read(ev.target.result, { type: 'array' })
-        const ws = wb.Sheets[wb.SheetNames[0]]
-        const rows = XLSX.utils.sheet_to_json(ws)
-        
-        let freshItems = [...items]
-        let payloads = []
-
-        for (let i = 0; i < rows.length; i++) {
-          const r = rows[i]
-          let siteStr = String(r['Site'] || r['site'] || 'Banyumas').toLowerCase()
-          let siteVal = SITES.find(s => s.label.toLowerCase() === siteStr || s.value === siteStr)?.value || 'banyumas'
-          let desa = String(r['Desa/Kelurahan'] || r['Desa'] || '').toUpperCase()
-          
-          let server_id = String(r['Server ID'] || r['ID'] || '')
-          if (!server_id && desa) {
-            server_id = generateItemId(siteVal, desa, freshItems)
-          }
-
-          if (!desa || !r['Nama Server']) continue; // skip invalid
-
-          const payload = {
-            server_id,
-            site: siteVal,
-            nama_server: r['Nama Server'],
-            provinsi: r['Provinsi'] || '',
-            kabupaten: r['Kabupaten/Kota'] || r['Kabupaten'] || '',
-            kecamatan: r['Kecamatan'] || '',
-            desa,
-            jalan: r['Jalan'] || '',
-            maps_url: r['Maps URL'] || '',
-            latitude: Number(r['Latitude']) || null,
-            longitude: Number(r['Longitude']) || null,
-            keterangan: r['Keterangan'] || '',
-            created_by: profile.id,
-            updated_by: profile.id,
-          }
-          
-          payloads.push(payload)
-          freshItems.push({ site: siteVal, desa, server_id })
-        }
-
-        if (payloads.length === 0) return toast.error('Tidak ada data valid yang bisa diimport!')
-        
-        const { error } = await supabase.from('network_server').insert(payloads)
-        if (error) throw error
-        toast.success(`${payloads.length} Server berhasil diimport!`)
-        fetchData()
-      } catch (err) {
-        toast.error('Gagal import file Excel')
-        console.error(err)
-      }
-      if (importRef.current) importRef.current.value = ''
-    }
-    reader.readAsArrayBuffer(file)
-  }
-
-  const itemIdPreview = !editingId && form.desa ? generateItemId(form.site, form.desa, items) : null
-
-  return (
+  const newReturn = `  return (
     <div className="page-container">
       {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' }}>
         <div>
           <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px', fontSize: '20px', fontWeight: 700 }}>
-            <Server size={24} style={{ opacity: 0.8 }} />
-            Data Server
+            ${icon}
+            ${componentName}
           </h2>
-          <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>Jaringan Fiber — Pencatatan & Manajemen Data Server</p>
+          <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>Jaringan Fiber — Pencatatan & Manajemen ${componentName}</p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {['admin', 'superadmin', 'teknisi'].includes(role) && (
@@ -540,7 +99,7 @@ export default function DataServer() {
                 )}
                 <div style={{ height: '1px', background: 'var(--border)', margin: '2px 0' }} />
                 <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'rgba(239,68,68,0.08)', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--danger)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => { setBulkMenuOpen(false); openBulkDeleteModal('all') }}>
-                  <Trash2 size={14} /> Hapus SEMUA DATA SERVER
+                  <Trash2 size={14} /> Hapus ${bulkDeleteText}
                 </button>
               </div>
             </>
@@ -567,13 +126,7 @@ export default function DataServer() {
                     </th>
                   )}
                   <th style={{ width: '40px' }}>No</th>
-                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('server_id')}>Server ID <SortIcon col="server_id" /></th>
-                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('nama_server')}>Nama Server <SortIcon col="nama_server" /></th>
-                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kecamatan')}>Kecamatan <SortIcon col="kecamatan" /></th>
-                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('desa')}>Desa <SortIcon col="desa" /></th>
-                  <th>Lokasi (Lat/Lon)</th>
-                  <th>Maps</th>
-                  <th>Keterangan</th>
+                  ${tableHeaders}
                   <th>Dibuat Oleh</th>
                   <th style={{ cursor: 'pointer' }} onClick={() => handleSort('created_at')}>Tanggal <SortIcon col="created_at" /></th>
                   <th style={{ width: '80px' }}>Aksi</th>
@@ -581,7 +134,7 @@ export default function DataServer() {
               </thead>
               <tbody>
                 {paginated.map((item, idx) => {
-                  
+                  ${extraProps}
                   return (
                     <tr key={item.id} style={{ background: selectedIds.has(item.id) ? 'rgba(59,130,246,0.06)' : undefined }}>
                       {role === 'superadmin' && (
@@ -590,21 +143,7 @@ export default function DataServer() {
                         </td>
                       )}
                       <td style={{ color: 'var(--text-secondary)' }}>{(page - 1) * perPage + idx + 1}</td>
-                      <td><span style={{ fontFamily: 'monospace', fontSize: '12px', background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: '4px' }}>{item.server_id}</span></td>
-                      <td>{item.nama_server || '-'}</td>
-                      <td>{item.kecamatan || '-'}</td>
-                      <td>{item.desa || '-'}</td>
-                      <td style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                        {item.latitude && item.longitude ? (Number(item.latitude).toFixed(5) + ', ' + Number(item.longitude).toFixed(5)) : '-'}
-                      </td>
-                      <td>
-                        {item.maps_url ? (
-                          <a href={item.maps_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                            <MapPin size={12} /><ExternalLink size={11} />
-                          </a>
-                        ) : '-'}
-                      </td>
-                      <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: '12px' }}>{item.keterangan || '-'}</td>
+                      ${tableRowCells}
                       <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{getUserName(item.created_by)}</td>
                       <td style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-'}</td>
                       <td>
@@ -687,14 +226,11 @@ export default function DataServer() {
                 </div>
                 {!editingId && (
                   <div className="form-group">
-                    <label className="form-label">ID Server Manual</label>
-                    <input className="form-input" placeholder="Biarkan kosong untuk auto-generate" value={form.server_id_manual || ''} onChange={e => setForm(f => ({ ...f, server_id_manual: e.target.value }))} />
+                    <label className="form-label">${generateIdLabel}</label>
+                    <input className="form-input" placeholder="Biarkan kosong untuk auto-generate" value={form.${generateIdFuncStr} || ''} onChange={e => setForm(f => ({ ...f, ${generateIdFuncStr}: e.target.value }))} />
                   </div>
                 )}
-                <div className="form-group">
-                  <label className="form-label">Nama Server *</label>
-                  <input className="form-input" placeholder="Nama server..." value={form.nama_server} onChange={e => setForm(f => ({ ...f, nama_server: e.target.value }))} />
-                </div>
+                ${deviceFields}
                 <div className="form-group">
                   <label className="form-label">Kecamatan *</label>
                   <SearchableSelect value={form.kecamatan} onChange={val => setForm(f => ({ ...f, kecamatan: val, desa: '' }))} options={kecamatanOpts.map(k => ({ value: k, label: k }))} placeholder="Ketik atau pilih kecamatan..." allowNew />
@@ -762,7 +298,7 @@ export default function DataServer() {
                       <tr key={i} style={{ background: r._error ? 'rgba(239,68,68,0.06)' : undefined }}>
                         <td><input type="checkbox" checked={!!r._selected && !r._error} disabled={!!r._error} onChange={e => setImportRows(rows => rows.map((row, ri) => ri === i ? { ...row, _selected: e.target.checked } : row))} /></td>
                         <td style={{ color: 'var(--text-secondary)' }}>{r._rowNo}</td>
-                        <td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{r.server_id_manual || <span style={{ color: 'var(--text-secondary)' }}>auto</span>}</td>
+                        <td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{r.${generateIdFuncStr} || <span style={{ color: 'var(--text-secondary)' }}>auto</span>}</td>
                         <td>{r.kecamatan}</td>
                         <td>{r.desa}</td>
                         <td>{r._error ? <span style={{ color: 'var(--danger)', fontSize: '11px' }}>{r._error}</span> : <span style={{ color: 'var(--success)', fontSize: '11px' }}>OK</span>}</td>
@@ -783,4 +319,263 @@ export default function DataServer() {
       )}
     </div>
   )
+}`;
+
+  const finalCode = logicSection + '\n' + newReturn;
+  fs.writeFileSync('src/pages/jaringan/' + file + '.jsx', finalCode);
+  console.log(file + ' updated.');
 }
+
+// 1. DataCoilan
+replaceReturn(
+  'DataCoilan',
+  'Data Coilan',
+  '<img src="/icon_coilan.png" alt="coilan" style={{ width: "24px", height: "24px", objectFit: "contain", filter: "brightness(0) invert(1)", opacity: 0.8 }} />',
+  'ID Coilan Manual',
+  'coilan_id_manual',
+  `<div className="form-group">
+                  <label className="form-label">Panjang (meter)</label>
+                  <input className="form-input" type="number" placeholder="cth: 50" value={form.panjang_meter} onChange={e => setForm(f => ({ ...f, panjang_meter: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Tiang Terkait (Opsional)</label>
+                  <SearchableSelect value={form.pole_id} onChange={val => setForm(f => ({ ...f, pole_id: val }))} options={poles.map(p => ({ value: p.id, label: p.pole_id + (p.desa ? ' - ' + p.desa : '') }))} placeholder="Pilih tiang yang terhubung..." />
+                </div>`,
+  `<th style={{ cursor: 'pointer' }} onClick={() => handleSort('coilan_id')}>Coilan ID <SortIcon col="coilan_id" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('panjang_meter')}>Panjang (m) <SortIcon col="panjang_meter" /></th>
+                  <th>Tiang Terkait</th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kecamatan')}>Kecamatan <SortIcon col="kecamatan" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('desa')}>Desa <SortIcon col="desa" /></th>
+                  <th>Lokasi (Lat/Lon)</th>
+                  <th>Maps</th>
+                  <th>Keterangan</th>`,
+  `<td><span style={{ fontFamily: 'monospace', fontSize: '12px', background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: '4px' }}>{item.coilan_id}</span></td>
+                      <td>{item.panjang_meter ? item.panjang_meter + ' m' : '-'}</td>
+                      <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{linkedPole ? linkedPole.pole_id : '-'}</td>
+                      <td>{item.kecamatan || '-'}</td>
+                      <td>{item.desa || '-'}</td>
+                      <td style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        {item.latitude && item.longitude ? (Number(item.latitude).toFixed(5) + ', ' + Number(item.longitude).toFixed(5)) : '-'}
+                      </td>
+                      <td>
+                        {item.maps_url ? (
+                          <a href={item.maps_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <MapPin size={12} /><ExternalLink size={11} />
+                          </a>
+                        ) : '-'}
+                      </td>
+                      <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: '12px' }}>{item.keterangan || '-'}</td>`,
+  false,
+  `const linkedPole = poles.find(p => p.id === item.pole_id)`
+);
+
+// 2. DataKasetFo
+replaceReturn(
+  'DataKasetFo',
+  'Data Kaset FO',
+  '<img src="/icon_kaset_fo.png" alt="kaset" style={{ width: "24px", height: "24px", objectFit: "contain", filter: "brightness(0) invert(1)", opacity: 0.8 }} />',
+  'ID Kaset Manual',
+  'kaset_id_manual',
+  `<div className="form-group">
+                  <label className="form-label">Jumlah Core</label>
+                  <input className="form-input" type="number" placeholder="cth: 12" value={form.jumlah_core} onChange={e => setForm(f => ({ ...f, jumlah_core: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">ODP/ODC Terkait (Opsional)</label>
+                  <SearchableSelect value={form.device_ref} onChange={val => setForm(f => ({ ...f, device_ref: val }))} options={devices.map(d => ({ value: d.id, label: d.device_id + (d.desa ? ' - ' + d.desa : '') }))} placeholder="Pilih ODP/ODC..." />
+                </div>`,
+  `<th style={{ cursor: 'pointer' }} onClick={() => handleSort('kaset_id')}>Kaset ID <SortIcon col="kaset_id" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('jumlah_core')}>Jumlah Core <SortIcon col="jumlah_core" /></th>
+                  <th>ODP/ODC Terkait</th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kecamatan')}>Kecamatan <SortIcon col="kecamatan" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('desa')}>Desa <SortIcon col="desa" /></th>
+                  <th>Lokasi (Lat/Lon)</th>
+                  <th>Maps</th>
+                  <th>Keterangan</th>`,
+  `<td><span style={{ fontFamily: 'monospace', fontSize: '12px', background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: '4px' }}>{item.kaset_id}</span></td>
+                      <td>{item.jumlah_core ? item.jumlah_core : '-'}</td>
+                      <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{linkedDev ? linkedDev.device_id : '-'}</td>
+                      <td>{item.kecamatan || '-'}</td>
+                      <td>{item.desa || '-'}</td>
+                      <td style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        {item.latitude && item.longitude ? (Number(item.latitude).toFixed(5) + ', ' + Number(item.longitude).toFixed(5)) : '-'}
+                      </td>
+                      <td>
+                        {item.maps_url ? (
+                          <a href={item.maps_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <MapPin size={12} /><ExternalLink size={11} />
+                          </a>
+                        ) : '-'}
+                      </td>
+                      <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: '12px' }}>{item.keterangan || '-'}</td>`,
+  true,
+  `const linkedDev = devices.find(d => d.id === item.device_ref)`
+);
+
+// 3. DataServer
+replaceReturn(
+  'DataServer',
+  'Data Server',
+  '<Server size={24} style={{ opacity: 0.8 }} />',
+  'ID Server Manual',
+  'server_id_manual',
+  `<div className="form-group">
+                  <label className="form-label">Nama Server *</label>
+                  <input className="form-input" placeholder="Nama server..." value={form.nama_server} onChange={e => setForm(f => ({ ...f, nama_server: e.target.value }))} />
+                </div>`,
+  `<th style={{ cursor: 'pointer' }} onClick={() => handleSort('server_id')}>Server ID <SortIcon col="server_id" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('nama_server')}>Nama Server <SortIcon col="nama_server" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kecamatan')}>Kecamatan <SortIcon col="kecamatan" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('desa')}>Desa <SortIcon col="desa" /></th>
+                  <th>Lokasi (Lat/Lon)</th>
+                  <th>Maps</th>
+                  <th>Keterangan</th>`,
+  `<td><span style={{ fontFamily: 'monospace', fontSize: '12px', background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: '4px' }}>{item.server_id}</span></td>
+                      <td>{item.nama_server || '-'}</td>
+                      <td>{item.kecamatan || '-'}</td>
+                      <td>{item.desa || '-'}</td>
+                      <td style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        {item.latitude && item.longitude ? (Number(item.latitude).toFixed(5) + ', ' + Number(item.longitude).toFixed(5)) : '-'}
+                      </td>
+                      <td>
+                        {item.maps_url ? (
+                          <a href={item.maps_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <MapPin size={12} /><ExternalLink size={11} />
+                          </a>
+                        ) : '-'}
+                      </td>
+                      <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: '12px' }}>{item.keterangan || '-'}</td>`,
+  false,
+  ''
+);
+
+// 4. DataClosure
+replaceReturn(
+  'DataClosure',
+  'Data Closure',
+  '<img src="/icon_closure.png" alt="closure" style={{ width: "24px", height: "24px", objectFit: "contain", filter: "brightness(0) invert(1)", opacity: 0.8 }} />',
+  'ID Closure Manual',
+  'closure_id_manual',
+  `<div className="form-group">
+                  <label className="form-label">Tipe Closure</label>
+                  <select className="form-input" value={form.tipe} onChange={e => setForm(f => ({ ...f, tipe: e.target.value }))}>
+                    <option value="">-- Pilih Tipe --</option>
+                    <option value="Dome">Dome</option>
+                    <option value="Fiber Splice Closure">Fiber Splice Closure</option>
+                    <option value="Inline Closure">Inline Closure</option>
+                    <option value="Horizontal">Horizontal</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Jumlah Core</label>
+                  <input className="form-input" type="number" placeholder="cth: 12" value={form.jumlah_core} onChange={e => setForm(f => ({ ...f, jumlah_core: e.target.value }))} />
+                </div>`,
+  `<th style={{ cursor: 'pointer' }} onClick={() => handleSort('closure_id')}>Closure ID <SortIcon col="closure_id" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('tipe')}>Tipe <SortIcon col="tipe" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('jumlah_core')}>Jumlah Core <SortIcon col="jumlah_core" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kecamatan')}>Kecamatan <SortIcon col="kecamatan" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('desa')}>Desa <SortIcon col="desa" /></th>
+                  <th>Lokasi (Lat/Lon)</th>
+                  <th>Maps</th>
+                  <th>Keterangan</th>`,
+  `<td><span style={{ fontFamily: 'monospace', fontSize: '12px', background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: '4px' }}>{item.closure_id}</span></td>
+                      <td>{item.tipe || '-'}</td>
+                      <td>{item.jumlah_core ? item.jumlah_core : '-'}</td>
+                      <td>{item.kecamatan || '-'}</td>
+                      <td>{item.desa || '-'}</td>
+                      <td style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        {item.latitude && item.longitude ? (Number(item.latitude).toFixed(5) + ', ' + Number(item.longitude).toFixed(5)) : '-'}
+                      </td>
+                      <td>
+                        {item.maps_url ? (
+                          <a href={item.maps_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            <MapPin size={12} /><ExternalLink size={11} />
+                          </a>
+                        ) : '-'}
+                      </td>
+                      <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: '12px' }}>{item.keterangan || '-'}</td>`,
+  false,
+  ''
+);
+
+// 5. DataJalurFo
+replaceReturn(
+  'DataJalurFo',
+  'Data Jalur FO',
+  '<Cable size={24} style={{ opacity: 0.8 }} />',
+  'ID Jalur Manual',
+  'jalur_id_manual',
+  `<div className="form-group">
+                  <label className="form-label">Nama Jalur *</label>
+                  <input className="form-input" placeholder="Nama Jalur..." value={form.nama_jalur} onChange={e => setForm(f => ({ ...f, nama_jalur: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Tipe Kabel</label>
+                  <select className="form-input" value={form.tipe_kabel} onChange={e => setForm(f => ({ ...f, tipe_kabel: e.target.value }))}>
+                    <option value="">-- Pilih Tipe --</option>
+                    <option value="ADSS">ADSS</option>
+                    <option value="FTTH">FTTH</option>
+                    <option value="OPGW">OPGW</option>
+                    <option value="UTP">UTP</option>
+                    <option value="Lainnya">Lainnya</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Panjang (meter)</label>
+                  <input className="form-input" type="number" placeholder="cth: 50" value={form.panjang_meter} onChange={e => setForm(f => ({ ...f, panjang_meter: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Titik Awal</label>
+                  <input className="form-input" placeholder="Titik Awal..." value={form.titik_awal} onChange={e => setForm(f => ({ ...f, titik_awal: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Titik Akhir</label>
+                  <input className="form-input" placeholder="Titik Akhir..." value={form.titik_akhir} onChange={e => setForm(f => ({ ...f, titik_akhir: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Maps URL Awal</label>
+                  <input className="form-input" placeholder="Maps URL Awal..." value={form.maps_url_awal} onChange={e => setForm(f => ({ ...f, maps_url_awal: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Maps URL Akhir</label>
+                  <input className="form-input" placeholder="Maps URL Akhir..." value={form.maps_url_akhir} onChange={e => setForm(f => ({ ...f, maps_url_akhir: e.target.value }))} />
+                </div>`,
+  `<th style={{ cursor: 'pointer' }} onClick={() => handleSort('jalur_id')}>Jalur ID <SortIcon col="jalur_id" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('nama_jalur')}>Nama Jalur <SortIcon col="nama_jalur" /></th>
+                  <th>Titik Awal</th>
+                  <th>Titik Akhir</th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('panjang_meter')}>Panjang (m) <SortIcon col="panjang_meter" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('tipe_kabel')}>Tipe Kabel <SortIcon col="tipe_kabel" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kecamatan')}>Kecamatan <SortIcon col="kecamatan" /></th>
+                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('desa')}>Desa <SortIcon col="desa" /></th>
+                  <th>Maps</th>
+                  <th>Keterangan</th>`,
+  `<td><span style={{ fontFamily: 'monospace', fontSize: '12px', background: 'var(--bg-primary)', padding: '2px 6px', borderRadius: '4px' }}>{item.jalur_id}</span></td>
+                      <td>{item.nama_jalur || '-'}</td>
+                      <td>{item.titik_awal || '-'}</td>
+                      <td>{item.titik_akhir || '-'}</td>
+                      <td>{item.panjang_meter ? item.panjang_meter + ' m' : '-'}</td>
+                      <td>{item.tipe_kabel || '-'}</td>
+                      <td>{item.kecamatan || '-'}</td>
+                      <td>{item.desa || '-'}</td>
+                      <td>
+                        {item.maps_url_awal || item.maps_url_akhir ? (
+                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                            {item.maps_url_awal && (
+                              <a href={item.maps_url_awal} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '2px', fontSize: '11px' }}>
+                                <MapPin size={10} />Awal <ExternalLink size={10} />
+                              </a>
+                            )}
+                            {item.maps_url_akhir && (
+                              <a href={item.maps_url_akhir} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '2px', fontSize: '11px' }}>
+                                <MapPin size={10} />Akhir <ExternalLink size={10} />
+                              </a>
+                            )}
+                          </div>
+                        ) : '-'}
+                      </td>
+                      <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: '12px' }}>{item.keterangan || '-'}</td>`,
+  false,
+  ''
+);
+
