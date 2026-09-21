@@ -21,7 +21,9 @@ import {
   RefreshCw,
   ScanLine,
   Map,
-  Server
+  Server,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react'
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -65,14 +67,46 @@ export default function Sidebar({ isOpen, onClose }) {
   // Exception: Maybe some things are completely hidden from Teknisi, but based on docs, Teknisi can View almost everything.
   // Superadmin/Admin see all.
 
+  // Retrieve initial state from localStorage if available, otherwise default to MAIN MENU open
+  const [openSections, setOpenSections] = useState(() => {
+    const saved = localStorage.getItem('sidebar_open_sections');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
+    }
+    return {
+      'MAIN MENU': true,
+      'INVENTORY': false,
+      'OPERATIONS': false,
+      'JARINGAN FIBER OPTIK': false,
+      'SYSTEM': false
+    };
+  });
+
+  const toggleSection = (sectionName) => {
+    setOpenSections(prev => {
+      const newState = { ...prev, [sectionName]: !prev[sectionName] };
+      localStorage.setItem('sidebar_open_sections', JSON.stringify(newState));
+      return newState;
+    });
+  };
+
   const renderNavSection = (sectionName) => {
     const items = navItems.filter(item => item.section === sectionName && (!item.allowedRoles || item.allowedRoles.includes(role)))
     if (items.length === 0) return null
+    
+    const isOpen = openSections[sectionName];
 
     return (
       <div key={sectionName}>
-        <div className="nav-section-label">{sectionName}</div>
-        {items.map(item => (
+        <div 
+          className="nav-section-label" 
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}
+          onClick={() => toggleSection(sectionName)}
+        >
+          {sectionName}
+          {isOpen ? <ChevronDown size={14} style={{ opacity: 0.5 }} /> : <ChevronRight size={14} style={{ opacity: 0.5 }} />}
+        </div>
+        {isOpen && items.map(item => (
           <NavLink 
             key={item.path} 
             to={item.path}
