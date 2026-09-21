@@ -92,6 +92,7 @@ export default function DataClosure() {
   const [saving, setSaving] = useState(false)
   
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [excelMenuOpen, setExcelMenuOpen] = useState(false)
   
   // Bulk Delete (superadmin only)
   const [selectedIds, setSelectedIds] = useState(new Set())
