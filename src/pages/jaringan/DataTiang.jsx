@@ -741,6 +741,13 @@ export default function DataTiang() {
         const ws = wb.Sheets[wb.SheetNames[0]]
         const rows = XLSX.utils.sheet_to_json(ws)
         
+        const counts = {}
+        for (const p of poles) {
+          if (!p.desa) continue
+          const key = `${p.site}_${p.desa.toUpperCase().trim()}`
+          counts[key] = (counts[key] || 0) + 1
+        }
+        
         const mapped = []
         for (let i = 0; i < rows.length; i++) {
           const r = rows[i]
@@ -796,7 +803,22 @@ export default function DataTiang() {
             }
           }
           
+          let poleId = (r['ID Tiang'] || '').trim();
+          let isAuto = false;
+          if (!poleId && r['Desa/Kelurahan']) {
+            const siteStr = (r['Site'] || 'banyumas').toLowerCase().trim()
+            const desaStr = r['Desa/Kelurahan'].toUpperCase().trim()
+            const key = `${siteStr}_${desaStr}`
+            counts[key] = (counts[key] || 0) + 1
+            const siteCode = SITE_CODE[siteStr] || 'BMS'
+            const desaSlug = desaStr.replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '').substring(0, 15)
+            poleId = idFormat.replace(/{SITE_CODE}/g, siteCode).replace(/{DESA}/g, desaSlug).replace(/{NO}/g, String(counts[key]).padStart(3, '0'))
+            isAuto = true;
+          }
+
           mapped.push({
+            _computedId: poleId,
+            _isAutoId: isAuto,
             _rowNo: i + 2,
             pole_id_manual: (r['ID Tiang'] || '').trim(),
             site: (r['Site'] || 'banyumas').toLowerCase().trim(),
@@ -1337,7 +1359,7 @@ export default function DataTiang() {
       {/* ══════ MODAL IMPORT ══════ */}
       {isImportModalOpen && (
         <div className="modal-overlay">
-          <div className="modal" style={{ width: '1200px', maxWidth: '98vw', maxHeight: '93vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div className="modal" style={{ width: '1200px', maxWidth: '98vw', maxHeight: '85vh', margin: 'auto', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div className="modal-header">
               <div>
                 <h3 style={{ margin: 0 }}>Preview Import Data Tiang</h3>
@@ -1366,7 +1388,7 @@ export default function DataTiang() {
                           }}
                         />
                       </th>
-                      <th>Baris</th><th>Site</th><th>Jenis</th><th>Kecamatan</th><th>Desa</th><th>Lat</th><th>Lon</th><th>Status</th>
+                      <th>Baris</th><th>ID Tiang</th><th>Site</th><th>Jenis</th><th>Kecamatan</th><th>Desa</th><th>Lat</th><th>Lon</th><th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1381,7 +1403,12 @@ export default function DataTiang() {
                               }}
                             />
                           </td>
-                          <td style={{ color: 'var(--text-secondary)', fontWeight: row._proximityWarning && !row._selected ? 'bold' : 'normal' }}>{row._rowNo}</td><td>{SITES.find(s => s.value === row.site)?.label || row.site}</td><td>{POLE_TYPES.find(t => t.value === row.pole_type)?.label || row.pole_type}</td>
+                          <td style={{ color: 'var(--text-secondary)', fontWeight: row._proximityWarning && !row._selected ? 'bold' : 'normal' }}>{row._rowNo}</td>
+                          <td style={{ fontFamily: 'monospace' }}>
+                            {row._computedId} 
+                            {row._isAutoId && <span style={{fontSize: '9px', background: 'rgba(59, 130, 246, 0.2)', color: 'var(--primary)', padding: '1px 4px', borderRadius: '4px', marginLeft: '6px', verticalAlign: 'middle'}}>AUTO</span>}
+                          </td>
+                          <td>{SITES.find(s => s.value === row.site)?.label || row.site}</td><td>{POLE_TYPES.find(t => t.value === row.pole_type)?.label || row.pole_type}</td>
                           <td>{row.kecamatan || <span style={{ color: 'var(--danger)' }}>Kosong!</span>}</td><td>{row.desa || <span style={{ color: 'var(--danger)' }}>Kosong!</span>}</td>
                           <td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{row.latitude || '-'}</td><td style={{ fontFamily: 'monospace', fontSize: '11px' }}>{row.longitude || '-'}</td>
                           <td>
@@ -1397,7 +1424,7 @@ export default function DataTiang() {
                         {row._proximityWarning && !row._selected && (
                           <tr style={{ background: 'rgba(245, 158, 11, 0.15)' }}>
                             <td style={{ borderLeft: '4px solid var(--warning)' }}></td>
-                            <td colSpan="8" style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--warning)', borderBottom: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                            <td colSpan="9" style={{ padding: '10px 14px', fontSize: '12px', color: 'var(--warning)', borderBottom: '1px solid rgba(245, 158, 11, 0.2)' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <AlertTriangle size={16} style={{ flexShrink: 0 }} />
                                 <div>
