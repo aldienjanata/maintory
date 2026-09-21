@@ -28,6 +28,14 @@ import BarcodeScanner from './pages/scanner/BarcodeScanner'
 import OwnerLogin from './pages/owner/OwnerLogin'
 import OwnerPanel from './pages/owner/OwnerPanel'
 
+const removeSplash = () => {
+  const splash = document.getElementById('splash')
+  if (splash) {
+    splash.classList.add('hiding')
+    setTimeout(() => { splash.remove() }, 400)
+  }
+}
+
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth()
   const [showRetry, setShowRetry] = useState(false)
@@ -38,6 +46,8 @@ const ProtectedRoute = ({ children }) => {
       return () => clearTimeout(t)
     } else {
       setShowRetry(false)
+      // Hapus splash saat auth check selesai — inilah saat yang tepat
+      removeSplash()
     }
   }, [loading])
 

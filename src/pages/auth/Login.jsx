@@ -16,6 +16,12 @@ export default function Login() {
 
   useEffect(() => {
     if (user) navigate('/')
+    // Hapus splash saat halaman login dimuat
+    const splash = document.getElementById('splash')
+    if (splash) {
+      splash.classList.add('hiding')
+      setTimeout(() => { splash.remove() }, 400)
+    }
     const savedUsername = localStorage.getItem('maintory-saved-user')
     const savedPassword = localStorage.getItem('maintory-saved-pass')
     if (savedUsername && savedPassword) {

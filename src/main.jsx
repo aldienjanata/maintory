@@ -63,6 +63,4 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )
 
-// Hapus initial loader setelah React render
-setTimeout(removeInitialLoader, 800)
 
