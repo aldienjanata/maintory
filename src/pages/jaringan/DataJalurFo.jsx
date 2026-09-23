@@ -133,6 +133,7 @@ export default function DataJalurFo() {
   const [isKmzModalOpen, setIsKmzModalOpen] = useState(false)
   const [kmzRows, setKmzRows] = useState([])
   const kmzRef = useRef(null)
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 })
 
   // Bulk Delete
   const [selectedIds, setSelectedIds] = useState(new Set())
@@ -476,9 +477,11 @@ export default function DataJalurFo() {
     const toImport = kmzRows.filter(r => r._selected)
     if (!toImport.length) return
     setSaving(true)
-    let success = 0
+    setImportProgress({ current: 0, total: toImport.length })
+    let successCount = 0
     try {
       let localItems = [...items]
+      const allPayloads = []
       for (const r of toImport) {
         const jId = generateItemId(r.site || 'banyumas', r.nama_jalur.replace(/\s+/g, '_'), localItems)
         const payload = {
@@ -495,14 +498,28 @@ export default function DataJalurFo() {
           desa: '',
           created_by: profile.id
         }
-        const { data, error } = await supabase.from('network_jalur_fo').insert(payload).select().single()
-        if (!error && data) { success++; localItems.push(data) }
+        allPayloads.push(payload)
+        localItems.push({ site: payload.site, desa: r.nama_jalur.replace(/\s+/g, '_'), jalur_id: jId })
       }
-      toast.success(`${success} jalur berhasil diimport dari KMZ!`)
+
+      const chunkSize = 50
+      for (let i = 0; i < allPayloads.length; i += chunkSize) {
+        const chunk = allPayloads.slice(i, i + chunkSize)
+        const { error } = await supabase.from('network_jalur_fo').insert(chunk)
+        if (!error) {
+          successCount += chunk.length
+        }
+        setImportProgress({ current: Math.min(i + chunkSize, allPayloads.length), total: allPayloads.length })
+      }
+
+      toast.success(`${successCount} jalur berhasil diimport dari KMZ!`)
       setIsKmzModalOpen(false)
       fetchData()
     } catch(e) { toast.error('Gagal import KMZ: ' + e.message) }
-    finally { setSaving(false) }
+    finally {
+      setSaving(false)
+      setTimeout(() => setImportProgress({ current: 0, total: 0 }), 500)
+    }
   }
 
   const handleExportKmz = async () => {
@@ -571,9 +588,11 @@ ${kmlLines}
   const processImport = async () => {
     if (importRows.length === 0) return
     setSaving(true)
+    setImportProgress({ current: 0, total: importRows.length })
+    let successCount = 0
     try {
-      let successCount = 0
       let localItems = [...items]
+      const allPayloads = []
 
       for (let i = 0; i < importRows.length; i++) {
         const r = importRows[i]
@@ -596,18 +615,28 @@ ${kmlLines}
           maps_url_akhir: r.maps_url_akhir,
           created_by: profile.id
         }
-
-        const { error, data } = await supabase.from('network_jalur_fo').insert(payload).select().single()
-        if (!error && data) {
-          successCount++
-          localItems.push(data)
-        }
+        allPayloads.push(payload)
+        localItems.push({ site: r.site, desa: r.desa, jalur_id: jId })
       }
+
+      const chunkSize = 50
+      for (let i = 0; i < allPayloads.length; i += chunkSize) {
+        const chunk = allPayloads.slice(i, i + chunkSize)
+        const { error } = await supabase.from('network_jalur_fo').insert(chunk)
+        if (!error) {
+          successCount += chunk.length
+        }
+        setImportProgress({ current: Math.min(i + chunkSize, allPayloads.length), total: allPayloads.length })
+      }
+
       toast.success(`${successCount} dari ${importRows.length} baris berhasil diimpor!`)
       setIsImportModalOpen(false)
       fetchData()
     } catch (e) { toast.error(e.message || 'Gagal impor data') }
-    finally { setSaving(false) }
+    finally {
+      setSaving(false)
+      setTimeout(() => setImportProgress({ current: 0, total: 0 }), 500)
+    }
   }
 
   return (
@@ -1043,17 +1072,30 @@ ${kmlLines}
             )}
 
             {/* Footer */}
-            <div className="modal-footer" style={{ flexShrink: 0, borderTop: '1px solid var(--border)' }}>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                {kmzRows.filter(r => r._selected).length} dari {kmzRows.length} jalur dipilih
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn btn-secondary" onClick={() => setIsKmzModalOpen(false)}>Batal</button>
-                <button className="btn btn-primary"
-                  disabled={saving || kmzRows.filter(r => r._selected).length === 0 || kmzRows.filter(r => r._selected).some(r => !r.site)}
-                  onClick={processKmzImport}>
-                  {saving ? 'Mengimport...' : `Import ${kmzRows.filter(r => r._selected).length} Jalur`}
-                </button>
+            <div className="modal-footer" style={{ flexShrink: 0, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {saving && importProgress.total > 0 && (
+                <div style={{ width: '100%' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    <span>Mengimport data...</span>
+                    <span>{importProgress.current} / {importProgress.total}</span>
+                  </div>
+                  <div style={{ width: '100%', height: '6px', background: 'var(--bg-secondary)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', background: 'var(--accent)', width: `${(importProgress.current / importProgress.total) * 100}%`, transition: 'width 0.2s' }} />
+                  </div>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  {kmzRows.filter(r => r._selected).length} dari {kmzRows.length} jalur dipilih
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="btn btn-secondary" onClick={() => setIsKmzModalOpen(false)} disabled={saving}>Batal</button>
+                  <button className="btn btn-primary"
+                    disabled={saving || kmzRows.filter(r => r._selected).length === 0 || kmzRows.filter(r => r._selected).some(r => !r.site)}
+                    onClick={processKmzImport}>
+                    {saving ? 'Mengimport...' : `Import ${kmzRows.filter(r => r._selected).length} Jalur`}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1095,11 +1137,24 @@ ${kmlLines}
                 </table>
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setIsImportModalOpen(false)}>Batal</button>
-              <button className="btn btn-primary" onClick={processImport} disabled={saving}>
-                {saving ? 'Mengimport...' : 'Import ' + importRows.filter(r => r._selected && !r._error).length + ' data'}
-              </button>
+            <div className="modal-footer" style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {saving && importProgress.total > 0 && (
+                <div style={{ width: '100%' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    <span>Mengimport data...</span>
+                    <span>{importProgress.current} / {importProgress.total}</span>
+                  </div>
+                  <div style={{ width: '100%', height: '6px', background: 'var(--bg-secondary)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', background: 'var(--accent)', width: `${(importProgress.current / importProgress.total) * 100}%`, transition: 'width 0.2s' }} />
+                  </div>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', width: '100%' }}>
+                <button className="btn btn-secondary" onClick={() => setIsImportModalOpen(false)} disabled={saving}>Batal</button>
+                <button className="btn btn-primary" onClick={processImport} disabled={saving}>
+                  {saving ? 'Mengimport...' : 'Import ' + importRows.filter(r => r._selected && !r._error).length + ' data'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
