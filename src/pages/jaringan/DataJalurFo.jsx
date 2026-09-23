@@ -785,11 +785,11 @@ ${kmlLines}
       )}
 
       {/* TABLE */}
-      <div className="card" style={{ overflow: 'hidden' }}>
+      <div className="card" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: (!loading && filtered.length === 0) ? 'calc(100vh - 280px)' : 'auto' }}>
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Memuat data...</div>
         ) : filtered.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Tidak ada data ditemukan</div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', color: 'var(--text-secondary)' }}>Tidak ada data ditemukan</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="table" style={{ minWidth: '900px', fontSize: '13px' }}>
