@@ -538,10 +538,15 @@ export default function DataJalurFo() {
         allPayloads.push(payload)
       }
 
+      // Deduplicate by jalur_id - keep last occurrence (latest from KMZ)
+      const dedupMap = new Map()
+      for (const p of allPayloads) dedupMap.set(p.jalur_id, p)
+      const uniquePayloads = Array.from(dedupMap.values())
+
       const chunkSize = 50
-      for (let i = 0; i < allPayloads.length; i += chunkSize) {
-        const chunk = allPayloads.slice(i, i + chunkSize)
-        // Upsert normally so it UPDATES existing rows instead of ignoring them
+      for (let i = 0; i < uniquePayloads.length; i += chunkSize) {
+        const chunk = uniquePayloads.slice(i, i + chunkSize)
+        // Upsert so it UPDATES existing rows if ID already exists in DB
         const { error } = await supabase.from('network_jalur_fo').upsert(chunk, { onConflict: 'jalur_id' })
         if (error) {
           console.error("KMZ Insert Error:", error)
