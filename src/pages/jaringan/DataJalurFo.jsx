@@ -1017,7 +1017,7 @@ ${kmlLines}
       {/* KMZ IMPORT PREVIEW MODAL */}
       {isKmzModalOpen && (
         <div className="modal-overlay" onClick={() => setIsKmzModalOpen(false)}>
-          <div className="modal" style={{ maxWidth: '760px', width: '100%', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: '760px', width: '100%', maxHeight: '88vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="modal-header" style={{ borderBottom: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1051,7 +1051,7 @@ ${kmlLines}
             </div>
 
             {/* List */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {kmzRows.map((r, i) => (
                 <div key={r._id}
                   onClick={() => setKmzRows(rows => rows.map((row, ri) => ri === i ? { ...row, _selected: !row._selected } : row))}
