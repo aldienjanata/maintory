@@ -1500,7 +1500,7 @@ export default function DataOdpOdc() {
       )}
 
       {/* ── TABLE ── */}
-      <div className="card" style={{ overflow: 'hidden' }}>
+      <div className="card" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: (!loading && paginated.length === 0) ? 'calc(100vh - 280px)' : 'auto' }}>
         <div style={{ overflowX: 'auto' }} className="desktop-table">
           <table className="table" style={{ minWidth: '960px', fontSize: '13px' }}>
             <thead>

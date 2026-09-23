@@ -535,7 +535,7 @@ export default function StokGudang() {
           </div>
         </div>
 
-        <div className="table-container">
+        <div className="table-container" style={{ display: 'flex', flexDirection: 'column', minHeight: (!loading && filtered.length === 0) ? 'calc(100vh - 280px)' : 'auto' }}>
           {loading ? (
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : filtered.length > 0 ? (

@@ -813,7 +813,7 @@ export default function Dismantle() {
                 <Pagination page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} totalItems={filtered.length} />
               </>
             ) : (
-              <div className="empty-state"><ArrowDownToLine size={48} /><h3>Tidak Ada Data</h3><p>Belum ada data dismantle.</p></div>
+              <div className="empty-state" style={{ minHeight: 'calc(100vh - 280px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><ArrowDownToLine size={48} /><h3>Tidak Ada Data</h3><p>Belum ada data dismantle.</p></div>
             )}
           </div>
         </div>
@@ -933,7 +933,7 @@ export default function Dismantle() {
                 <Pagination page={pickupPage} setPage={setPickupPage} perPage={pickupPerPage} setPerPage={setPickupPerPage} totalItems={filteredPickups.length} />
               </>
             ) : (
-              <div className="empty-state">
+              <div className="empty-state" style={{ minHeight: 'calc(100vh - 280px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <PackageCheck size={48} />
                 <h3>Belum Ada Data Pengambilan</h3>
                 <p>Klik "+ Catat Pengambilan" untuk menambah data.</p>

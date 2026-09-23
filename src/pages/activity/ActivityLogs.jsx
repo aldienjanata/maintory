@@ -197,7 +197,7 @@ export default function ActivityLogs() {
               </div>
             </>
           ) : (
-            <div className="empty-state"><History size={48} /><h3>Tidak Ada Log</h3><p>Belum ada aktivitas tercatat sesuai filter.</p></div>
+            <div className="empty-state" style={{ minHeight: 'calc(100vh - 280px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><History size={48} /><h3>Tidak Ada Log</h3><p>Belum ada aktivitas tercatat sesuai filter.</p></div>
           )}
         </div>
 

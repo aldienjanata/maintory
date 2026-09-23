@@ -20,6 +20,8 @@ export default function Maintenance() {
   
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
+  const ITEMS_PER_PAGE = 20
+  const [currentPage, setCurrentPage] = useState(1)
   const [technicians, setTechnicians] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   
@@ -49,7 +51,10 @@ export default function Maintenance() {
       })
       .subscribe()
 
-    return () => {
+    const totalPages = Math.ceil(filteredTickets.length / ITEMS_PER_PAGE)
+  const paginated = filteredTickets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+
+  return () => {
       supabase.removeChannel(channel)
     }
   }, [])
@@ -484,7 +489,7 @@ export default function Maintenance() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTickets.map(ticket => (
+                  {paginated.map(ticket => (
                     <tr key={ticket.id}>
                       <td><div className="font-semibold">#{ticket.ticket_number}</div></td>
                       <td>{format(new Date(ticket.date_input), 'dd MMM yyyy', { locale: id })}</td>
@@ -554,7 +559,7 @@ export default function Maintenance() {
               </table>
 
               <div className="mobile-only mobile-card-list">
-                {filteredTickets.map(ticket => (
+                {paginated.map(ticket => (
                   <div key={ticket.id} className="mobile-card">
                     <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === ticket.id ? null : ticket.id)}>
                       <div>
@@ -641,6 +646,27 @@ export default function Maintenance() {
                     )}
                   </div>
                 ))}
+              
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', flexWrap: 'wrap', gap: '8px', borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Menampilkan {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredTickets.length)}�{Math.min(currentPage * ITEMS_PER_PAGE, filteredTickets.length)} dari {filteredTickets.length} data
+              </div>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>� Prev</button>
+                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                  const start = Math.max(1, currentPage - 2)
+                  const page = start + i
+                  if (page > totalPages) return null
+                  return (
+                    <button key={page} className={`btn btn-sm ${currentPage === page ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setCurrentPage(page)}>{page}</button>
+                  )
+                })}
+                <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Next �</button>
+              </div>
+            </div>
+          )}
+
               </div>
             </>
           ) : (

@@ -1478,7 +1478,7 @@ export default function BonBarang() {
                   <Pagination page={schedPage} setPage={setSchedPage} perPage={schedPerPage} setPerPage={setSchedPerPage} totalItems={schedules.length} />
                 </>
               ) : (
-                <div className="empty-state"><CalendarDays size={44} /><h3>Belum Ada Jadwal</h3><p>Klik "Tambah Jadwal" untuk menjadwalkan tugas teknisi.</p></div>
+                <div className="empty-state" style={{ minHeight: 'calc(100vh - 280px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><CalendarDays size={44} /><h3>Belum Ada Jadwal</h3><p>Klik "Tambah Jadwal" untuk menjadwalkan tugas teknisi.</p></div>
               )}
             </>
           ) : activeTab === 'riwayat' ? (
@@ -1513,7 +1513,7 @@ export default function BonBarang() {
                   <Pagination page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} totalItems={historyDispatches.length} />
                 </>
               ) : (
-                <div className="empty-state"><PackageCheck size={44} /><h3>Belum Ada Riwayat</h3><p>Bon yang sudah selesai dilaporkan akan muncul di sini.</p></div>
+                <div className="empty-state" style={{ minHeight: 'calc(100vh - 280px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><PackageCheck size={44} /><h3>Belum Ada Riwayat</h3><p>Bon yang sudah selesai dilaporkan akan muncul di sini.</p></div>
               )}
             </>
           ) : (
@@ -1593,7 +1593,7 @@ export default function BonBarang() {
                   <Pagination page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} totalItems={combinedActive.length} />
                 </>
               ) : (
-                <div className="empty-state"><ClipboardList size={44} /><h3>Tidak Ada Yang Perlu Dikerjakan</h3><p>Semua jadwal sudah selesai atau belum ada bon yang aktif.</p></div>
+                <div className="empty-state" style={{ minHeight: 'calc(100vh - 280px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><ClipboardList size={44} /><h3>Tidak Ada Yang Perlu Dikerjakan</h3><p>Semua jadwal sudah selesai atau belum ada bon yang aktif.</p></div>
               )}
             </>
           )}
