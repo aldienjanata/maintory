@@ -488,7 +488,13 @@ export default function DataJalurFo() {
       let localItems = [...items]
       const allPayloads = []
       for (const r of toImport) {
-        const jId = generateItemId(r.site || 'banyumas', r.nama_jalur.replace(/\s+/g, '_'), localItems)
+        // Gunakan nama_jalur dari KMZ sebagai jalur_id jika memungkinkan. 
+        // Jika namanya kosong atau "Untitled Path", baru pakai generateItemId.
+        let jId = r.nama_jalur.trim()
+        if (!jId || jId.toLowerCase().includes('untitled path') || jId.toLowerCase() === 'jalur fo') {
+          jId = generateItemId(r.site || 'banyumas', 'KMZ', localItems)
+        }
+
         const payload = {
           jalur_id: jId,
           nama_jalur: r.nama_jalur,
@@ -504,13 +510,14 @@ export default function DataJalurFo() {
           created_by: profile.id
         }
         allPayloads.push(payload)
-        localItems.push({ site: payload.site, desa: r.nama_jalur.replace(/\s+/g, '_'), jalur_id: jId })
+        localItems.push({ site: payload.site, desa: 'KMZ', jalur_id: jId })
       }
 
       const chunkSize = 50
       for (let i = 0; i < allPayloads.length; i += chunkSize) {
         const chunk = allPayloads.slice(i, i + chunkSize)
-        const { error } = await supabase.from('network_jalur_fo').insert(chunk)
+        // Gunakan upsert dengan ignoreDuplicates agar tidak bentrok jika ID sudah ada
+        const { error } = await supabase.from('network_jalur_fo').upsert(chunk, { onConflict: 'jalur_id', ignoreDuplicates: true })
         if (error) {
           console.error("KMZ Insert Error:", error)
           throw new Error(error.message || 'Gagal menyimpan batch data')
