@@ -918,16 +918,37 @@ export default function BarcodeScanner() {
                 <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', flexShrink: 0 }}>Riwayat Scan (Sesi Ini)</div>
                 {camScannedItems.map((item) => (
                   <div key={item.id} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255,255,255,0.08)', borderRadius: '6px' }}>
-                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      {item.status === 'saving' && <Loader size={14} className="spinner" style={{ color: 'var(--accent)' }} />}
-                      {item.status === 'success' && <Check size={14} style={{ color: '#22c55e' }} />}
-                      {item.status === 'error' && <AlertTriangle size={14} style={{ color: '#f87171' }} />}
-                      <div style={{ color: item.status === 'error' ? '#f87171' : '#fff', fontFamily: 'monospace', fontSize: '13px', fontWeight: 600 }}>{item.barcode}</div>
-                    </div>
-                    {item.status !== 'saving' && (
-                      <button onClick={() => handleDeleteCamScan(item.barcode)} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Trash2 size={15} />
-                      </button>
+                    {editingCamScanId === item.id ? (
+                      <div style={{ display: 'flex', width: '100%', gap: '8px', alignItems: 'center' }}>
+                        <input
+                          autoFocus
+                          value={editingCamScanValue}
+                          onChange={e => setEditingCamScanValue(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleSaveCamEdit(item)}
+                          style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--accent)', background: 'transparent', color: '#fff', fontSize: '13px', fontFamily: 'monospace', minWidth: 0 }}
+                        />
+                        <button onClick={() => handleSaveCamEdit(item)} style={{ background: 'var(--accent)', border: 'none', color: '#000', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', flexShrink: 0 }}><Check size={14} /></button>
+                        <button onClick={() => setEditingCamScanId(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', flexShrink: 0 }}><X size={14} /></button>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+                          {item.status === 'saving' && <Loader size={14} className="spinner" style={{ color: 'var(--accent)', flexShrink: 0 }} />}
+                          {item.status === 'success' && <Check size={14} style={{ color: '#22c55e', flexShrink: 0 }} />}
+                          {item.status === 'error' && <AlertTriangle size={14} style={{ color: '#f87171', flexShrink: 0 }} />}
+                          <div style={{ color: item.status === 'error' ? '#f87171' : '#fff', fontFamily: 'monospace', fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.barcode}</div>
+                        </div>
+                        {item.status !== 'saving' && (
+                          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                            <button onClick={() => { setEditingCamScanId(item.id); setEditingCamScanValue(item.barcode); }} style={{ background: 'transparent', border: 'none', color: '#60a5fa', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Edit2 size={15} />
+                            </button>
+                            <button onClick={() => handleDeleteCamScan(item.barcode)} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 ))}
