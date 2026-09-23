@@ -505,38 +505,57 @@ export default function DataJalurFo() {
     let successCount = 0
     try {
       let localItems = [...items]
+      const seenIds = new Set()
       const allPayloads = []
+      
       for (const r of toImport) {
-        // Gunakan nama_jalur dari KMZ sebagai jalur_id jika memungkinkan. 
-        // Jika namanya kosong atau "Untitled Path", baru pakai generateItemId.
-        let jId = r.nama_jalur.trim()
-        if (!jId || jId.toLowerCase().includes('untitled path') || jId.toLowerCase() === 'jalur fo') {
+        let baseId = r.nama_jalur.trim()
+        let jId = baseId
+        
+        if (!baseId || baseId.toLowerCase().includes('untitled path') || baseId.toLowerCase() === 'jalur fo') {
           jId = generateItemId(r.site || 'banyumas', 'KMZ', localItems)
+        } else {
+          // Prevent duplicates WITHIN this batch by appending -1, -2, etc.
+          // This ensures if a KMZ has 5 lines all named "ADSS 48C", they get unique IDs.
+          if (seenIds.has(jId)) {
+            let counter = 1
+            while (seenIds.has(`${baseId}-${counter}`) || localItems.some(i => i.jalur_id === `${baseId}-${counter}`)) {
+              counter++
+            }
+            jId = `${baseId}-${counter}`
+          }
         }
+        
+        seenIds.add(jId)
+        
+        // Find existing data in DB to preserve user-edited fields like desa/kecamatan
+        const existing = items.find(i => i.jalur_id === jId)
 
         const payload = {
           jalur_id: jId,
           nama_jalur: r.nama_jalur,
-          site: r.site || 'banyumas',
+          site: r.site || existing?.site || 'banyumas',
           panjang_meter: r.panjang,
-          tipe_kabel: 'ADSS',
           route_waypoints: r.waypoints,
           warna_jalur: r.warna_jalur,
-          provinsi: 'Jawa Tengah',
-          kabupaten: 'Banyumas',
-          kecamatan: '',
-          desa: '',
-          created_by: profile.id
+          tipe_kabel: existing?.tipe_kabel || 'ADSS',
+          provinsi: existing?.provinsi || 'Jawa Tengah',
+          kabupaten: existing?.kabupaten || 'Banyumas',
+          kecamatan: existing?.kecamatan || '',
+          desa: existing?.desa || '',
+          keterangan: existing?.keterangan || '',
+          created_by: existing ? existing.created_by : profile.id
         }
         allPayloads.push(payload)
+        // Add to localItems so generateItemId can see it if needed
         localItems.push({ site: payload.site, desa: 'KMZ', jalur_id: jId })
       }
 
       const chunkSize = 50
       for (let i = 0; i < allPayloads.length; i += chunkSize) {
         const chunk = allPayloads.slice(i, i + chunkSize)
-        // Gunakan upsert dengan ignoreDuplicates agar tidak bentrok jika ID sudah ada
-        const { error } = await supabase.from('network_jalur_fo').upsert(chunk, { onConflict: 'jalur_id', ignoreDuplicates: true })
+        // Upsert normally so it UPDATES existing rows instead of ignoring them
+        const { error } = await supabase.from('network_jalur_fo').upsert(chunk, { onConflict: 'jalur_id' })
         if (error) {
           console.error("KMZ Insert Error:", error)
           throw new Error(error.message || 'Gagal menyimpan batch data')
