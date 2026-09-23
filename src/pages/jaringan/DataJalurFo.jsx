@@ -411,20 +411,16 @@ export default function DataJalurFo() {
     XLSX.writeFile(wb, 'Template_Jalur_FO.xlsx')
   }
 
-  const handleExport = () => {
+  const handleExportExcel = () => {
     const dataToExport = filtered.map(p => ({
       'Jalur ID': p.jalur_id,
       'Nama Jalur': p.nama_jalur,
       Site: p.site,
-      'Titik Awal': p.titik_awal,
-      'Titik Akhir': p.titik_akhir,
       'Panjang (m)': p.panjang_meter,
       'Tipe Kabel': p.tipe_kabel,
       Kecamatan: p.kecamatan,
       Desa: p.desa,
       Keterangan: p.keterangan,
-      'Maps URL Awal': p.maps_url_awal,
-      'Maps URL Akhir': p.maps_url_akhir,
       'Diinput Oleh': getUserName(p.created_by),
       Tanggal: format(new Date(p.created_at), 'dd MMM yyyy HH:mm', { locale: localeId })
     }))
@@ -462,6 +458,15 @@ export default function DataJalurFo() {
         if (waypoints.length < 2) continue
         const name = pm.querySelector('name')?.textContent?.trim() || 'Jalur FO'
         
+        let rawDesc = pm.querySelector('description')?.textContent?.trim() || ''
+        // Kadang description dari google earth berisi tag HTML. Kita hilangkan tag-nya.
+        if (rawDesc) {
+           const div = document.createElement('div')
+           div.innerHTML = rawDesc
+           rawDesc = div.textContent || div.innerText || ''
+        }
+        const description = rawDesc
+        
         // Extract color from StyleMap or Style
         let color = '#FF0000'
         let styleUrl = pm.querySelector('styleUrl')?.textContent?.trim()?.replace('#', '')
@@ -485,7 +490,7 @@ export default function DataJalurFo() {
         if (lineColor) color = kmlColorToHex(lineColor)
         
         const panjang = calcPolylineLength(waypoints)
-        lines.push({ nama_jalur: name, warna_jalur: color, waypoints, panjang, _selected: true, _id: Math.random().toString(36).slice(2) })
+        lines.push({ nama_jalur: name, warna_jalur: color, waypoints, panjang, description, _selected: true, _id: Math.random().toString(36).slice(2) })
       }
       if (lines.length === 0) { toast.error('Tidak ditemukan jalur garis (LineString) di file KMZ ini'); return }
       setKmzRows(lines)
@@ -543,7 +548,7 @@ export default function DataJalurFo() {
           kabupaten: existing?.kabupaten || 'Banyumas',
           kecamatan: existing?.kecamatan || '',
           desa: existing?.desa || '',
-          keterangan: existing?.keterangan || '',
+          keterangan: r.description || existing?.keterangan || '',
           created_by: existing ? existing.created_by : profile.id
         }
         allPayloads.push(payload)
@@ -582,6 +587,7 @@ export default function DataJalurFo() {
       const coordStr = (item.route_waypoints || []).map(p => `${p.lon},${p.lat},0`).join(' ')
       return `    <Placemark>
       <name>${item.nama_jalur || item.jalur_id}</name>
+      <description><![CDATA[${item.keterangan || ''}]]></description>
       <Style><LineStyle><color>${color}</color><width>3</width></LineStyle></Style>
       <LineString><coordinates>${coordStr}</coordinates></LineString>
     </Placemark>`
