@@ -823,7 +823,6 @@ ${kmlLines}
                       <td>{item.tipe_kabel || '-'}</td>
                       <td>{item.kecamatan || '-'}</td>
                       <td>{item.desa || '-'}</td>
-                      </td>
                       <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: '12px' }}>{item.keterangan || '-'}</td>
                       <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{getUserName(item.created_by)}</td>
                       <td style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{item.created_at ? new Date(item.created_at).toLocaleDateString('id-ID') : '-'}</td>
