@@ -1051,46 +1051,48 @@ ${kmlLines}
             </div>
 
             {/* List */}
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {kmzRows.map((r, i) => (
-                <div key={r._id}
-                  onClick={() => setKmzRows(rows => rows.map((row, ri) => ri === i ? { ...row, _selected: !row._selected } : row))}
-                  style={{
-                    display: 'grid', gridTemplateColumns: '28px 6px 1fr auto auto', gap: '10px', alignItems: 'center',
-                    padding: '10px 14px', borderRadius: 'var(--radius-md)', cursor: 'pointer',
-                    border: '1px solid ' + (r._selected ? 'rgba(59,130,246,0.4)' : 'var(--border)'),
-                    background: r._selected ? 'rgba(59,130,246,0.06)' : 'var(--bg-primary)',
-                    transition: 'all 0.15s'
-                  }}>
-                  {/* Checkbox */}
-                  <input type="checkbox" checked={r._selected}
-                    onClick={e => e.stopPropagation()}
-                    onChange={e => setKmzRows(rows => rows.map((row, ri) => ri === i ? { ...row, _selected: e.target.checked } : row))}
-                    style={{ width: '15px', height: '15px' }}
-                  />
-                  {/* Color swatch */}
-                  <div style={{ width: '6px', height: '36px', borderRadius: '4px', background: r.warna_jalur, flexShrink: 0 }} />
-                  {/* Info */}
-                  <div style={{ overflow: 'hidden' }}>
-                    <div style={{ fontWeight: 600, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.nama_jalur}</div>
-                    <div style={{ display: 'flex', gap: '12px', marginTop: '3px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>📍 {r.waypoints.length} titik</span>
-                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>📏 {r.panjang >= 1000 ? (r.panjang / 1000).toFixed(2) + ' km' : r.panjang + ' m'}</span>
-                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{r.warna_jalur}</span>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {kmzRows.map((r, i) => (
+                  <div key={r._id}
+                    onClick={() => setKmzRows(rows => rows.map((row, ri) => ri === i ? { ...row, _selected: !row._selected } : row))}
+                    style={{
+                      display: 'grid', gridTemplateColumns: '28px 6px 1fr auto auto', gap: '10px', alignItems: 'center',
+                      padding: '10px 14px', borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                      border: '1px solid ' + (r._selected ? 'rgba(59,130,246,0.4)' : 'var(--border)'),
+                      background: r._selected ? 'rgba(59,130,246,0.06)' : 'var(--bg-primary)',
+                      transition: 'all 0.15s'
+                    }}>
+                    {/* Checkbox */}
+                    <input type="checkbox" checked={r._selected}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => setKmzRows(rows => rows.map((row, ri) => ri === i ? { ...row, _selected: e.target.checked } : row))}
+                      style={{ width: '15px', height: '15px' }}
+                    />
+                    {/* Color swatch */}
+                    <div style={{ width: '6px', height: '36px', borderRadius: '4px', background: r.warna_jalur, flexShrink: 0 }} />
+                    {/* Info */}
+                    <div style={{ overflow: 'hidden' }}>
+                      <div style={{ fontWeight: 600, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.nama_jalur}</div>
+                      <div style={{ display: 'flex', gap: '12px', marginTop: '3px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>📍 {r.waypoints.length} titik</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>📏 {r.panjang >= 1000 ? (r.panjang / 1000).toFixed(2) + ' km' : r.panjang + ' m'}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{r.warna_jalur}</span>
+                      </div>
                     </div>
+                    {/* Site selector */}
+                    <select className="form-input"
+                      onClick={e => e.stopPropagation()}
+                      style={{ height: '30px', fontSize: '12px', padding: '0 8px', minWidth: '150px', flexShrink: 0,
+                        borderColor: r._selected && !r.site ? 'var(--danger)' : undefined }}
+                      value={r.site || ''}
+                      onChange={e => setKmzRows(rows => rows.map((row, ri) => ri === i ? { ...row, site: e.target.value } : row))}>
+                      <option value="">-- Pilih Site --</option>
+                      {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </select>
                   </div>
-                  {/* Site selector */}
-                  <select className="form-input"
-                    onClick={e => e.stopPropagation()}
-                    style={{ height: '30px', fontSize: '12px', padding: '0 8px', minWidth: '150px', flexShrink: 0,
-                      borderColor: r._selected && !r.site ? 'var(--danger)' : undefined }}
-                    value={r.site || ''}
-                    onChange={e => setKmzRows(rows => rows.map((row, ri) => ri === i ? { ...row, site: e.target.value } : row))}>
-                    <option value="">-- Pilih Site --</option>
-                    {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </select>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
 
             {/* Warning */}
