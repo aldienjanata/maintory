@@ -506,9 +506,11 @@ export default function DataJalurFo() {
       for (let i = 0; i < allPayloads.length; i += chunkSize) {
         const chunk = allPayloads.slice(i, i + chunkSize)
         const { error } = await supabase.from('network_jalur_fo').insert(chunk)
-        if (!error) {
-          successCount += chunk.length
+        if (error) {
+          console.error("KMZ Insert Error:", error)
+          throw new Error(error.message || 'Gagal menyimpan batch data')
         }
+        successCount += chunk.length
         setImportProgress({ current: Math.min(i + chunkSize, allPayloads.length), total: allPayloads.length })
       }
 
@@ -623,9 +625,11 @@ ${kmlLines}
       for (let i = 0; i < allPayloads.length; i += chunkSize) {
         const chunk = allPayloads.slice(i, i + chunkSize)
         const { error } = await supabase.from('network_jalur_fo').insert(chunk)
-        if (!error) {
-          successCount += chunk.length
+        if (error) {
+          console.error("Excel Insert Error:", error)
+          throw new Error(error.message || 'Gagal menyimpan batch data')
         }
+        successCount += chunk.length
         setImportProgress({ current: Math.min(i + chunkSize, allPayloads.length), total: allPayloads.length })
       }
 
