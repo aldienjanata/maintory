@@ -642,7 +642,7 @@ export default function DataClosure() {
       {/* PAGINATION */}
       {totalPages > 1 && (
         <div style={{ marginTop: '12px' }}>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          <Pagination page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} totalItems={filtered.length} />
         </div>
       )}
 
