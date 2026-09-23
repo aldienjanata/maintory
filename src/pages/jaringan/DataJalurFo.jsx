@@ -510,30 +510,14 @@ export default function DataJalurFo() {
     let successCount = 0
     try {
       let localItems = [...items]
-      const seenIds = new Set()
       const allPayloads = []
       
       for (const r of toImport) {
-        let baseId = r.nama_jalur.trim()
-        let jId = baseId
+        // Gunakan nama_jalur dari KMZ apa adanya sebagai jalur_id.
+        // Jika kosong, gunakan string fallback saja.
+        const jId = r.nama_jalur.trim() || `Jalur-${Math.random().toString(36).slice(2, 7).toUpperCase()}`
         
-        if (!baseId || baseId.toLowerCase().includes('untitled path') || baseId.toLowerCase() === 'jalur fo') {
-          jId = generateItemId(r.site || 'banyumas', 'KMZ', localItems)
-        } else {
-          // Prevent duplicates WITHIN this batch by appending -1, -2, etc.
-          // This ensures if a KMZ has 5 lines all named "ADSS 48C", they get unique IDs.
-          if (seenIds.has(jId)) {
-            let counter = 1
-            while (seenIds.has(`${baseId}-${counter}`) || localItems.some(i => i.jalur_id === `${baseId}-${counter}`)) {
-              counter++
-            }
-            jId = `${baseId}-${counter}`
-          }
-        }
-        
-        seenIds.add(jId)
-        
-        // Find existing data in DB to preserve user-edited fields like desa/kecamatan
+        // Preserve user-edited fields from existing DB record if ID matches
         const existing = items.find(i => i.jalur_id === jId)
 
         const payload = {
@@ -552,8 +536,6 @@ export default function DataJalurFo() {
           created_by: existing ? existing.created_by : profile.id
         }
         allPayloads.push(payload)
-        // Add to localItems so generateItemId can see it if needed
-        localItems.push({ site: payload.site, desa: 'KMZ', jalur_id: jId })
       }
 
       const chunkSize = 50
