@@ -79,6 +79,8 @@ export default function BarcodeScanner() {
   const [camLastBarcode, setCamLastBarcode] = useState('')
   const [camScanCount, setCamScanCount] = useState(0)
   const [camScannedItems, setCamScannedItems] = useState([])
+  const [editingCamScanId, setEditingCamScanId] = useState(null)
+  const [editingCamScanValue, setEditingCamScanValue] = useState('')
   const [camStatus, setCamStatus] = useState('scanning')
   const [hasBarcodeDetector] = useState(() => 'BarcodeDetector' in window)
   const videoRef = useRef(null)
