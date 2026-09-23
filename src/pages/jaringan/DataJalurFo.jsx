@@ -480,11 +480,11 @@ export default function DataJalurFo() {
     try {
       let localItems = [...items]
       for (const r of toImport) {
-        const jId = generateItemId('banyumas', r.nama_jalur.replace(/\s+/g, '_'), localItems)
+        const jId = generateItemId(r.site || 'banyumas', r.nama_jalur.replace(/\s+/g, '_'), localItems)
         const payload = {
           jalur_id: jId,
           nama_jalur: r.nama_jalur,
-          site: 'banyumas',
+          site: r.site || 'banyumas',
           panjang_meter: r.panjang,
           tipe_kabel: 'ADSS',
           route_waypoints: r.waypoints,
@@ -959,17 +959,28 @@ ${kmlLines}
       {/* KMZ IMPORT PREVIEW MODAL */}
       {isKmzModalOpen && (
         <div className="modal-overlay" onClick={() => setIsKmzModalOpen(false)}>
-          <div className="modal" style={{ maxWidth: '780px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: '900px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <div>
                 <h3 style={{ margin: 0 }}>Preview Import KMZ — {kmzRows.length} jalur ditemukan</h3>
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Hanya garis (LineString) yang diimport. Titik (pin) dilewati otomatis.</p>
+                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>Hanya garis (LineString) yang diimport. Titik (pin) diabaikan otomatis.</p>
               </div>
               <button className="btn-icon" onClick={() => setIsKmzModalOpen(false)}><X size={18} /></button>
             </div>
             <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
+              {/* Set All Site */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                <span style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>Set Site Semua:</span>
+                <select className="form-input" style={{ height: '32px', fontSize: '13px', maxWidth: '200px' }}
+                  onChange={e => { if (e.target.value) setKmzRows(rows => rows.map(r => ({ ...r, site: e.target.value }))) }}>
+                  <option value="">-- Pilih untuk set semua --</option>
+                  {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>atau atur per jalur di kolom Site di bawah</span>
+              </div>
+
               <div style={{ overflowX: 'auto' }}>
-                <table className="table" style={{ fontSize: '12px', minWidth: '600px' }}>
+                <table className="table" style={{ fontSize: '12px', minWidth: '700px' }}>
                   <thead>
                     <tr>
                       <th style={{ width: '36px' }}>
@@ -980,35 +991,47 @@ ${kmlLines}
                       </th>
                       <th>Warna</th>
                       <th>Nama Jalur (dari Google Earth)</th>
-                      <th>Jumlah Titik</th>
-                      <th>Estimasi Panjang</th>
+                      <th>Site *</th>
+                      <th>Titik</th>
+                      <th>Panjang</th>
                     </tr>
                   </thead>
                   <tbody>
                     {kmzRows.map((r, i) => (
-                      <tr key={r._id}>
+                      <tr key={r._id} style={{ background: r._selected ? 'rgba(59,130,246,0.04)' : undefined }}>
                         <td><input type="checkbox" checked={r._selected} onChange={e => setKmzRows(rows => rows.map((row, ri) => ri === i ? { ...row, _selected: e.target.checked } : row))} /></td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <div style={{ width: '18px', height: '18px', borderRadius: '3px', background: r.warna_jalur, border: '1px solid rgba(255,255,255,0.2)' }} />
+                            <div style={{ width: '18px', height: '18px', borderRadius: '3px', background: r.warna_jalur, border: '1px solid rgba(255,255,255,0.2)', flexShrink: 0 }} />
                             <span style={{ fontFamily: 'monospace', fontSize: '10px', color: 'var(--text-secondary)' }}>{r.warna_jalur}</span>
                           </div>
                         </td>
                         <td style={{ fontWeight: 600 }}>{r.nama_jalur}</td>
+                        <td>
+                          <select className="form-input" style={{ height: '28px', fontSize: '12px', padding: '0 6px', minWidth: '140px',
+                            borderColor: !r.site ? 'var(--danger)' : undefined }}
+                            value={r.site || ''}
+                            onChange={e => setKmzRows(rows => rows.map((row, ri) => ri === i ? { ...row, site: e.target.value } : row))}>
+                            <option value="">-- Pilih Site --</option>
+                            {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                          </select>
+                        </td>
                         <td style={{ color: 'var(--text-secondary)' }}>{r.waypoints.length} titik</td>
-                        <td>{r.panjang >= 1000 ? (r.panjang / 1000).toFixed(2) + ' km' : r.panjang + ' m'}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{r.panjang >= 1000 ? (r.panjang / 1000).toFixed(2) + ' km' : r.panjang + ' m'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <div style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(59,130,246,0.08)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(59,130,246,0.2)', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                ⚠️ <strong>Perhatian:</strong> Setelah diimport, lengkapi data Kecamatan dan Desa di halaman ini (klik Edit). Panjang dihitung otomatis dari koordinat.
+                ⚠️ <strong>Perhatian:</strong> Kolom <strong>Site *</strong> wajib diisi. Setelah diimport, lengkapi Kecamatan dan Desa lewat tombol Edit. Panjang dihitung otomatis dari koordinat.
               </div>
             </div>
             <div className="modal-footer" style={{ flexShrink: 0 }}>
               <button className="btn btn-secondary" onClick={() => setIsKmzModalOpen(false)}>Batal</button>
-              <button className="btn btn-primary" disabled={saving || kmzRows.filter(r => r._selected).length === 0} onClick={processKmzImport}>
+              <button className="btn btn-primary"
+                disabled={saving || kmzRows.filter(r => r._selected).length === 0 || kmzRows.filter(r => r._selected).some(r => !r.site)}
+                onClick={processKmzImport}>
                 {saving ? 'Mengimport...' : `Import ${kmzRows.filter(r => r._selected).length} Jalur`}
               </button>
             </div>
