@@ -51,16 +51,21 @@ function generateItemId(site, desa, existingItems) {
   const siteCode = SITE_CODE[site] || 'BMS'
   const desaSlug = desa.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '').substring(0, 15)
   
-  const sameItems = existingItems.filter(
-    p => p.site === site && p.desa?.toUpperCase().trim() === desa.toUpperCase().trim()
-  )
+  const sameItems = existingItems.filter(p => {
+    if (p.site !== site || !p.jalur_id) return false
+    const parts = p.jalur_id.split('/')
+    if (parts.length >= 5) {
+      return parts[3] === desaSlug
+    }
+    return false
+  })
   
   let maxNo = 0
   for (const p of sameItems) {
-    if (p.jalur_id) {
-        const match = p.jalur_id.match(/\/(\d+)$/)
-        if (match) maxNo = Math.max(maxNo, parseInt(match[1]))
-    }
+    const parts = p.jalur_id.split('/')
+    const noStr = parts[parts.length - 1]
+    const no = parseInt(noStr, 10)
+    if (!isNaN(no)) maxNo = Math.max(maxNo, no)
   }
   
   return `NAT/${siteCode}/JALUR/${desaSlug}/${String(maxNo + 1).padStart(3, '0')}`
