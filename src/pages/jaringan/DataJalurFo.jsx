@@ -449,6 +449,9 @@ export default function DataJalurFo() {
       const placemarks = Array.from(xml.querySelectorAll('Placemark'))
       const lines = []
       for (const pm of placemarks) {
+        // LineString is only for lines, not points
+        if (!pm.querySelector('LineString')) continue
+        
         const lineEl = pm.querySelector('LineString coordinates') || pm.querySelector('coordinates')
         if (!lineEl) continue
         const rawCoords = lineEl.textContent.trim().split(/\s+/)
@@ -458,13 +461,29 @@ export default function DataJalurFo() {
         }).filter(Boolean)
         if (waypoints.length < 2) continue
         const name = pm.querySelector('name')?.textContent?.trim() || 'Jalur FO'
+        
         // Extract color from StyleMap or Style
         let color = '#FF0000'
-        const styleUrl = pm.querySelector('styleUrl')?.textContent?.trim()?.replace('#','')
+        let styleUrl = pm.querySelector('styleUrl')?.textContent?.trim()?.replace('#', '')
+        
+        if (styleUrl) {
+          // Check if it's a StyleMap
+          const styleMap = xml.querySelector(`StyleMap[id="${styleUrl}"]`)
+          if (styleMap) {
+            const pairs = Array.from(styleMap.querySelectorAll('Pair'))
+            const normalPair = pairs.find(p => p.querySelector('key')?.textContent === 'normal') || pairs[0]
+            if (normalPair) {
+              const normalUrl = normalPair.querySelector('styleUrl')?.textContent?.trim()?.replace('#', '')
+              if (normalUrl) styleUrl = normalUrl
+            }
+          }
+        }
+        
         const styleEls = Array.from(xml.querySelectorAll('Style'))
         const matchedStyle = styleEls.find(s => s.getAttribute('id') === styleUrl)
         const lineColor = (matchedStyle || pm).querySelector('LineStyle color')?.textContent?.trim()
         if (lineColor) color = kmlColorToHex(lineColor)
+        
         const panjang = calcPolylineLength(waypoints)
         lines.push({ nama_jalur: name, warna_jalur: color, waypoints, panjang, _selected: true, _id: Math.random().toString(36).slice(2) })
       }
@@ -667,22 +686,18 @@ ${kmlLines}
           <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>Jaringan Fiber — Pencatatan & Manajemen Data Jalur FO</p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {['admin', 'superadmin', 'teknisi'].includes(role) && (
-            <button className="btn btn-primary btn-sm" onClick={openAdd}><Plus size={14} /> Tambah</button>
-          )}
-          <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate}><FileSpreadsheet size={14} /> Template</button>
-          <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer', marginBottom: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Globe size={14} /> Import KMZ
             <input ref={kmzRef} type="file" accept=".kmz,.kml" style={{ display: 'none' }} onChange={handleImportKmz} />
           </label>
           <div style={{ position: 'relative', display: 'inline-block' }}>
             <button className="btn btn-secondary btn-sm" onClick={() => setExcelMenuOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Download size={14} /> Excel <ChevronDown size={13} style={{ transform: excelMenuOpen ? 'rotate(180deg)' : 'none', transition: '0.15s' }} />
+              <Download size={14} /> Export <ChevronDown size={13} style={{ transform: excelMenuOpen ? 'rotate(180deg)' : 'none', transition: '0.15s' }} />
             </button>
             {excelMenuOpen && (
               <>
                 <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setExcelMenuOpen(false)} />
-                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 100, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '180px', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 100, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '180px', overflow: 'hidden' }}>
                   <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => { setExcelMenuOpen(false); handleExportExcel() }}><Download size={13} /> Export ke Excel</button>
                   <button className="dropdown-item" style={{ width: '100%', padding: '10px 14px', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => { setExcelMenuOpen(false); handleExportKmz() }}><Globe size={13} /> Export ke KMZ (Google Earth)</button>
                 </div>
@@ -771,13 +786,10 @@ ${kmlLines}
                   <th style={{ width: '40px' }}>No</th>
                   <th style={{ cursor: 'pointer' }} onClick={() => handleSort('jalur_id')}>Jalur ID <SortIcon col="jalur_id" /></th>
                   <th style={{ cursor: 'pointer' }} onClick={() => handleSort('nama_jalur')}>Nama Jalur <SortIcon col="nama_jalur" /></th>
-                  <th>Titik Awal</th>
-                  <th>Titik Akhir</th>
                   <th style={{ cursor: 'pointer' }} onClick={() => handleSort('panjang_meter')}>Panjang (m) <SortIcon col="panjang_meter" /></th>
                   <th style={{ cursor: 'pointer' }} onClick={() => handleSort('tipe_kabel')}>Tipe Kabel <SortIcon col="tipe_kabel" /></th>
                   <th style={{ cursor: 'pointer' }} onClick={() => handleSort('kecamatan')}>Kecamatan <SortIcon col="kecamatan" /></th>
                   <th style={{ cursor: 'pointer' }} onClick={() => handleSort('desa')}>Desa <SortIcon col="desa" /></th>
-                  <th>Maps</th>
                   <th>Keterangan</th>
                   <th>Dibuat Oleh</th>
                   <th style={{ cursor: 'pointer' }} onClick={() => handleSort('created_at')}>Tanggal <SortIcon col="created_at" /></th>
@@ -807,27 +819,10 @@ ${kmlLines}
                           {item.route_waypoints?.length > 1 && <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '2px' }}>{item.route_waypoints.length} titik koordinat</div>}
                         </div>
                       </td>
-                      <td>{item.titik_awal || '-'}</td>
-                      <td>{item.titik_akhir || '-'}</td>
                       <td>{item.panjang_meter ? item.panjang_meter + ' m' : '-'}</td>
                       <td>{item.tipe_kabel || '-'}</td>
                       <td>{item.kecamatan || '-'}</td>
                       <td>{item.desa || '-'}</td>
-                      <td>
-                        {item.maps_url_awal || item.maps_url_akhir ? (
-                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                            {item.maps_url_awal && (
-                              <a href={item.maps_url_awal} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '2px', fontSize: '11px' }}>
-                                <MapPin size={10} />Awal <ExternalLink size={10} />
-                              </a>
-                            )}
-                            {item.maps_url_akhir && (
-                              <a href={item.maps_url_akhir} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '2px', fontSize: '11px' }}>
-                                <MapPin size={10} />Akhir <ExternalLink size={10} />
-                              </a>
-                            )}
-                          </div>
-                        ) : '-'}
                       </td>
                       <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: '12px' }}>{item.keterangan || '-'}</td>
                       <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{getUserName(item.created_by)}</td>
