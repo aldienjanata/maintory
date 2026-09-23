@@ -538,10 +538,17 @@ export default function DataJalurFo() {
         allPayloads.push(payload)
       }
 
-      // Deduplicate by jalur_id - keep last occurrence (latest from KMZ)
-      const dedupMap = new Map()
-      for (const p of allPayloads) dedupMap.set(p.jalur_id, p)
-      const uniquePayloads = Array.from(dedupMap.values())
+      // Buat jalur_id unik untuk setiap baris.
+      // Nama yang sama akan mendapat suffix: "ADSS 48C", "ADSS 48C-2", "ADSS 48C-3", dst.
+      // nama_jalur tetap TIDAK BERUBAH (sesuai KMZ).
+      const idCountMap = new Map()
+      const uniquePayloads = []
+      for (const p of allPayloads) {
+        const base = p.jalur_id
+        const count = (idCountMap.get(base) || 0) + 1
+        idCountMap.set(base, count)
+        uniquePayloads.push({ ...p, jalur_id: count === 1 ? base : `${base}-${count}` })
+      }
 
       const chunkSize = 50
       for (let i = 0; i < uniquePayloads.length; i += chunkSize) {
