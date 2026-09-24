@@ -1261,7 +1261,7 @@ export default function BarcodeScanner() {
       {/* HISTORY MODAL */}
       {historyItem && createPortal(
         <div className="modal-overlay" onClick={() => setHistoryItem(null)}>
-          <div className="modal" style={{ maxWidth: '700px', width: '95%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: '1000px', width: '95%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3 style={{ margin: 0, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <History size={16} />
