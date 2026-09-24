@@ -732,6 +732,7 @@ export default function BarcodeScanner() {
                   {selectMode && selected.size > 0 && <button className="btn btn-danger btn-sm" onClick={handleDeleteSelected}><Trash2 size={13} /> ({selected.size})</button>}
                   <button className="btn btn-secondary btn-sm" onClick={() => setShowDeleteByDate(true)} title="Hapus by tanggal"><Calendar size={13} /></button>
                 </>)}
+                <button className="btn btn-secondary btn-sm" onClick={() => setShowBulkEditNote(true)} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Edit2 size={13} /><span className="hide-on-mobile" style={{marginLeft:'4px'}}>Bulk Edit</span></button>
                 {can(role, 'scanner.export') && <button className="btn btn-secondary btn-sm" onClick={() => setShowExportModal(true)}><FileDown size={13} /> <span className="hide-on-mobile">Export</span></button>}
               </div>
               <button className="btn btn-secondary btn-sm" onClick={fetchScans}><RefreshCw size={13} /></button>
