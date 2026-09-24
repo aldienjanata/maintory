@@ -456,21 +456,37 @@ export default function BarcodeScanner() {
     if (!bulkEditNote.trim()) { toast.error('Isi catatan baru'); return }
     setBulkEditSaving(true)
     try {
+      const now = new Date().toISOString()
       if (bulkEditMode === 'selected') {
         if (selected.size === 0) { toast.error('Pilih data dulu'); setBulkEditSaving(false); return }
         const { error } = await supabase.from('barcode_scans').update({ note: bulkEditNote.trim() }).in('id', [...selected])
         if (error) throw error
+        const historyPayloads = scans.filter(s => selected.has(s.id)).map(s => ({
+          barcode_scan_id: s.id, barcode: s.barcode, scanned_by: profile.id, scanned_at: now,
+          category: s.category, note: bulkEditNote.trim(), ont_kondisi: s.ont_kondisi,
+          ont_asal: s.ont_asal, ont_asal_detail: s.ont_asal_detail, ont_tujuan: s.ont_tujuan,
+          ont_tujuan_detail: s.ont_tujuan_detail, action: 'bulk_edit'
+        }))
+        if (historyPayloads.length > 0) await supabase.from('barcode_scan_history').insert(historyPayloads)
         toast.success('Catatan diupdate untuk ' + selected.size + ' data')
         setScans(prev => prev.map(s => selected.has(s.id) ? { ...s, note: bulkEditNote.trim() } : s))
         setSelected(new Set())
         setSelectMode(false)
       } else {
         if (!bulkEditDateFrom) { toast.error('Pilih tanggal dari'); setBulkEditSaving(false); return }
+        const matchingItems = scans.filter(s => s.first_scan >= bulkEditDateFrom + 'T00:00:00' && (!bulkEditDateTo || s.first_scan <= bulkEditDateTo + 'T23:59:59'))
         let query = supabase.from('barcode_scans').update({ note: bulkEditNote.trim() })
           .gte('first_scan', bulkEditDateFrom + 'T00:00:00')
         if (bulkEditDateTo) query = query.lte('first_scan', bulkEditDateTo + 'T23:59:59')
         const { error } = await query
         if (error) throw error
+        const historyPayloads = matchingItems.map(s => ({
+          barcode_scan_id: s.id, barcode: s.barcode, scanned_by: profile.id, scanned_at: now,
+          category: s.category, note: bulkEditNote.trim(), ont_kondisi: s.ont_kondisi,
+          ont_asal: s.ont_asal, ont_asal_detail: s.ont_asal_detail, ont_tujuan: s.ont_tujuan,
+          ont_tujuan_detail: s.ont_tujuan_detail, action: 'bulk_edit'
+        }))
+        if (historyPayloads.length > 0) await supabase.from('barcode_scan_history').insert(historyPayloads)
         toast.success('Catatan berhasil diupdate')
         fetchScans()
       }
