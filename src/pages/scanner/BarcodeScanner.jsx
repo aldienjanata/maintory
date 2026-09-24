@@ -468,7 +468,7 @@ export default function BarcodeScanner() {
           format(lastDateObj, 'dd/MM/yyyy'),
           format(lastDateObj, 'HH:mm'),
           s.scan_count,
-          users[s.scanned_by] || '-'
+          users[s.updated_by || s.scanned_by] || '-'
         ]
         if (hasOnt) {
           rowData.push(

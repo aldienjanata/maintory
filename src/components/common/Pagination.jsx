@@ -61,14 +61,14 @@ export default function Pagination({ page, setPage, perPage, setPerPage, totalIt
             className="btn-icon" 
             onClick={handlePrev} 
             disabled={page === 1} 
-            style={{ padding: '4px 6px', borderRadius: '6px' }}
+            style={{ width: '28px', height: '28px', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px' }}
           >
             <ChevronLeft size={16} />
           </button>
           
           {startPage > 1 && (
             <>
-              <button className="btn-icon" onClick={() => setPage(1)} style={{ padding: '4px 10px', borderRadius: '6px' }}>1</button>
+              <button className="btn-icon" onClick={() => setPage(1)} style={{ minWidth: '28px', height: '28px', padding: '0 4px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px' }}>1</button>
               {startPage > 2 && <span style={{ color: 'var(--text-muted)', padding: '0 4px' }}>...</span>}
             </>
           )}
@@ -79,7 +79,7 @@ export default function Pagination({ page, setPage, perPage, setPerPage, totalIt
               className={`btn-icon ${page === i ? 'active' : ''}`} 
               onClick={() => setPage(i)} 
               style={{ 
-                padding: '4px 10px', 
+                minWidth: '28px', height: '28px', padding: '0 4px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', 
                 borderRadius: '6px', 
                 background: page === i ? 'var(--accent-dim)' : 'transparent', 
                 color: page === i ? 'var(--accent)' : 'inherit',
@@ -93,7 +93,7 @@ export default function Pagination({ page, setPage, perPage, setPerPage, totalIt
           {endPage < totalPages && (
             <>
               {endPage < totalPages - 1 && <span style={{ color: 'var(--text-muted)', padding: '0 4px' }}>...</span>}
-              <button className="btn-icon" onClick={() => setPage(totalPages)} style={{ padding: '4px 10px', borderRadius: '6px' }}>{totalPages}</button>
+              <button className="btn-icon" onClick={() => setPage(totalPages)} style={{ minWidth: '28px', height: '28px', padding: '0 4px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px' }}>{totalPages}</button>
             </>
           )}
 
@@ -101,7 +101,7 @@ export default function Pagination({ page, setPage, perPage, setPerPage, totalIt
             className="btn-icon" 
             onClick={handleNext} 
             disabled={page === totalPages} 
-            style={{ padding: '4px 6px', borderRadius: '6px' }}
+            style={{ width: '28px', height: '28px', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px' }}
           >
             <ChevronRight size={16} />
           </button>
