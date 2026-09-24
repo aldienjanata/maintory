@@ -73,6 +73,12 @@ export default function BarcodeScanner() {
   const [deleteByDateFrom, setDeleteByDateFrom] = useState('')
   const [deleteByDateTo, setDeleteByDateTo] = useState('')
   const [showExportModal, setShowExportModal] = useState(false)
+  const [showBulkEditNote, setShowBulkEditNote] = useState(false)
+  const [bulkEditNote, setBulkEditNote] = useState('')
+  const [bulkEditMode, setBulkEditMode] = useState('selected') // 'selected' | 'date'
+  const [bulkEditDateFrom, setBulkEditDateFrom] = useState('')
+  const [bulkEditDateTo, setBulkEditDateTo] = useState('')
+  const [bulkEditSaving, setBulkEditSaving] = useState(false)
   const [exportMonth, setExportMonth] = useState(format(new Date(), 'yyyy-MM'))
   const [exportMode, setExportMode] = useState('month')
 
@@ -445,6 +451,38 @@ export default function BarcodeScanner() {
       if (!error) { toast.success('Data dihapus'); setShowDeleteByDate(false); setDeleteByDateFrom(''); setDeleteByDateTo(''); fetchScans() }
     })
   }
+  const handleBulkEditNote = async () => {
+    if (!bulkEditNote.trim()) { toast.error('Isi catatan baru'); return }
+    setBulkEditSaving(true)
+    try {
+      if (bulkEditMode === 'selected') {
+        if (selected.size === 0) { toast.error('Pilih data dulu'); setBulkEditSaving(false); return }
+        const { error } = await supabase.from('barcode_scans').update({ note: bulkEditNote.trim() }).in('id', [...selected])
+        if (error) throw error
+        toast.success('Catatan diupdate untuk ' + selected.size + ' data')
+        setScans(prev => prev.map(s => selected.has(s.id) ? { ...s, note: bulkEditNote.trim() } : s))
+        setSelected(new Set())
+        setSelectMode(false)
+      } else {
+        if (!bulkEditDateFrom) { toast.error('Pilih tanggal dari'); setBulkEditSaving(false); return }
+        let query = supabase.from('barcode_scans').update({ note: bulkEditNote.trim() })
+          .gte('first_scan', bulkEditDateFrom + 'T00:00:00')
+        if (bulkEditDateTo) query = query.lte('first_scan', bulkEditDateTo + 'T23:59:59')
+        const { error } = await query
+        if (error) throw error
+        toast.success('Catatan berhasil diupdate')
+        fetchScans()
+      }
+      setShowBulkEditNote(false)
+      setBulkEditNote('')
+      setBulkEditDateFrom('')
+      setBulkEditDateTo('')
+    } catch (e) {
+      toast.error('Gagal: ' + e.message)
+    }
+    setBulkEditSaving(false)
+  }
+
   const handleDeleteSingle = (s) => {
     requestConfirm('Hapus Data', `Hapus "${s.barcode}"? Tidak bisa dibatalkan.`, async () => {
       const { error } = await supabase.from('barcode_scans').delete().eq('id', s.id)
@@ -1119,7 +1157,71 @@ export default function BarcodeScanner() {
         </div></div>
       )}
 
-﻿      {/* HISTORY MODAL */}
+﻿﻿
+      {/* BULK EDIT CATATAN MODAL */}
+      {showBulkEditNote && createPortal(
+        <div className="modal-overlay" onClick={() => !bulkEditSaving && setShowBulkEditNote(false)}>
+          <div className="modal" style={{ maxWidth: '480px', width: '95%' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Edit2 size={16} /> Edit Catatan Massal
+              </h3>
+              <button className="btn-icon" onClick={() => setShowBulkEditNote(false)} disabled={bulkEditSaving}><X size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', gap: '8px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)', padding: '4px' }}>
+                <button onClick={() => setBulkEditMode('selected')} style={{ flex: 1, padding: '7px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: bulkEditMode === 'selected' ? 'var(--accent)' : 'transparent', color: bulkEditMode === 'selected' ? '#000' : 'var(--text-secondary)', fontWeight: bulkEditMode === 'selected' ? 700 : 400, fontSize: '13px' }}>
+                  Data Dipilih {bulkEditMode === 'selected' && selected.size > 0 && '(' + selected.size + ')'}
+                </button>
+                <button onClick={() => setBulkEditMode('date')} style={{ flex: 1, padding: '7px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: bulkEditMode === 'date' ? 'var(--accent)' : 'transparent', color: bulkEditMode === 'date' ? '#000' : 'var(--text-secondary)', fontWeight: bulkEditMode === 'date' ? 700 : 400, fontSize: '13px' }}>
+                  Berdasarkan Tanggal
+                </button>
+              </div>
+
+              {bulkEditMode === 'selected' ? (
+                <div style={{ padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  {selected.size === 0
+                    ? <span style={{ color: 'var(--warning)' }}>⚠ Belum ada data yang dipilih. Aktifkan mode Pilih dan centang data yang ingin diedit.</span>
+                    : <span><strong style={{ color: 'var(--accent)' }}>{selected.size}</strong> data akan diupdate catatannya.</span>}
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Dari Tanggal Pertama Scan</label>
+                    <input type="date" className="form-input" value={bulkEditDateFrom} onChange={e => setBulkEditDateFrom(e.target.value)} style={{ width: '100%', padding: '7px 10px', fontSize: '13px' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Sampai Tanggal</label>
+                    <input type="date" className="form-input" value={bulkEditDateTo} onChange={e => setBulkEditDateTo(e.target.value)} style={{ width: '100%', padding: '7px 10px', fontSize: '13px' }} />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Catatan Baru</label>
+                <textarea
+                  className="form-input"
+                  rows={3}
+                  placeholder="Masukkan catatan baru untuk semua data yang dipilih..."
+                  value={bulkEditNote}
+                  onChange={e => setBulkEditNote(e.target.value)}
+                  style={{ width: '100%', resize: 'vertical', padding: '8px 10px', fontSize: '13px', fontFamily: 'inherit' }}
+                />
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Catatan lama akan ditimpa oleh catatan baru ini.</div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowBulkEditNote(false)} disabled={bulkEditSaving}>Batal</button>
+              <button className="btn btn-primary" onClick={handleBulkEditNote} disabled={bulkEditSaving || !bulkEditNote.trim() || (bulkEditMode === 'selected' && selected.size === 0)}>
+                {bulkEditSaving ? 'Menyimpan...' : 'Simpan Catatan'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* HISTORY MODAL */}
       {historyItem && createPortal(
         <div className="modal-overlay" onClick={() => setHistoryItem(null)}>
           <div className="modal" style={{ maxWidth: '700px', width: '95%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
