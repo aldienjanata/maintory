@@ -51,10 +51,7 @@ export default function Maintenance() {
       })
       .subscribe()
 
-    const totalPages = Math.ceil(filteredTickets.length / ITEMS_PER_PAGE)
-  const paginated = filteredTickets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
-
-  return () => {
+    return () => {
       supabase.removeChannel(channel)
     }
   }, [])
@@ -295,6 +292,9 @@ export default function Maintenance() {
     })
 
   // ─── EXPORT ───────────────────────────────────────────────────────────────
+  const totalPages = Math.ceil(filteredTickets.length / ITEMS_PER_PAGE)
+  const paginated = filteredTickets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+
   const handleExport = async (range) => {
     try {
       setExportModal(false)
