@@ -587,13 +587,14 @@ export default function BarcodeScanner() {
         .order('scanned_at', { ascending: true })
       if (histRows && histRows.length > 0) {
         const ws2 = wb.addWorksheet('Riwayat Scan')
-        const histHdrs = ['No', 'Barcode / SN', 'Waktu Scan', 'Kategori', 'Catatan', 'Kondisi ONT', 'Asal ONT', 'Tujuan ONT', 'Oleh']
+        const histHdrs = ['No', 'Aksi', 'Barcode / SN', 'Waktu Scan', 'Kategori', 'Catatan', 'Kondisi ONT', 'Asal ONT', 'Tujuan ONT', 'Oleh']
         applyHeaderStyle(ws2, histHdrs, '065F46')
-        setColumnWidths(ws2, [6, 25, 20, 12, 30, 14, 25, 25, 18])
+        setColumnWidths(ws2, [6, 15, 25, 20, 12, 30, 14, 25, 25, 18])
         histRows.forEach((h, i) => {
           const asal = h.ont_asal ? h.ont_asal + (h.ont_asal_detail ? ' (' + h.ont_asal_detail + ')' : '') : ''
           const tujuan = h.ont_tujuan ? h.ont_tujuan + (h.ont_tujuan_detail ? ' (' + h.ont_tujuan_detail + ')' : '') : ''
-          const row = ws2.addRow([i + 1, h.barcode, format(new Date(h.scanned_at), 'dd/MM/yyyy HH:mm:ss'), h.category || 'umum', h.note || '', h.ont_kondisi || '', asal, tujuan, h.scanner?.full_name || '-'])
+          const actionName = h.action === 'bulk_edit' ? 'Edit Massal' : h.action === 'edit' ? 'Edit Manual' : 'Scan'
+          const row = ws2.addRow([i + 1, actionName, h.barcode, format(new Date(h.scanned_at), 'dd/MM/yyyy HH:mm:ss'), h.category || 'umum', h.note || '', h.ont_kondisi || '', asal, tujuan, h.scanner?.full_name || '-'])
           applyDataRowStyles(ws2, row, i)
         })
       }
@@ -1272,6 +1273,7 @@ export default function BarcodeScanner() {
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border)' }}>
                         <th style={{ padding: '8px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>#</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>Aksi</th>
                         <th style={{ padding: '8px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>Waktu Scan</th>
                         <th style={{ padding: '8px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Kategori</th>
                         <th style={{ padding: '8px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Catatan</th>
@@ -1284,6 +1286,11 @@ export default function BarcodeScanner() {
                       {historyData.map((h, i) => (
                         <tr key={h.id} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-primary)' }}>
                           <td style={{ padding: '8px 6px', color: 'var(--text-muted)' }}>{i + 1}</td>
+                          <td style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: '10px', padding: '2px 6px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-secondary)' }}>
+                              {h.action === 'bulk_edit' ? 'Edit Massal' : h.action === 'edit' ? 'Edit Manual' : 'Scan'}
+                            </span>
+                          </td>
                           <td style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>
                             {(() => { try { return format(new Date(h.scanned_at), 'dd MMM yyyy HH:mm') } catch { return '-' } })()}
                           </td>
