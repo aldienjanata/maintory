@@ -8,7 +8,7 @@ import {
   ScanLine, Search, Trash2, Edit2, X, Download,
   CheckSquare, Calendar, RefreshCw, FileDown, Clock,
   Copy, Tag, Camera, ChevronDown, ChevronUp, AlertTriangle, Check, Info, Loader
-} from 'lucide-react'
+, History } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns'
 import { id as idLocale } from 'date-fns/locale'
 import { applyHeaderStyle, applyDataRowStyles, setColumnWidths, downloadWorkbook } from '../../utils/excelHelper'
@@ -119,6 +119,23 @@ export default function BarcodeScanner() {
     setScans(data || [])
     setLoading(false)
   }
+  // Scan History Modal
+  const [historyItem, setHistoryItem] = useState(null)
+  const [historyData, setHistoryData] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+
+  const fetchHistory = async (item) => {
+    setHistoryItem(item)
+    setHistoryLoading(true)
+    const { data } = await supabase
+      .from('barcode_scan_history')
+      .select('*, scanner:users!barcode_scan_history_scanned_by_fkey(full_name)')
+      .eq('barcode', item.barcode)
+      .order('scanned_at', { ascending: true })
+    setHistoryData(data || [])
+    setHistoryLoading(false)
+  }
+
   const fetchUsers = async () => {
     const { data } = await supabase.from('users').select('id, full_name')
     if (data) setUsers(Object.fromEntries(data.map(u => [u.id, u.full_name])))
@@ -171,8 +188,19 @@ export default function BarcodeScanner() {
         ...ontFields
       }
       const { error, data: updated } = await supabase.from('barcode_scans').update(payload).eq('id', existing.id).select().single()
-      if (!error) { toast.success(`🔄 Diperbarui: "${barcode}" (${newCount}x)`, { duration: 2000 }); return updated }
-      if (error) { toast.error('Gagal update: ' + error.message); return false }
+      if (!error) {
+        await supabase.from('barcode_scan_history').insert({
+          barcode_scan_id: existing.id, barcode, scanned_by: profile.id,
+          scanned_at: payload.last_scan, category: bulk.category,
+          note: bulk.note.trim() || existing.note || null,
+          ont_kondisi: ontFields.ont_kondisi, ont_asal: ontFields.ont_asal,
+          ont_asal_detail: ontFields.ont_asal_detail, ont_tujuan: ontFields.ont_tujuan,
+          ont_tujuan_detail: ontFields.ont_tujuan_detail, action: 'scan'
+        })
+        toast.success(`?? Diperbarui: "${barcode}" (${newCount}x)`, { duration: 2000 })
+        return updated
+      }
+      if (error) { toast.error('Gagal: ' + error.message); return false }
     } else {
       const now = new Date().toISOString()
       const payload = {
@@ -181,8 +209,18 @@ export default function BarcodeScanner() {
         ...ontFields
       }
       const { error, data: inserted } = await supabase.from('barcode_scans').insert(payload).select().single()
-      if (!error) { toast.success(`✅ Tersimpan: "${barcode}"`, { duration: 2000 }); return inserted }
-      if (error) { toast.error('Gagal simpan: ' + error.message); return false }
+      if (!error) {
+        await supabase.from('barcode_scan_history').insert({
+          barcode_scan_id: inserted.id, barcode, scanned_by: profile.id,
+          scanned_at: now, category: bulk.category, note: bulk.note.trim() || null,
+          ont_kondisi: ontFields.ont_kondisi, ont_asal: ontFields.ont_asal,
+          ont_asal_detail: ontFields.ont_asal_detail, ont_tujuan: ontFields.ont_tujuan,
+          ont_tujuan_detail: ontFields.ont_tujuan_detail, action: 'scan'
+        })
+        toast.success(`? Tersimpan: "${barcode}"`, { duration: 2000 })
+        return inserted
+      }
+      if (error) { toast.error('Gagal: ' + error.message); return false }
     }
     return false
   }, [profile])
@@ -405,8 +443,9 @@ export default function BarcodeScanner() {
   }
   const handleDeleteSingle = (s) => {
     requestConfirm('Hapus Data', `Hapus "${s.barcode}"? Tidak bisa dibatalkan.`, async () => {
-      await supabase.from('barcode_scans').delete().eq('id', s.id)
-      toast.success('Dihapus'); fetchScans()
+      const { error } = await supabase.from('barcode_scans').delete().eq('id', s.id)
+      if (!error) { toast.success('Dihapus'); setScans(prev => prev.filter(item => item.id !== s.id)) }
+      else toast.error('Gagal hapus: ' + error.message)
     })
   }
   const handleEdit = item => { 
@@ -481,6 +520,25 @@ export default function BarcodeScanner() {
       })
 
       applyDataRowStyles(ws)
+
+      // ---- Riwayat Scan sheet ----
+      const { data: histRows } = await supabase
+        .from('barcode_scan_history')
+        .select('*, scanner:users!barcode_scan_history_scanned_by_fkey(full_name)')
+        .order('scanned_at', { ascending: true })
+      if (histRows && histRows.length > 0) {
+        const ws2 = wb.addWorksheet('Riwayat Scan')
+        const histHdrs = ['No', 'Barcode / SN', 'Waktu Scan', 'Kategori', 'Catatan', 'Kondisi ONT', 'Asal ONT', 'Tujuan ONT', 'Oleh']
+        applyHeaderStyle(ws2, histHdrs, '065F46')
+        setColumnWidths(ws2, [6, 25, 20, 12, 30, 14, 25, 25, 18])
+        histRows.forEach((h, i) => {
+          const asal = h.ont_asal ? h.ont_asal + (h.ont_asal_detail ? ' (' + h.ont_asal_detail + ')' : '') : ''
+          const tujuan = h.ont_tujuan ? h.ont_tujuan + (h.ont_tujuan_detail ? ' (' + h.ont_tujuan_detail + ')' : '') : ''
+          const row = ws2.addRow([i + 1, h.barcode, format(new Date(h.scanned_at), 'dd/MM/yyyy HH:mm:ss'), h.category || 'umum', h.note || '', h.ont_kondisi || '', asal, tujuan, h.scanner?.full_name || '-'])
+          applyDataRowStyles(ws2, row, i)
+        })
+      }
+
       await downloadWorkbook(wb, filename)
       toast.success('Export: ' + filename)
       setShowExportModal(false)
@@ -745,6 +803,7 @@ export default function BarcodeScanner() {
                         <td style={{ textAlign: 'center' }}><span style={{ background: s.scan_count > 1 ? 'rgba(245,158,11,0.15)' : 'var(--bg-primary)', color: s.scan_count > 1 ? 'var(--warning)' : 'var(--text-muted)', borderRadius: '12px', padding: '2px 7px', fontSize: '11px', fontWeight: 700 }}>{s.scan_count}×</span></td>
                         <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{users[s.scanned_by] || '—'}</td>
                         <td><div style={{ display: 'flex', gap: '2px', justifyContent: 'flex-end' }}>
+                          <button className="btn-icon" onClick={() => fetchHistory(s)} title="Lihat Riwayat"><History size={13} /></button>
                           {can(role, 'scanner.edit') && <button className="btn-icon" onClick={() => handleEdit(s)}><Edit2 size={13} /></button>}
                           {can(role, 'scanner.delete') && <button className="btn-icon text-danger" onClick={() => handleDeleteSingle(s)}><Trash2 size={13} /></button>}
                         </div></td>
@@ -1052,6 +1111,74 @@ export default function BarcodeScanner() {
           </div>
           <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setShowDeleteByDate(false)}>Batal</button><button className="btn btn-danger" onClick={handleDeleteByDate}>Hapus</button></div>
         </div></div>
+      )}
+
+﻿      {/* HISTORY MODAL */}
+      {historyItem && createPortal(
+        <div className="modal-overlay" onClick={() => setHistoryItem(null)}>
+          <div className="modal" style={{ maxWidth: '700px', width: '95%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <History size={16} />
+                Riwayat Scan: <span style={{ fontFamily: 'monospace', color: 'var(--accent)', marginLeft: '6px' }}>{historyItem.barcode}</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400, marginLeft: '4px' }}>({historyData.length} event)</span>
+              </h3>
+              <button className="btn-icon" onClick={() => setHistoryItem(null)}><X size={18} /></button>
+            </div>
+            <div className="modal-body" style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+              {historyLoading ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Memuat riwayat...</div>
+              ) : historyData.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                  <History size={36} style={{ opacity: 0.2, display: 'block', margin: '0 auto 10px' }} />
+                  <div>Belum ada riwayat scan tersimpan</div>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ padding: '8px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>#</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>Waktu Scan</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Kategori</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Catatan</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Kondisi</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Asal / Tujuan</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600 }}>Oleh</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyData.map((h, i) => (
+                        <tr key={h.id} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-primary)' }}>
+                          <td style={{ padding: '8px 6px', color: 'var(--text-muted)' }}>{i + 1}</td>
+                          <td style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>
+                            {(() => { try { return format(new Date(h.scanned_at), 'dd MMM yyyy HH:mm') } catch { return '-' } })()}
+                          </td>
+                          <td style={{ padding: '8px 6px' }}>
+                            <span style={{ fontSize: '10px', padding: '2px 6px', background: 'var(--accent-dim)', color: 'var(--accent)', borderRadius: '4px' }}>{h.category || 'umum'}</span>
+                          </td>
+                          <td style={{ padding: '8px 6px', maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{h.note || '-'}</td>
+                          <td style={{ padding: '8px 6px' }}>
+                            {h.ont_kondisi
+                              ? <span style={{ fontSize: '10px', padding: '2px 6px', background: h.ont_kondisi === 'Aman' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)', color: h.ont_kondisi === 'Aman' ? 'var(--success)' : 'var(--danger)', borderRadius: '4px' }}>{h.ont_kondisi}</span>
+                              : <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                          </td>
+                          <td style={{ padding: '8px 6px', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                            {h.ont_asal && <div>Dari: {h.ont_asal}{h.ont_asal_detail ? ' (' + h.ont_asal_detail + ')' : ''}</div>}
+                            {h.ont_tujuan && <div>Ke: {h.ont_tujuan}{h.ont_tujuan_detail ? ' (' + h.ont_tujuan_detail + ')' : ''}</div>}
+                            {!h.ont_asal && !h.ont_tujuan && <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                          </td>
+                          <td style={{ padding: '8px 6px', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>{h.scanner?.full_name || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL EXPORT */}
