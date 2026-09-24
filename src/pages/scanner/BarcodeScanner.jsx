@@ -1184,18 +1184,25 @@ export default function BarcodeScanner() {
                 <div style={{ padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)', fontSize: '13px', color: 'var(--text-secondary)' }}>
                   {selected.size === 0
                     ? <span style={{ color: 'var(--warning)' }}>⚠ Belum ada data yang dipilih. Aktifkan mode Pilih dan centang data yang ingin diedit.</span>
-                    : <span><strong style={{ color: 'var(--accent)' }}>{selected.size}</strong> data akan diupdate catatannya.</span>}
+                    : <span>Terdapat <strong style={{ color: 'var(--accent)' }}>{selected.size}</strong> data yang dipilih dan akan diupdate.</span>}
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div>
-                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Dari Tanggal Pertama Scan</label>
-                    <input type="date" className="form-input" value={bulkEditDateFrom} onChange={e => setBulkEditDateFrom(e.target.value)} style={{ width: '100%', padding: '7px 10px', fontSize: '13px' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div>
+                      <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Dari Tanggal Pertama Scan</label>
+                      <input type="date" className="form-input" value={bulkEditDateFrom} onChange={e => setBulkEditDateFrom(e.target.value)} style={{ width: '100%', padding: '7px 10px', fontSize: '13px' }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Sampai Tanggal</label>
+                      <input type="date" className="form-input" value={bulkEditDateTo} onChange={e => setBulkEditDateTo(e.target.value)} style={{ width: '100%', padding: '7px 10px', fontSize: '13px' }} />
+                    </div>
                   </div>
-                  <div>
-                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Sampai Tanggal</label>
-                    <input type="date" className="form-input" value={bulkEditDateTo} onChange={e => setBulkEditDateTo(e.target.value)} style={{ width: '100%', padding: '7px 10px', fontSize: '13px' }} />
-                  </div>
+                  {bulkEditDateFrom && (
+                    <div style={{ padding: '10px 12px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      <span>Terdapat <strong style={{ color: 'var(--accent)' }}>{scans.filter(s => s.first_scan >= bulkEditDateFrom + 'T00:00:00' && (!bulkEditDateTo || s.first_scan <= bulkEditDateTo + 'T23:59:59')).length}</strong> data pada rentang tanggal tersebut yang akan diupdate.</span>
+                    </div>
+                  )}
                 </div>
               )}
 
