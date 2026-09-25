@@ -1,4 +1,6 @@
 const fs = require('fs');
 let content = fs.readFileSync('src/pages/inventory/SerialNumber.jsx', 'utf8');
+
 let idx = content.indexOf('const handleSaveBulk = async');
-console.log(content.substring(idx, idx + 1500));
+let endIdx = content.indexOf('const handleDelete = async', idx);
+console.log(content.substring(idx, endIdx));

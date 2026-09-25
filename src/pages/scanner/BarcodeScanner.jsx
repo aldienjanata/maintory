@@ -1,5 +1,4 @@
-<button className="btn btn-secondary btn-sm" onClick={() => setShowBulkEditNote(true)} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Edit2 size={13} /><span className="hide-on-mobile" style={{marginLeft:'4px'}}>Bulk Edit</span></button>
-                import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
