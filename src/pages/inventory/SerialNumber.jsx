@@ -188,6 +188,11 @@ export default function SerialNumber() {
       }
 
       if (editItem) {
+        // --- EDIT EXISTING ---
+        const changes = []
+        if (editItem.status !== form.status) changes.push(`Status: ${editItem.status} → ${form.status}`)
+        if (editItem.date_in !== form.date_in) changes.push(`Tgl Masuk: ${editItem.date_in} → ${form.date_in}`)
+        if ((editItem.note || '') !== (form.note || '')) changes.push(`Catatan: "${editItem.note || '-'}" → "${form.note || '-'}"`)
         const { error } = await supabase.from('serial_numbers').update({
           brand_id: brandId,
           type_id: typeId,
@@ -198,27 +203,57 @@ export default function SerialNumber() {
           updated_at: new Date().toISOString()
         }).eq('id', editItem.id)
         if (error) throw error
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Edit SN', detail: `SN: ${form.serial_number}` })
+        const changeDetail = changes.length > 0 ? changes.join(' | ') : 'Tidak ada perubahan'
+        await supabase.from('inventory_log').insert({ log_date: form.date_in, item_type: 'sn', item_id: editItem.id, action: 'edit', quantity: 0, note: changeDetail, created_by: profile.id })
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Edit SN', detail: `SN: ${form.serial_number} — ${changeDetail}` })
         toast.success('Serial Number berhasil diperbarui')
       } else {
-        const { data: newSn, error } = await supabase.from('serial_numbers').insert({
-          brand_id: brandId,
-          type_id: typeId,
-          serial_number: form.serial_number,
-          date_in: form.date_in,
-          note: form.note,
-          status: 'tersedia',
-          created_by: profile.id
-        }).select().single()
-        if (error) throw error
-        await supabase.from('inventory_log').insert({ log_date: form.date_in, item_type: 'sn', item_id: newSn.id, action: 'masuk', quantity: 1, note: form.note || null, created_by: profile.id })
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Tambah SN', detail: `SN: ${form.serial_number}` })
-        toast.success('Serial Number berhasil ditambahkan')
+        // --- CHECK IF ALREADY EXISTS ---
+        const { data: existingSnData } = await supabase.from('serial_numbers').select('*').ilike('serial_number', form.serial_number.trim()).maybeSingle()
+        if (existingSnData) {
+          if (existingSnData.status === 'tersedia') {
+            toast.error('Serial Number sudah ada dan berstatus TERSEDIA di gudang!')
+            setSaving(false)
+            return
+          }
+          // RECYCLE: was terpakai, now bring back to gudang
+          const { error: recErr } = await supabase.from('serial_numbers').update({
+            brand_id: brandId || existingSnData.brand_id,
+            type_id: typeId || existingSnData.type_id,
+            date_in: form.date_in,
+            note: form.note || existingSnData.note,
+            status: 'tersedia',
+            updated_at: new Date().toISOString()
+          }).eq('id', existingSnData.id)
+          if (recErr) throw recErr
+          const recycleChanges = []
+          recycleChanges.push(`Status: terpakai → tersedia`)
+          recycleChanges.push(`Tgl Masuk Baru: ${form.date_in}`)
+          if (form.note && form.note !== existingSnData.note) recycleChanges.push(`Catatan: "${existingSnData.note || '-'}" → "${form.note}"`)
+          await supabase.from('inventory_log').insert({ log_date: form.date_in, item_type: 'sn', item_id: existingSnData.id, action: 'masuk', quantity: 1, note: `[KEMBALI KE GUDANG] ${recycleChanges.join(' | ')}`, created_by: profile.id })
+          await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Recycle SN', detail: `SN: ${form.serial_number} dikembalikan ke gudang — ${recycleChanges.join(' | ')}` })
+          toast.success(`✅ SN "${form.serial_number}" berhasil dikembalikan ke gudang!`)
+        } else {
+          // --- BRAND NEW SN ---
+          const { data: newSn, error } = await supabase.from('serial_numbers').insert({
+            brand_id: brandId,
+            type_id: typeId,
+            serial_number: form.serial_number,
+            date_in: form.date_in,
+            note: form.note,
+            status: 'tersedia',
+            created_by: profile.id
+          }).select().single()
+          if (error) throw error
+          await supabase.from('inventory_log').insert({ log_date: form.date_in, item_type: 'sn', item_id: newSn.id, action: 'masuk', quantity: 1, note: form.note || 'SN baru masuk gudang', created_by: profile.id })
+          await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Tambah SN', detail: `SN: ${form.serial_number}` })
+          toast.success('Serial Number berhasil ditambahkan')
+        }
       }
       setIsModalOpen(false)
       fetchAll()
     } catch (err) {
-      toast.error(err.code === '23505' ? 'Serial Number sudah ada!' : 'Gagal: ' + err.message)
+      toast.error('Gagal: ' + err.message)
     } finally { setSaving(false) }
   }
 
@@ -249,17 +284,48 @@ export default function SerialNumber() {
         }
       }
       
-      const existing = items.filter(i => lines.includes(i.serial_number)).map(i => i.serial_number)
-      const toInsert = lines.filter(sn => !existing.includes(sn)).map(sn => ({ brand_id: brandId, type_id: typeId, serial_number: sn, date_in: form.date_in, status: 'tersedia', note: bulkNote.trim() || null, created_by: profile.id }))
+      const snUpper = lines.map(l => l.toUpperCase())
+      const alreadyAvailable = items.filter(i => snUpper.includes(i.serial_number.toUpperCase()) && i.status === 'tersedia')
+      const toRecycle = items.filter(i => snUpper.includes(i.serial_number.toUpperCase()) && i.status === 'terpakai')
+      const existingSNs = items.map(i => i.serial_number.toUpperCase())
+      const toInsert = lines.filter(sn => !existingSNs.includes(sn.toUpperCase()))
+        .map(sn => ({ brand_id: brandId, type_id: typeId, serial_number: sn, date_in: form.date_in, status: 'tersedia', note: bulkNote.trim() || null, created_by: profile.id }))
       
+      // Insert brand new SNs
       if (toInsert.length > 0) {
         const { data: insertedSns, error } = await supabase.from('serial_numbers').insert(toInsert).select()
         if (error) throw error
-        await supabase.from('inventory_log').insert(insertedSns.map(sn => ({ log_date: form.date_in, item_type: 'sn', item_id: sn.id, action: 'masuk', quantity: 1, note: bulkNote.trim() || 'Input massal via text', created_by: profile.id })))
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Input Massal SN', detail: `${toInsert.length} SN ditambahkan` })
+        await supabase.from('inventory_log').insert(insertedSns.map(sn => ({ log_date: form.date_in, item_type: 'sn', item_id: sn.id, action: 'masuk', quantity: 1, note: bulkNote.trim() || 'SN baru masuk gudang (Input massal)', created_by: profile.id })))
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Input Massal SN', detail: `${toInsert.length} SN baru ditambahkan` })
+      }
+
+      // Recycle terpakai SNs (kembali ke gudang)
+      if (toRecycle.length > 0) {
+        const logPayloads = []
+        for (const rec of toRecycle) {
+          await supabase.from('serial_numbers').update({
+            brand_id: brandId || rec.brand_id,
+            type_id: typeId || rec.type_id,
+            date_in: form.date_in,
+            note: bulkNote.trim() || rec.note,
+            status: 'tersedia',
+            updated_at: new Date().toISOString()
+          }).eq('id', rec.id)
+          logPayloads.push({
+            log_date: form.date_in, item_type: 'sn', item_id: rec.id, action: 'masuk', quantity: 1,
+            note: `[KEMBALI KE GUDANG] Status: terpakai → tersedia | Tgl Masuk Baru: ${form.date_in}${bulkNote.trim() ? ` | Catatan: ${bulkNote.trim()}` : ''}`,
+            created_by: profile.id
+          })
+        }
+        if (logPayloads.length > 0) await supabase.from('inventory_log').insert(logPayloads)
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Serial Number', action: 'Recycle SN Massal', detail: `${toRecycle.length} SN dikembalikan ke gudang` })
       }
       
-      toast.success(`${toInsert.length} berhasil ditambah, ${existing.length} sudah ada.`)
+      const msgs = []
+      if (toInsert.length > 0) msgs.push(`${toInsert.length} SN baru`)
+      if (toRecycle.length > 0) msgs.push(`${toRecycle.length} SN dikembalikan ke gudang`)
+      if (alreadyAvailable.length > 0) msgs.push(`${alreadyAvailable.length} SN diabaikan (sudah tersedia)`)
+      toast.success(msgs.length ? msgs.join(' | ') : 'Selesai')
       setIsModalOpen(false)
       setBulkText('')
       setBulkNote('')
