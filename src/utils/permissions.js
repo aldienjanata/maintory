@@ -33,14 +33,14 @@ export const can = (role, action) => {
 
     // Inventory - Dropcore
     'inventory.dropcore.view': ['superadmin', 'admin', 'teknisi', 'backbone'],
-    'inventory.dropcore.add': ['superadmin', 'admin', 'teknisi', 'backbone'],
+    'inventory.dropcore.add': ['superadmin', 'admin'],
     'inventory.dropcore.edit': ['superadmin', 'admin'],
     'inventory.dropcore.delete': ['superadmin', 'admin'],
     'inventory.dropcore.export': ['superadmin', 'admin'],
 
     // Inventory - ADSS
     'inventory.Adss.view': ['superadmin', 'admin', 'teknisi', 'backbone'],
-    'inventory.Adss.add': ['superadmin', 'admin', 'teknisi', 'backbone'],
+    'inventory.Adss.add': ['superadmin', 'admin'],
     'inventory.Adss.edit': ['superadmin', 'admin'],
     'inventory.Adss.delete': ['superadmin', 'admin'],
     'inventory.Adss.export': ['superadmin', 'admin'],
