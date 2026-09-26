@@ -234,7 +234,7 @@ export default function Dropcore() {
       date: l.log_date,
       action: l.action === 'masuk' ? 'Masuk' : l.action === 'isi_ulang_dropcore' ? 'Isi Ulang' : 'Koreksi',
       qty: l.meters,
-      note: l.note || l.notes || '-',
+      note: `Jumlah: ${l.meters}m${l.note || l.notes ? ` | Note: ${l.note || l.notes}` : ''}`,
       user: l.user?.full_name || '-',
       type: 'in'
     }))
@@ -242,15 +242,15 @@ export default function Dropcore() {
     const outRowsExp = (expItems || [])
       .filter(ei => !ei.expense?.note?.includes('Bon Barang'))
       .map(ei => {
-        const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+        const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ') || '-'
         const wType = ei.expense?.work_type
+        const wTypeLabel = workTypeLabels[wType] || wType || '-'
         return {
           date: ei.expense?.expense_date || ei.created_at?.substring(0, 10),
           action: 'Keluar',
           qty: ei.meters_used,
-          note: ei.expense?.site || ei.expense?.note || '-',
-          technicianNames: techNames,
-          workType: workTypeLabels[wType] || wType,
+          note: `Keluar: ${ei.meters_used}m | Pekerjaan: ${wTypeLabel} | Lokasi: ${ei.expense?.site || ei.expense?.note || '-'}`,
+          user: `Teknisi: ${techNames}`,
           type: 'out'
         }
       })
@@ -261,15 +261,15 @@ export default function Dropcore() {
       .map(di => {
         // dispatches stores technicians as array (new) or technician_ids (old)
         const techIds = di.dispatch?.technicians || di.dispatch?.technician_ids || (di.dispatch?.technician_id ? [di.dispatch.technician_id] : [])
-        const techNames = techIds.map(tid => usersMap[tid]).filter(Boolean).join(', ')
+        const techNames = techIds.map(tid => usersMap[tid]).filter(Boolean).join(', ') || '-'
         const wType = di.dispatch?.work_type
+        const wTypeLabel = workTypeLabels[wType] || wType || '-'
         return {
           date: di.dispatch?.dispatch_date || di.created_at?.substring(0, 10),
           action: 'Keluar (Bon Barang)',
           qty: di.meters_used,
-          note: di.dispatch?.site || di.dispatch?.location || '(Relation missing)',
-          technicianNames: techNames,
-          workType: workTypeLabels[wType] || wType,
+          note: `Keluar: ${di.meters_used}m | Pekerjaan: ${wTypeLabel} | Lokasi: ${di.dispatch?.site || di.dispatch?.location || '-'}`,
+          user: `Teknisi: ${techNames}`,
           type: 'out'
         }
       })
