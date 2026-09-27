@@ -1365,7 +1365,7 @@ export default function BonBarang() {
       )}
 
       {/* Main Card */}
-      <div className="card">
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 280px)' }}>
         {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
           {[
@@ -1384,7 +1384,7 @@ export default function BonBarang() {
           ))}
         </div>
 
-        <div className="card-body">
+        <div className="card-body" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {loading ? (
             <div className="flex-center" style={{ height: '180px' }}><div className="spinner" /></div>
           ) : activeTab === 'jadwal' ? (
