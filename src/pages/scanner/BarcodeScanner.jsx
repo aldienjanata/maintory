@@ -151,86 +151,92 @@ export default function BarcodeScanner() {
 
   // ===== PROCESS SCAN =====
   const processBarcode = useCallback(async (barcode) => {
-    if (!barcode) return false
-    const bulk = bulkStateRef.current
-    const tab = activeTabRef.current
-    
-    // Check mode
-    if (tab === 'sementara') {
-      if (tempScansRef.current.find(s => s.barcode === barcode)) { 
-        toast('Sudah ada dalam sesi', { icon: '⚠️' }); return false 
+    try {
+      if (!barcode) return false
+      const bulk = bulkStateRef.current
+      const tab = activeTabRef.current
+      
+      // Check mode
+      if (tab === 'sementara') {
+        if (tempScansRef.current.find(s => s.barcode === barcode)) { 
+          toast('Sudah ada dalam sesi', { icon: '⚠️' }); return false 
+        }
+        setTempScans(prev => [...prev, { id: crypto.randomUUID(), barcode, scanned_at: new Date().toISOString() }])
+        toast.success(`Terscan sementara: "${barcode}"`, { duration: 1500 });
+        return true
       }
-      setTempScans(prev => [...prev, { id: crypto.randomUUID(), barcode, scanned_at: new Date().toISOString() }])
-      toast.success(`Terscan sementara: "${barcode}"`, { duration: 1500 });
-      return true
+  
+      // Permanent Save Mode Validation
+      if (bulk.category === 'ONT') {
+        if (!bulk.ontKondisi) { toast.error('Kondisi ONT wajib dipilih!'); return false }
+        if (!bulk.ontAsal) { toast.error('Asal Modem wajib dipilih!'); return false }
+        if (bulk.ontAsal === 'Pembelian Di Luar' && !(bulk.ontAsalDetail || '').trim()) { toast.error('Nama toko wajib diisi!'); return false }
+        if (!bulk.ontTujuan) { toast.error('Status / Tujuan ONT wajib dipilih!'); return false }
+        if (bulk.ontTujuan === 'Akan Di Kirim Ke Site Lain' && !(bulk.ontTujuanDetail || '').trim()) { toast.error('Nama site wajib diisi!'); return false }
+      }
+  
+      const ontFields = bulk.category === 'ONT' ? {
+        ont_kondisi: bulk.ontKondisi,
+        ont_asal: bulk.ontAsal,
+        ont_asal_detail: (bulk.ontAsalDetail || '').trim() || null,
+        ont_tujuan: bulk.ontTujuan,
+        ont_tujuan_detail: (bulk.ontTujuanDetail || '').trim() || null
+      } : {
+        ont_kondisi: null, ont_asal: null, ont_asal_detail: null, ont_tujuan: null, ont_tujuan_detail: null
+      }
+  
+      const { data: existing } = await supabase.from('barcode_scans').select('*').eq('barcode', barcode).maybeSingle()
+      if (existing) {
+        const newCount = (existing.scan_count || 1) + 1
+        const payload = {
+          last_scan: new Date().toISOString(), 
+          scan_count: newCount, 
+          updated_by: profile.id,
+          note: (bulk.note || '').trim() || existing.note,
+          category: bulk.category,
+          ...ontFields
+        }
+        const { error, data: updated } = await supabase.from('barcode_scans').update(payload).eq('id', existing.id).select().single()
+        if (!error) {
+          await supabase.from('barcode_scan_history').insert({
+            barcode_scan_id: existing.id, barcode, scanned_by: profile.id,
+            scanned_at: payload.last_scan, category: bulk.category,
+            note: (bulk.note || '').trim() || existing.note || null,
+            ont_kondisi: ontFields.ont_kondisi, ont_asal: ontFields.ont_asal,
+            ont_asal_detail: ontFields.ont_asal_detail, ont_tujuan: ontFields.ont_tujuan,
+            ont_tujuan_detail: ontFields.ont_tujuan_detail, action: 'scan'
+          })
+          toast.success(`?? Diperbarui: "${barcode}" (${newCount}x)`, { duration: 2000 })
+          return updated
+        }
+        if (error) { toast.error('Gagal: ' + error.message); return false }
+      } else {
+        const now = new Date().toISOString()
+        const payload = {
+          barcode, note: (bulk.note || '').trim() || null, category: bulk.category,
+          scanned_by: profile.id, first_scan: now, last_scan: now, scan_count: 1,
+          ...ontFields
+        }
+        const { error, data: inserted } = await supabase.from('barcode_scans').insert(payload).select().single()
+        if (!error) {
+          await supabase.from('barcode_scan_history').insert({
+            barcode_scan_id: inserted.id, barcode, scanned_by: profile.id,
+            scanned_at: now, category: bulk.category, note: (bulk.note || '').trim() || null,
+            ont_kondisi: ontFields.ont_kondisi, ont_asal: ontFields.ont_asal,
+            ont_asal_detail: ontFields.ont_asal_detail, ont_tujuan: ontFields.ont_tujuan,
+            ont_tujuan_detail: ontFields.ont_tujuan_detail, action: 'scan'
+          })
+          toast.success(`? Tersimpan: "${barcode}"`, { duration: 2000 })
+          return inserted
+        }
+        if (error) { toast.error('Gagal: ' + error.message); return false }
+      }
+      return false
+    } catch (err) {
+      console.error("processBarcode err:", err);
+      toast.error("Terjadi kesalahan sistem/jaringan");
+      return false;
     }
-
-    // Permanent Save Mode Validation
-    if (bulk.category === 'ONT') {
-      if (!bulk.ontKondisi) { toast.error('Kondisi ONT wajib dipilih!'); return false }
-      if (!bulk.ontAsal) { toast.error('Asal Modem wajib dipilih!'); return false }
-      if (bulk.ontAsal === 'Pembelian Di Luar' && !bulk.ontAsalDetail.trim()) { toast.error('Nama toko wajib diisi!'); return false }
-      if (!bulk.ontTujuan) { toast.error('Status / Tujuan ONT wajib dipilih!'); return false }
-      if (bulk.ontTujuan === 'Akan Di Kirim Ke Site Lain' && !bulk.ontTujuanDetail.trim()) { toast.error('Nama site wajib diisi!'); return false }
-    }
-
-    const ontFields = bulk.category === 'ONT' ? {
-      ont_kondisi: bulk.ontKondisi,
-      ont_asal: bulk.ontAsal,
-      ont_asal_detail: bulk.ontAsalDetail.trim() || null,
-      ont_tujuan: bulk.ontTujuan,
-      ont_tujuan_detail: bulk.ontTujuanDetail.trim() || null
-    } : {
-      ont_kondisi: null, ont_asal: null, ont_asal_detail: null, ont_tujuan: null, ont_tujuan_detail: null
-    }
-
-    const { data: existing } = await supabase.from('barcode_scans').select('*').eq('barcode', barcode).maybeSingle()
-    if (existing) {
-      const newCount = (existing.scan_count || 1) + 1
-      const payload = {
-        last_scan: new Date().toISOString(), 
-        scan_count: newCount, 
-        updated_by: profile.id,
-        note: bulk.note.trim() || existing.note,
-        category: bulk.category,
-        ...ontFields
-      }
-      const { error, data: updated } = await supabase.from('barcode_scans').update(payload).eq('id', existing.id).select().single()
-      if (!error) {
-        await supabase.from('barcode_scan_history').insert({
-          barcode_scan_id: existing.id, barcode, scanned_by: profile.id,
-          scanned_at: payload.last_scan, category: bulk.category,
-          note: bulk.note.trim() || existing.note || null,
-          ont_kondisi: ontFields.ont_kondisi, ont_asal: ontFields.ont_asal,
-          ont_asal_detail: ontFields.ont_asal_detail, ont_tujuan: ontFields.ont_tujuan,
-          ont_tujuan_detail: ontFields.ont_tujuan_detail, action: 'scan'
-        })
-        toast.success(`?? Diperbarui: "${barcode}" (${newCount}x)`, { duration: 2000 })
-        return updated
-      }
-      if (error) { toast.error('Gagal: ' + error.message); return false }
-    } else {
-      const now = new Date().toISOString()
-      const payload = {
-        barcode, note: bulk.note.trim() || null, category: bulk.category,
-        scanned_by: profile.id, first_scan: now, last_scan: now, scan_count: 1,
-        ...ontFields
-      }
-      const { error, data: inserted } = await supabase.from('barcode_scans').insert(payload).select().single()
-      if (!error) {
-        await supabase.from('barcode_scan_history').insert({
-          barcode_scan_id: inserted.id, barcode, scanned_by: profile.id,
-          scanned_at: now, category: bulk.category, note: bulk.note.trim() || null,
-          ont_kondisi: ontFields.ont_kondisi, ont_asal: ontFields.ont_asal,
-          ont_asal_detail: ontFields.ont_asal_detail, ont_tujuan: ontFields.ont_tujuan,
-          ont_tujuan_detail: ontFields.ont_tujuan_detail, action: 'scan'
-        })
-        toast.success(`? Tersimpan: "${barcode}"`, { duration: 2000 })
-        return inserted
-      }
-      if (error) { toast.error('Gagal: ' + error.message); return false }
-    }
-    return false
   }, [profile])
 
   const handleScan = (e) => {
@@ -240,7 +246,7 @@ export default function BarcodeScanner() {
     const barcode = raw.split(/\s+/)[0]
     setBarcodeInput('')
     setScanning(true)
-    processBarcode(barcode).then(result => {
+    processBarcode(barcode).catch(() => false).then(result => {
       if (activeTab === 'simpan' && result) {
         setScans(prev => {
           const filtered = prev.filter(s => s.id !== result.id)
@@ -302,7 +308,7 @@ export default function BarcodeScanner() {
               setCamScanCount(prev => prev + 1)
               setCamScannedItems(prev => [{ barcode, id: itemId, status: 'saving' }, ...prev])
 
-              processBarcode(barcode).then(result => {
+              processBarcode(barcode).catch(() => false).then(result => {
                 if (result) {
                   setCamScannedItems(prev => prev.map(item => item.id === itemId ? { ...item, status: 'success' } : item))
                 } else {
@@ -348,7 +354,7 @@ export default function BarcodeScanner() {
     setCamScannedItems(prev => [{ barcode: newBarcode, id: newItemId, status: 'saving' }, ...prev])
     setCamLastBarcode(newBarcode)
 
-    const result = await processBarcode(newBarcode)
+    const result = await processBarcode(newBarcode).catch(() => false)
     if (result) {
       setCamScannedItems(prev => prev.map(i => i.id === newItemId ? { ...i, status: 'success' } : i))
     } else {
