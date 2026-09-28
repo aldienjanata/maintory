@@ -233,6 +233,8 @@ function parseInputToCoords(input) {
 export default function KonversiTiang() {
   const [mode, setMode] = useState('exportFO')
   const [exportFOLoading, setExportFOLoading] = useState(false)
+  const [exportAllLoading, setExportAllLoading] = useState(false)
+  const [exportAllProgress, setExportAllProgress] = useState('')
 
   // KMZ → Excel state
   const [kmzFile, setKmzFile] = useState(null)
@@ -1041,6 +1043,199 @@ export default function KonversiTiang() {
   const doneCount  = kmzRows.filter(r => r.status === 'done').length
   const emptyCount = kmzRows.filter(r => r.status === 'done' && !r.provinsi && !r.kabupaten).length
 
+  // ── EXPORT SEMUA DATA JARINGAN (EXCEL MULTI-SHEET + KMZ MULTI-FOLDER) ──────
+  const handleExportAll = async (type) => {
+    setExportAllLoading(true)
+    try {
+      const step = 1000
+      const fetchAll = async (table, query) => {
+        let all = [], from = 0
+        while (true) {
+          const { data, error } = await query(supabase.from(table)).range(from, from + step - 1)
+          if (error) throw error
+          if (!data || data.length === 0) break
+          all = [...all, ...data]
+          if (data.length < step) break
+          from += step
+        }
+        return all
+      }
+
+      setExportAllProgress('Mengambil data tiang...')
+      const poles = await fetchAll('network_poles', q => q.select('*').neq('status', 'dismantled'))
+
+      setExportAllProgress('Mengambil data ODP & ODC...')
+      const odpOdc = await fetchAll('network_odp_odc', q => q.select('*'))
+
+      setExportAllProgress('Mengambil data Coilan...')
+      const coilan = await fetchAll('network_coilan', q => q.select('*'))
+
+      setExportAllProgress('Mengambil data Closure...')
+      const closure = await fetchAll('network_closure', q => q.select('*'))
+
+      setExportAllProgress('Mengambil data Server...')
+      const server = await fetchAll('network_server', q => q.select('*'))
+
+      setExportAllProgress('Mengambil data Kaset FO...')
+      const kaset = await fetchAll('network_kaset_fo', q => q.select('*'))
+
+      setExportAllProgress('Mengambil data Jalur FO...')
+      const jalur = await fetchAll('network_jalur_fo', q => q.select('*'))
+
+      setExportAllProgress('Mengambil data pengguna...')
+      const { data: usersData } = await supabase.from('users').select('id, full_name')
+      const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
+      const getUser = (id) => usersMap[id] || '-'
+      const fmtDate = (d) => d ? format(new Date(d), 'dd/MM/yyyy HH:mm') : ''
+
+      if (type === 'excel') {
+        setExportAllProgress('Membuat file Excel...')
+        const wb = XLSX.utils.book_new()
+
+        // Sheet 1: Data Tiang
+        const tiangRows = poles.map((p, i) => ({
+          'No': i+1, 'Site': p.site || '', 'ID Tiang': p.pole_id || '', 'Jenis Tiang': p.pole_type || '',
+          'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
+          'Desa/Kelurahan': p.desa || '', 'Jalan': p.jalan || '',
+          'Latitude': p.latitude || '', 'Longitude': p.longitude || '', 'Maps URL': p.maps_url || '',
+          'Keterangan': p.keterangan || '', 'Diinput Oleh': getUser(p.created_by), 'Tanggal Input': fmtDate(p.created_at)
+        }))
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tiangRows), 'Data Tiang')
+
+        // Sheet 2: Data ODP & ODC
+        const odpRows = odpOdc.map((p, i) => ({
+          'No': i+1, 'Site': p.site || '', 'Device ID': p.device_id || '', 'Tipe': p.type || '',
+          'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
+          'Desa/Kelurahan': p.desa || '', 'Jalan': p.jalan || '',
+          'Latitude': p.latitude || '', 'Longitude': p.longitude || '', 'Maps URL': p.maps_url || '',
+          'Keterangan': p.keterangan || '', 'Diinput Oleh': getUser(p.created_by), 'Tanggal Input': fmtDate(p.created_at)
+        }))
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(odpRows), 'Data ODP & ODC')
+
+        // Sheet 3: Data Coilan
+        const coilanRows = coilan.map((p, i) => ({
+          'No': i+1, 'Site': p.site || '', 'Coilan ID': p.coilan_id || '', 'Panjang (m)': p.panjang_meter || '',
+          'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
+          'Desa/Kelurahan': p.desa || '', 'Jalan': p.jalan || '',
+          'Latitude': p.latitude || '', 'Longitude': p.longitude || '', 'Maps URL': p.maps_url || '',
+          'Keterangan': p.keterangan || '', 'Diinput Oleh': getUser(p.created_by), 'Tanggal Input': fmtDate(p.created_at)
+        }))
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(coilanRows), 'Data Coilan')
+
+        // Sheet 4: Data Closure
+        const closureRows = closure.map((p, i) => ({
+          'No': i+1, 'Site': p.site || '', 'Closure ID': p.closure_id || '', 'Tipe Closure': p.tipe_closure || '', 'Jumlah Core': p.jumlah_core || '',
+          'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
+          'Desa/Kelurahan': p.desa || '', 'Jalan': p.jalan || '',
+          'Latitude': p.latitude || '', 'Longitude': p.longitude || '', 'Maps URL': p.maps_url || '',
+          'Keterangan': p.keterangan || '', 'Diinput Oleh': getUser(p.created_by), 'Tanggal Input': fmtDate(p.created_at)
+        }))
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(closureRows), 'Data Closure')
+
+        // Sheet 5: Data Server
+        const serverRows = server.map((p, i) => ({
+          'No': i+1, 'Site': p.site || '', 'Server ID': p.server_id || '', 'Nama Server': p.nama_server || '',
+          'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
+          'Desa/Kelurahan': p.desa || '', 'Jalan': p.jalan || '',
+          'Latitude': p.latitude || '', 'Longitude': p.longitude || '', 'Maps URL': p.maps_url || '',
+          'Keterangan': p.keterangan || '', 'Diinput Oleh': getUser(p.created_by), 'Tanggal Input': fmtDate(p.created_at)
+        }))
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(serverRows), 'Data Server')
+
+        // Sheet 6: Data Kaset FO
+        const kasetRows = kaset.map((p, i) => ({
+          'No': i+1, 'Site': p.site || '', 'Kaset ID': p.kaset_id || '', 'Jumlah Core': p.jumlah_core || '',
+          'Provinsi': p.provinsi || '', 'Kabupaten/Kota': p.kabupaten || '', 'Kecamatan': p.kecamatan || '',
+          'Desa/Kelurahan': p.desa || '', 'Jalan': p.jalan || '',
+          'Latitude': p.latitude || '', 'Longitude': p.longitude || '', 'Maps URL': p.maps_url || '',
+          'Keterangan': p.keterangan || '', 'Diinput Oleh': getUser(p.created_by), 'Tanggal Input': fmtDate(p.created_at)
+        }))
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(kasetRows), 'Data Kaset FO')
+
+        // Sheet 7: Data Jalur FO
+        const jalurRows = jalur.map((p, i) => ({
+          'No': i+1, 'Site': p.site || '', 'Jalur ID': p.jalur_id || '', 'Nama Jalur': p.nama_jalur || '',
+          'Panjang (m)': p.panjang_meter || '', 'Tipe Kabel': p.tipe_kabel || '',
+          'Kecamatan': p.kecamatan || '', 'Desa': p.desa || '',
+          'Keterangan': p.keterangan || '', 'Diinput Oleh': getUser(p.created_by), 'Tanggal Input': fmtDate(p.created_at)
+        }))
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(jalurRows), 'Data Jalur FO')
+
+        setExportAllProgress('Menyimpan file Excel...')
+        XLSX.writeFile(wb, `Backup Data Jaringan FO ${format(new Date(), 'dd-MM-yyyy HH.mm')}.xlsx`)
+        toast.success(`Export Excel selesai! ${poles.length} tiang, ${odpOdc.length} ODP/ODC, ${coilan.length} coilan, ${closure.length} closure, ${server.length} server, ${kaset.length} kaset, ${jalur.length} jalur`)
+      } else if (type === 'kmz') {
+        setExportAllProgress('Membuat file KMZ (Google Earth)...')
+        const dateStr = format(new Date(), 'dd-MM-yyyy')
+
+        // Icon colors per category
+        const makeFolder = (name, items, colorHex, labelMap) => {
+          if (items.length === 0) return ''
+          const placemarks = items
+            .filter(p => p.latitude && p.longitude)
+            .map(p => {
+              const lat = Number(p.latitude)
+              const lon = Number(p.longitude)
+              if (isNaN(lat) || isNaN(lon)) return ''
+              const label = labelMap(p)
+              const desc = Object.entries(p)
+                .filter(([k]) => !['id','created_at','updated_at','created_by','updated_by','maps_url'].includes(k))
+                .map(([k, v]) => `${k}: ${v || '-'}`)
+                .join('\n')
+              return `      <Placemark>
+        <name>${label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</name>
+        <description><![CDATA[${desc}]]></description>
+        <Style><IconStyle><color>ff${colorHex}</color><scale>0.8</scale></IconStyle></Style>
+        <Point><coordinates>${lon},${lat},0</coordinates></Point>
+      </Placemark>`
+            }).filter(Boolean).join('\n')
+          return `  <Folder>
+    <name>${name}</name>
+    <open>0</open>
+${placemarks}
+  </Folder>`
+        }
+
+        const folders = [
+          makeFolder('Data Tiang', poles, '0000ff', p => p.pole_id || 'Tiang'),
+          makeFolder('Data ODP & ODC', odpOdc, '00ff00', p => `${p.type || 'ODP'} - ${p.device_id || ''}`),
+          makeFolder('Data Coilan', coilan, 'ffff00', p => p.coilan_id || 'Coilan'),
+          makeFolder('Data Closure', closure, 'ff00ff', p => p.closure_id || 'Closure'),
+          makeFolder('Data Server', server, 'ff8000', p => p.server_id || 'Server'),
+          makeFolder('Data Kaset FO', kaset, '00ffff', p => p.kaset_id || 'Kaset FO'),
+        ].filter(Boolean).join('\n\n')
+
+        const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Data Jaringan FO - ${dateStr}</name>
+  <description>Backup semua data jaringan Fiber Optik dari Maintory</description>
+${folders}
+</Document>
+</kml>`
+
+        setExportAllProgress('Mengemas file KMZ...')
+        const zip = new JSZip()
+        zip.file('doc.kml', kml)
+        const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = `Backup Data Jaringan FO ${dateStr}.kmz`
+        a.click()
+        URL.revokeObjectURL(a.href)
+        const total = poles.filter(p=>p.latitude).length + odpOdc.filter(p=>p.latitude).length + coilan.filter(p=>p.latitude).length + closure.filter(p=>p.latitude).length + server.filter(p=>p.latitude).length + kaset.filter(p=>p.latitude).length
+        toast.success(`KMZ berhasil dibuat! ${total} titik koordinat dalam 6 folder.`)
+      }
+    } catch (err) {
+      console.error(err)
+      toast.error('Gagal export: ' + (err.message || 'Error'))
+    } finally {
+      setExportAllLoading(false)
+      setExportAllProgress('')
+    }
+  }
+
+
   return (
     <div className="page-container">
       {/* HEADER */}
@@ -1080,6 +1275,68 @@ export default function KonversiTiang() {
                 {exportFOLoading ? 'Memproses Data...' : 'Export Sekarang'}
               </button>
             </div>
+          </div>
+
+          {/* ══════════ EXPORT SEMUA DATA JARINGAN ══════════ */}
+          <div style={{ marginTop: '32px', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <FileSpreadsheet size={18} style={{ color: 'var(--accent)' }} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '15px' }}>Export Semua Data Jaringan FO</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  Download semua data (Tiang, ODP/ODC, Coilan, Closure, Server, Kaset FO, Jalur FO) dalam satu file, terpisah per folder/sheet.
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '20px 20px', display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+              {/* Excel Export */}
+              <div style={{ flex: '1', minWidth: '220px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px', textAlign: 'center', background: 'var(--bg-card)' }}>
+                <FileSpreadsheet size={36} style={{ color: '#22c55e', opacity: 0.7, marginBottom: '12px' }} />
+                <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px' }}>Format Excel (.xlsx)</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: '1.6' }}>
+                  7 sheet terpisah:<br />
+                  Tiang · ODP/ODC · Coilan<br />
+                  Closure · Server · Kaset FO · Jalur FO
+                </div>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => handleExportAll('excel')}
+                  disabled={exportAllLoading}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600 }}
+                >
+                  {exportAllLoading && exportAllProgress ? <Loader size={14} className="spin" /> : <Download size={14} />}
+                  Download Excel
+                </button>
+              </div>
+
+              {/* KMZ Export */}
+              <div style={{ flex: '1', minWidth: '220px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '20px', textAlign: 'center', background: 'var(--bg-card)' }}>
+                <MapIcon size={36} style={{ color: 'var(--accent)', opacity: 0.7, marginBottom: '12px' }} />
+                <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px' }}>Format KMZ / Google Earth</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: '1.6' }}>
+                  6 folder terpisah (hanya data ber-koordinat GPS):<br />
+                  Tiang · ODP/ODC · Coilan<br />
+                  Closure · Server · Kaset FO
+                </div>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => handleExportAll('kmz')}
+                  disabled={exportAllLoading}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: 'var(--accent)', borderColor: 'rgba(59,130,246,0.4)' }}
+                >
+                  {exportAllLoading ? <Loader size={14} className="spin" /> : <MapIcon size={14} />}
+                  Download KMZ
+                </button>
+              </div>
+            </div>
+
+            {/* Progress */}
+            {exportAllLoading && exportAllProgress && (
+              <div style={{ margin: '0 20px 20px', padding: '10px 14px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--accent)' }}>
+                <Loader size={14} className="spin" style={{ flexShrink: 0 }} />
+                {exportAllProgress}
+              </div>
+            )}
           </div>
         </div>
     </div>
