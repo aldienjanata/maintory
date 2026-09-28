@@ -548,6 +548,7 @@ export default function Adss() {
           <select className="filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
             <option value="all">Semua Tipe</option>
             <option value="24c">24C</option>
+            <option value="36c">36C</option>
             <option value="48c">48C</option>
             <option value="72c">72C</option>
             <option value="96c">96C</option>
@@ -724,6 +725,7 @@ export default function Adss() {
                     }
                   }}>
                     <option value="24c">ADSS 24C</option>
+                    <option value="36c">ADSS 36C</option>
                     <option value="48c">ADSS 48C</option>
                     <option value="72c">ADSS 72C</option>
                     <option value="96c">ADSS 96C</option>
