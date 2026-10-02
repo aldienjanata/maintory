@@ -51,15 +51,29 @@ export default function Adss() {
 
   const generateNextCode = (typeToGenerate, currentHaspels = haspels) => {
     const typePrefix = `A${typeToGenerate.toUpperCase()}-`
-    const existingNums = currentHaspels
-      .filter(h => h.haspel_code && h.haspel_code.toUpperCase().startsWith(typePrefix))
-      .map(h => {
-        const numStr = h.haspel_code.substring(typePrefix.length)
-        return parseInt(numStr, 10)
-      })
-      .filter(n => !isNaN(n))
-    
-    const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1
+    const existingNums = new Set(
+      currentHaspels
+        .filter(h => h.haspel_code && h.haspel_code.toUpperCase().startsWith(typePrefix))
+        .map(h => {
+          const numStr = h.haspel_code.substring(typePrefix.length)
+          return parseInt(numStr, 10)
+        })
+        .filter(n => !isNaN(n))
+    )
+    // Cari nomor terkecil yang belum terpakai (gap filling)
+    let nextNum = 1
+    if (existingNums.size > 0) {
+      const maxNum = Math.max(...existingNums)
+      let foundGap = false
+      for (let i = 1; i <= maxNum; i++) {
+        if (!existingNums.has(i)) {
+          nextNum = i
+          foundGap = true
+          break
+        }
+      }
+      if (!foundGap) nextNum = maxNum + 1
+    }
     return `${typePrefix}${String(nextNum).padStart(3, '0')}`
   }
 
