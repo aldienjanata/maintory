@@ -144,7 +144,7 @@ export default function BonBarang() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [dispRes, schedRes, techRes, snRes, haspelRes, adssRes, otherRes] = await Promise.all([
+      const [dispRes, schedRes, techRes, snRes, haspelRes, adssRes, otherRes, expRes] = await Promise.all([
         // Note: we might not have a reliable foreign key to users if we use UUID array `technicians`
         // We will fetch users separately and map them locally.
         supabase
@@ -157,7 +157,8 @@ export default function BonBarang() {
         supabase.from('serial_numbers').select('id, serial_number').eq('status', 'tersedia'),
         supabase.from('dropcore_haspels').select('id, haspel_code, initial_meters, used_meters, type').in('status', ['tersedia']),
         supabase.from('adss_haspels').select('id, haspel_code, initial_meters, used_meters, type, tube_type, brand').in('status', ['tersedia']),
-        supabase.from('warehouses').select('id, item_name, initial_stock').gt('initial_stock', 0)
+        supabase.from('warehouses').select('id, item_name, initial_stock').gt('initial_stock', 0),
+        supabase.from('expense_items').select('warehouse_item_id, quantity').eq('item_type', 'other')
       ])
 
       if (techRes.data) {
@@ -183,7 +184,14 @@ export default function BonBarang() {
       if (snRes.data) setSnList(snRes.data)
       if (haspelRes.data) setHaspelList(haspelRes.data)
       if (adssRes.data) setAdssList(adssRes.data)
-      if (otherRes.data) setOtherItems(otherRes.data)
+      if (otherRes.data) {
+        const expenses = expRes?.data || []
+        const processedOther = otherRes.data.map(w => {
+          const out = expenses.filter(e => e.warehouse_item_id === w.id).reduce((acc, e) => acc + (Number(e.quantity) || 0), 0)
+          return { ...w, current_stock: w.initial_stock - out }
+        })
+        setOtherItems(processedOther)
+      }
 
       if (schedRes.data) {
         let allScheds = schedRes.data || []
@@ -218,7 +226,7 @@ export default function BonBarang() {
     if (refreshingStok) return
     setRefreshingStok(true)
     try {
-      const [snRes, haspelRes, adssRes, otherRes] = await Promise.all([
+      const [snRes, haspelRes, adssRes, otherRes, expRes2] = await Promise.all([
         supabase.from('serial_numbers').select('id, serial_number').eq('status', 'tersedia'),
         supabase.from('dropcore_haspels').select('id, haspel_code, initial_meters, used_meters, type').in('status', ['tersedia']),
         supabase.from('adss_haspels').select('id, haspel_code, initial_meters, used_meters, type, tube_type, brand').in('status', ['tersedia']),
@@ -227,7 +235,14 @@ export default function BonBarang() {
       if (snRes.data) setSnList(snRes.data)
       if (haspelRes.data) setHaspelList(haspelRes.data)
       if (adssRes.data) setAdssList(adssRes.data)
-      if (otherRes.data) setOtherItems(otherRes.data)
+      if (otherRes.data) {
+        const expenses = expRes2?.data || []
+        const processedOther = otherRes.data.map(w => {
+          const out = expenses.filter(e => e.warehouse_item_id === w.id).reduce((acc, e) => acc + (Number(e.quantity) || 0), 0)
+          return { ...w, current_stock: w.initial_stock - out }
+        })
+        setOtherItems(processedOther)
+      }
       if (showToast) toast.success('Data stok berhasil diperbarui!', { icon: '🔄', duration: 2000 })
     } catch (err) {
       if (showToast) toast.error('Gagal memperbarui stok')
@@ -1258,7 +1273,7 @@ export default function BonBarang() {
     const brandInfo = h.brand ? ` | ${h.brand}` : ''
     return { value: h.id, label: `${h.haspel_code} [${typeLabel}${brandInfo}] — Sisa: ${sisa}m`, sisa, initial_meters: h.initial_meters, used_meters: h.used_meters }
   }).filter(h => h.sisa > 0)
-  const otherOptions = otherItems.map(w => ({ value: w.id, label: `${w.item_name} (stok: ${w.initial_stock})` }))
+  const otherOptions = otherItems.map(w => ({ value: w.id, label: `${w.item_name} (stok: ${w.current_stock})` }))
 
   let activeDispatches = dispatches.filter(d => d.status === 'sedang_dibawa')
   let historyDispatches = dispatches.filter(d => d.status === 'selesai')
