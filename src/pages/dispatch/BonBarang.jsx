@@ -1036,8 +1036,8 @@ export default function BonBarang() {
       // ===== SHEET LOKASI: Lokasi Tiang & ADSS =====
       showProgress('Mengekspor Data', 'Memproses Data Lokasi...', 42)
       const wsLokasi = workbook.addWorksheet('Lokasi Pemasangan')
-      const headersLokasi = ['Tanggal', 'Teknisi', 'Jenis Pekerjaan', 'Lokasi', 'Jenis Item', 'Kode / Nama', 'Tipe Lokasi', 'URL Maps']
-      setColumnWidths(wsLokasi, [14, 28, 20, 20, 18, 26, 18, 60])
+      const headersLokasi = ['Tanggal', 'Teknisi', 'Jenis Pekerjaan', 'Lokasi', 'Jenis Item', 'Kode / Nama', 'Tipe Lokasi', 'URL Maps', 'Catatan']
+      setColumnWidths(wsLokasi, [14, 28, 20, 20, 18, 26, 18, 60, 30])
       applyHeaderStyle(wsLokasi, headersLokasi, '7C3AED') // purple
 
       for (const d of filteredData) {
@@ -1057,7 +1057,8 @@ export default function BonBarang() {
                 d.dispatch_date, techName, workTypeLabel, site,
                 isTiang ? 'Tiang' : 'ODP/Splitter', itemName,
                 urls.length > 1 ? `Lokasi ${idx + 1}` : 'Lokasi',
-                url
+                url,
+                d.notes || '-'
               ])
             })
           }
@@ -1067,13 +1068,13 @@ export default function BonBarang() {
             if (it.adss_titik_awal) {
               wsLokasi.addRow([
                 d.dispatch_date, techName, workTypeLabel, site,
-                'Kabel ADSS', haspelCode, 'Titik Awal Penarikan', it.adss_titik_awal
+                'Kabel ADSS', haspelCode, 'Titik Awal Penarikan', it.adss_titik_awal, d.notes || '-'
               ])
             }
             if (it.adss_titik_akhir) {
               wsLokasi.addRow([
                 d.dispatch_date, techName, workTypeLabel, site,
-                'Kabel ADSS', haspelCode, 'Titik Akhir Penarikan', it.adss_titik_akhir
+                'Kabel ADSS', haspelCode, 'Titik Akhir Penarikan', it.adss_titik_akhir, d.notes || '-'
               ])
             }
           }
