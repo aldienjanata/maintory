@@ -66,7 +66,7 @@ export default function SerialNumber() {
     
     const { data: logs } = await supabase.from('inventory_log').select('*, user:users(full_name)').eq('item_type', 'sn').eq('item_id', item.id).order('log_date', { ascending: true })
     const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians, work_type, note)').eq('item_type', 'ont').eq('serial_number_id', item.id).order('created_at', { ascending: true })
-    const { data: dispItems } = await supabase.from('dispatch_items').select('*, dispatch:dispatches(dispatch_date, location, technician_ids, work_type, status, note)').eq('item_type', 'ont').eq('serial_number_id', item.id)
+    const { data: dispItems } = await supabase.from('dispatch_items').select('*, dispatch:dispatches(dispatch_date, site, location, technicians, technician_id, technician_ids, work_type, status, notes)').eq('item_type', 'ont').eq('serial_number_id', item.id)
     const { data: replacements } = await supabase.from('ont_replacements').select('*, technician:users(full_name)').eq('new_serial_number_id', item.id)
     
     const { data: usersData } = await supabase.from('users').select('id, full_name')
@@ -88,13 +88,19 @@ export default function SerialNumber() {
         type: 'in' 
       })),
       ...(expItems || [])
-        .map(ei => ({ 
-          date: ei.expense?.expense_date || '-', 
-          action: ei.expense?.note?.includes('Bon Barang') ? 'Bon Barang' : 'Pemakaian', 
-          note: `${workTypeLabels[ei.expense?.work_type] || ei.expense?.work_type || '-'} | Lokasi: ${ei.expense?.site || '-'} | Teknisi: ${(ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')}`, 
-          qty: 1, 
-          type: 'out' 
-        })),
+        .map(ei => {
+          const techNames = (ei.expense?.technicians || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+          const wType = ei.expense?.work_type
+          return { 
+            date: ei.expense?.expense_date || '-', 
+            action: ei.expense?.note?.includes('Bon Barang') ? 'Bon Barang' : 'Pemakaian', 
+            note: ei.expense?.site || '-',
+            technicianNames: techNames || '-',
+            workType: workTypeLabels[wType] || wType || '-',
+            qty: 1, 
+            type: 'out' 
+          }
+        }),
       ...(dispItems || [])
         .filter(di => {
           if (di.dispatch?.status === 'selesai') {
@@ -107,7 +113,9 @@ export default function SerialNumber() {
           return {
             date: di.dispatch?.dispatch_date || '-',
             action: isSelesai ? 'Batal Pakai (Bon Barang)' : `Dibawa Teknisi (${di.dispatch?.status || '-'})`,
-            note: `Lokasi: ${di.dispatch?.location || '-'} | ${workTypeLabels[di.dispatch?.work_type] || di.dispatch?.work_type || '-'} | Teknisi: ${(di.dispatch?.technician_ids || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')}`,
+            note: `${workTypeLabels[di.dispatch?.work_type] || di.dispatch?.work_type || '-'} | Lokasi: ${di.dispatch?.site || di.dispatch?.location || '-'}`,
+            technicianNames: ((di.dispatch?.technicians || di.dispatch?.technician_ids || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')) || '-',
+            workType: workTypeLabels[di.dispatch?.work_type] || di.dispatch?.work_type || '-',
             qty: 1,
             type: isSelesai ? 'in' : 'pending'
           }
@@ -116,7 +124,9 @@ export default function SerialNumber() {
         .map(r => ({
           date: r.replacement_date || '-',
           action: 'Pergantian ONT',
-          note: `Pelanggan: ${r.customer_name || '-'} | Lokasi: ${r.location || '-'} | Teknisi: ${r.technician?.full_name || '-'}`,
+          note: `Pelanggan: ${r.customer_name || '-'} | Lokasi: ${r.location || '-'}`,
+          technicianNames: r.technician?.full_name || '-',
+          workType: 'Pergantian ONT',
           qty: 1,
           type: 'out'
         }))

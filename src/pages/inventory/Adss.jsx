@@ -217,7 +217,7 @@ export default function Adss() {
 
     const { data: dispItems } = await supabase
       .from('dispatch_items')
-      .select('*, dispatch:dispatches(*)')
+      .select('*, dispatch:dispatches(id, dispatch_date, site, location, technicians, technician_id, technician_ids, work_type, status, notes)')
       .eq('item_type', 'adss')
       .eq('adss_id', haspel.id)
 

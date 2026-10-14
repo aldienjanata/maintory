@@ -150,7 +150,7 @@ export default function StokGudang() {
 
     const { data: logs } = await supabase.from('inventory_log').select('*, user:users(full_name)').eq('item_type', 'stok_gudang').eq('item_id', item.id).order('log_date', { ascending: true })
     const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians, work_type, note)').eq('item_type', 'other').eq('warehouse_item_id', item.id).order('created_at', { ascending: true })
-    const { data: dispItems } = await supabase.from('dispatch_items').select('*, dispatch:dispatches(dispatch_date, location, technician_ids, work_type, status)').eq('item_type', 'other').eq('warehouse_item_id', item.id)
+    const { data: dispItems } = await supabase.from('dispatch_items').select('*, dispatch:dispatches(dispatch_date, site, location, technicians, technician_id, technician_ids, work_type, status, notes)').eq('item_type', 'other').eq('warehouse_item_id', item.id)
 
     const { data: usersData } = await supabase.from('users').select('id, full_name')
     const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
@@ -177,18 +177,22 @@ export default function StokGudang() {
       })
       
     ;(dispItems || [])
-      .filter(di => di.dispatch?.status === 'selesai' && Number(di.quantity) > 0)
+      .filter(di => Number(di.quantity_dispatched) > 0)
       .forEach(di => {
-        const techNames = (di.dispatch?.technician_ids || []).map(tid => usersMap[tid]).filter(Boolean).join(', ')
+        const techIds = di.dispatch?.technicians || di.dispatch?.technician_ids || (di.dispatch?.technician_id ? [di.dispatch.technician_id] : [])
+        const techNames = techIds.map(tid => usersMap[tid]).filter(Boolean).join(', ')
         const wType = di.dispatch?.work_type
+        const isSelesai = di.dispatch?.status === 'selesai'
+        const qtyUsed = Number(di.quantity_used) || 0
+        const qtyDispatched = Number(di.quantity_dispatched) || 0
         combined.push({
           date: di.dispatch?.dispatch_date || '-',
-          action: 'Keluar',
-          note: di.dispatch?.location || '-',
-          technicianNames: techNames,
-          workType: workTypeLabels[wType] || wType,
-          qty: di.quantity,
-          type: 'out'
+          action: isSelesai ? 'Keluar (Bon Barang)' : 'Dibawa Teknisi (Bon Barang)',
+          note: di.dispatch?.site || di.dispatch?.location || di.dispatch?.notes || '-',
+          technicianNames: techNames || '-',
+          workType: workTypeLabels[wType] || wType || '-',
+          qty: isSelesai ? qtyUsed : qtyDispatched,
+          type: isSelesai ? 'out' : 'pending'
         })
       })
       
