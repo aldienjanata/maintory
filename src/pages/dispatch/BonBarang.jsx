@@ -116,8 +116,14 @@ export default function BonBarang() {
 
   const [refreshingStok, setRefreshingStok] = useState(false)
 
+  // --- FILTER (Riwayat tab) ---
+  const [filterDate, setFilterDate] = useState('')
+  const [filterWorkType, setFilterWorkType] = useState('')
+  const [filterTechId, setFilterTechId] = useState('')
+
   useEffect(() => { fetchData() }, [])
   useEffect(() => { setPage(1) }, [activeTab])
+  useEffect(() => { setPage(1) }, [filterDate, filterWorkType, filterTechId])
 
   // Real-time listener untuk stok saat modal buat bon terbuka (tanpa perlu refresh manual/tunggu 30s)
   useEffect(() => {
@@ -1293,7 +1299,20 @@ export default function BonBarang() {
   ].sort((a, b) => new Date(b.dispatch_date || b.schedule_date) - new Date(a.dispatch_date || a.schedule_date))
 
   const paginatedCombined = combinedActive.slice((page - 1) * perPage, page * perPage)
-  const paginatedHistory = historyDispatches.slice((page - 1) * perPage, page * perPage)
+  // Apply filters to historyDispatches, sorted by dispatch_date DESC (newest first)
+  let filteredHistory = historyDispatches
+    .filter(d => {
+      if (filterDate && !d.dispatch_date?.startsWith(filterDate)) return false
+      if (filterWorkType && d.work_type !== filterWorkType) return false
+      if (filterTechId) {
+        const techIds = d.technicians && d.technicians.length > 0 ? d.technicians : [d.technician_id].filter(Boolean)
+        if (!techIds.includes(filterTechId)) return false
+      }
+      return true
+    })
+    .sort((a, b) => new Date(b.dispatch_date) - new Date(a.dispatch_date))
+
+  const paginatedHistory = filteredHistory.slice((page - 1) * perPage, page * perPage)
   const paginatedSchedules = schedules.slice((schedPage - 1) * schedPerPage, schedPage * schedPerPage)
 
   const getTechNames = (techIds = []) => {
@@ -1500,33 +1519,81 @@ export default function BonBarang() {
           ) : activeTab === 'riwayat' ? (
             /* ===== RIWAYAT TAB ===== */
             <>
+              {/* Filter bar for Riwayat */}
+              <div className="filter-bar" style={{ marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                <input
+                  type="month"
+                  value={filterDate}
+                  onChange={e => setFilterDate(e.target.value)}
+                  style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
+                  title="Filter Bulan"
+                />
+                <select
+                  value={filterWorkType}
+                  onChange={e => setFilterWorkType(e.target.value)}
+                  style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
+                >
+                  <option value="">Semua Pekerjaan</option>
+                  {WORK_TYPES.map(w => <option key={w.value} value={w.value}>{w.label}</option>)}
+                </select>
+                <select
+                  value={filterTechId}
+                  onChange={e => setFilterTechId(e.target.value)}
+                  style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
+                >
+                  <option value="">Semua Teknisi</option>
+                  {allUsers.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                </select>
+                {(filterDate || filterWorkType || filterTechId) && (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => { setFilterDate(''); setFilterWorkType(''); setFilterTechId('') }}
+                  >
+                    Reset Filter
+                  </button>
+                )}
+                <span style={{ marginLeft: 'auto', fontSize: '13px', color: 'var(--text-secondary)', alignSelf: 'center' }}>
+                  {filteredHistory.length} bon ditemukan
+                </span>
+              </div>
+
               {historyDispatches.length > 0 ? (
                 <>
-                  <div className="desktop-only table-responsive">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Tanggal</th>
-                          <th>Teknisi</th>
-                          <th>Lokasi / Pekerjaan</th>
-                          <th>Item</th>
-                          <th>Status</th>
-                          <th className="text-right">Aksi</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {paginatedHistory.map(d => (
-                          <BonTableRow key={d.id} d={d} role={role} getTechNames={getTechNames} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} handleOpenLapor={handleOpenLapor} handleOpenEdit={handleOpenEdit} handleDelete={handleDelete} setDetailDispatch={setDetailDispatch} />
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="mobile-only">
-                    <div className="mobile-card-list" style={{ gap: '10px' }}>
-                      {paginatedHistory.map(d => <BonCard key={d.id} d={d} role={role} getTechNames={getTechNames} expandedId={expandedId} setExpandedId={setExpandedId} handleOpenLapor={handleOpenLapor} handleOpenEdit={handleOpenEdit} handleDelete={handleDelete} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} />)}
+                  {filteredHistory.length > 0 ? (
+                    <>
+                      <div className="desktop-only table-responsive">
+                        <table className="table">
+                          <thead>
+                            <tr>
+                              <th>Tanggal</th>
+                              <th>Teknisi</th>
+                              <th>Lokasi / Pekerjaan</th>
+                              <th>Item</th>
+                              <th>Status</th>
+                              <th className="text-right">Aksi</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paginatedHistory.map(d => (
+                              <BonTableRow key={d.id} d={d} role={role} getTechNames={getTechNames} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} handleOpenLapor={handleOpenLapor} handleOpenEdit={handleOpenEdit} handleDelete={handleDelete} setDetailDispatch={setDetailDispatch} />
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="mobile-only">
+                        <div className="mobile-card-list" style={{ gap: '10px' }}>
+                          {paginatedHistory.map(d => <BonCard key={d.id} d={d} role={role} getTechNames={getTechNames} expandedId={expandedId} setExpandedId={setExpandedId} handleOpenLapor={handleOpenLapor} handleOpenEdit={handleOpenEdit} handleDelete={handleDelete} SITES={SITES} ITEM_TYPE_COLORS={ITEM_TYPE_COLORS} />)}
+                        </div>
+                      </div>
+                      <Pagination page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} totalItems={filteredHistory.length} />
+                    </>
+                  ) : (
+                    <div className="empty-state" style={{ minHeight: '180px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <PackageCheck size={36} />
+                      <h3>Tidak Ada Hasil</h3>
+                      <p>Tidak ada bon yang sesuai filter. Coba ubah atau reset filter.</p>
                     </div>
-                  </div>
-                  <Pagination page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} totalItems={historyDispatches.length} />
+                  )}
                 </>
               ) : (
                 <div className="empty-state" style={{ minHeight: 'calc(100vh - 280px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}><PackageCheck size={44} /><h3>Belum Ada Riwayat</h3><p>Bon yang sudah selesai dilaporkan akan muncul di sini.</p></div>
