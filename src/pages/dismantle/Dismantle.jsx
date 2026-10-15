@@ -661,21 +661,17 @@ export default function Dismantle() {
               <input type="text" placeholder="Cari nama/ID..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
             </div>
 
-            <div className="date-filter-group" style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <input
-                type={dateFilter ? 'date' : 'text'}
-                placeholder="Semua Tanggal"
-                onFocus={(e) => e.target.type = 'date'}
-                onBlur={(e) => { if (!e.target.value) e.target.type = 'text' }}
-                className="filter-select date-input"
+                type="date"
+                className="filter-select"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                style={{ width: '100%', paddingRight: dateFilter ? '30px' : '12px' }}
+                title="Filter Tanggal"
               />
               {dateFilter && (
-                <button className="btn-clear-date" onClick={() => setDateFilter('')} title="Tampilkan semua tanggal"
-                  style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', padding: '4px' }}>
-                  <X size={16} />
+                <button className="btn-icon" onClick={() => setDateFilter('')} title="Reset tanggal" style={{ flexShrink: 0 }}>
+                  <X size={14} />
                 </button>
               )}
             </div>
