@@ -85,8 +85,8 @@ export default function BarcodeScanner() {
   // ===== CAMERA STATE =====
   const [isCameraOpen, setIsCameraOpen] = useState(false)
   const [camLastBarcode, setCamLastBarcode] = useState('')
-  const [camScanCount, setCamScanCount] = useState(0)
   const [camScannedItems, setCamScannedItems] = useState([])
+  const camScanCount = camScannedItems.filter(i => i.status !== 'error').length
   const [editingCamScanId, setEditingCamScanId] = useState(null)
   const [editingCamScanValue, setEditingCamScanValue] = useState('')
   const [camStatus, setCamStatus] = useState('scanning')
@@ -269,7 +269,6 @@ export default function BarcodeScanner() {
   const openCamera = async () => {
     if (!hasBarcodeDetector) { toast.error('Browser ini tidak mendukung scan kamera. Gunakan Chrome di Android.'); return }
     setIsCameraOpen(true)
-    setCamScanCount(0)
     setCamScannedItems([])
     setCamLastBarcode('')
     try {
@@ -305,14 +304,12 @@ export default function BarcodeScanner() {
               setCamStatus('detected')
               
               const itemId = crypto.randomUUID()
-              setCamScanCount(prev => prev + 1)
               setCamScannedItems(prev => [{ barcode, id: itemId, status: 'saving' }, ...prev])
 
               processBarcode(barcode).catch(() => false).then(result => {
                 if (result) {
                   setCamScannedItems(prev => prev.map(item => item.id === itemId ? { ...item, status: 'success' } : item))
                 } else {
-                  setCamScanCount(prev => Math.max(0, prev - 1))
                   setCamScannedItems(prev => prev.map(item => item.id === itemId ? { ...item, status: 'error' } : item))
                 }
               })
@@ -344,13 +341,11 @@ export default function BarcodeScanner() {
       setTempScans(prev => prev.filter(s => s.barcode !== item.barcode))
     }
     
-    setCamScanCount(prev => Math.max(0, prev - 1))
     setCamScannedItems(prev => prev.filter(i => i.id !== item.id))
     if (camLastBarcode === item.barcode) setCamLastBarcode('')
     setEditingCamScanId(null)
 
     const newItemId = crypto.randomUUID()
-    setCamScanCount(prev => prev + 1)
     setCamScannedItems(prev => [{ barcode: newBarcode, id: newItemId, status: 'saving' }, ...prev])
     setCamLastBarcode(newBarcode)
 
@@ -358,29 +353,58 @@ export default function BarcodeScanner() {
     if (result) {
       setCamScannedItems(prev => prev.map(i => i.id === newItemId ? { ...i, status: 'success' } : i))
     } else {
-      setCamScanCount(prev => Math.max(0, prev - 1))
       setCamScannedItems(prev => prev.map(i => i.id === newItemId ? { ...i, status: 'error' } : i))
     }
   }
 
-  const handleDeleteCamScan = async (barcode) => {
+  const handleDeleteCamScan = async (item) => {
+    const barcode = typeof item === 'string' ? item : item.barcode
+    const itemId = typeof item === 'object' ? item.id : null
+
+    // Check if there are other scans of this same barcode in this session (excluding this item)
+    const otherScans = camScannedItems.filter(i => i.barcode === barcode && (itemId ? i.id !== itemId : false))
+
     if (activeTab === 'simpan') {
-      const { error } = await supabase.from('barcode_scans').delete().eq('barcode', barcode)
-      if (error) {
-        toast.error('Gagal hapus: ' + error.message)
+      if (otherScans.length === 0) {
+        const { error } = await supabase.from('barcode_scans').delete().eq('barcode', barcode)
+        if (error) {
+          toast.error('Gagal hapus: ' + error.message)
+          return
+        }
       } else {
-        toast.success(`Dihapus: ${barcode}`)
-        fetchScans()
-        setCamScanCount(prev => Math.max(0, prev - 1))
-        setCamScannedItems(prev => prev.filter(i => i.barcode !== barcode))
-        if (camLastBarcode === barcode) setCamLastBarcode('')
+        const { data: existing } = await supabase.from('barcode_scans').select('id, scan_count').eq('barcode', barcode).maybeSingle()
+        if (existing && existing.scan_count > 1) {
+          await supabase.from('barcode_scans').update({ scan_count: existing.scan_count - 1 }).eq('id', existing.id)
+        }
       }
+      toast.success(`Dihapus: ${barcode}`)
+      fetchScans()
     } else {
-      setTempScans(prev => prev.filter(s => s.barcode !== barcode))
-      setCamScanCount(prev => Math.max(0, prev - 1))
-      setCamScannedItems(prev => prev.filter(i => i.barcode !== barcode))
-      if (camLastBarcode === barcode) setCamLastBarcode('')
+      setTempScans(prev => {
+        if (itemId) {
+          const idx = prev.findIndex(s => s.barcode === barcode)
+          if (idx !== -1) {
+            const next = [...prev]
+            next.splice(idx, 1)
+            return next
+          }
+        }
+        return prev.filter(s => s.barcode !== barcode)
+      })
       toast.success(`Dihapus dari sesi sementara`)
+    }
+
+    setCamScannedItems(prev => {
+      if (itemId) return prev.filter(i => i.id !== itemId)
+      return prev.filter(i => i.barcode !== barcode)
+    })
+
+    if (camLastBarcode === barcode) {
+      const remaining = camScannedItems.filter(i => itemId ? i.id !== itemId : i.barcode !== barcode)
+      setCamLastBarcode(remaining[0]?.barcode || '')
+    }
+    if (lastBarcodeRef.current === barcode) {
+      lastBarcodeRef.current = ''
     }
   }
 
@@ -1117,7 +1141,7 @@ export default function BarcodeScanner() {
                             <button onClick={() => { setEditingCamScanId(item.id); setEditingCamScanValue(item.barcode); }} style={{ background: 'transparent', border: 'none', color: '#60a5fa', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               <Edit2 size={15} />
                             </button>
-                            <button onClick={() => handleDeleteCamScan(item.barcode)} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <button onClick={() => handleDeleteCamScan(item)} style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               <Trash2 size={15} />
                             </button>
                           </div>
