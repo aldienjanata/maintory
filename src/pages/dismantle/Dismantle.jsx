@@ -13,6 +13,35 @@ import Pagination from '../../components/common/Pagination'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+export function toTitleCase(str) {
+  if (!str) return ''
+  return str
+    .trim()
+    .toLowerCase()
+    .replace(/(?:^|[\s/([-])([a-z])/g, (match, ch) => match.slice(0, -1) + ch.toUpperCase())
+}
+
+export function formatTeknisiText(str) {
+  if (!str) return ''
+  let cleaned = str.trim()
+  if (cleaned === '-' || !cleaned) return cleaned
+
+  // Replace separators like '/', '&', '+', ' dan ' with ','
+  cleaned = cleaned.replace(/\s*(\/|&|\+|\bdan\b)\s*/gi, ',')
+
+  // If no comma exists, but there are multiple space-separated words, split by space
+  if (!cleaned.includes(',')) {
+    const parts = cleaned.split(/\s+/).filter(Boolean)
+    if (parts.length > 1) cleaned = parts.join(',')
+  }
+
+  return cleaned
+    .split(',')
+    .map(name => toTitleCase(name))
+    .filter(Boolean)
+    .join(', ')
+}
+
 /**
  * Parse text from WA message format into an array of structured objects.
  */
@@ -63,15 +92,15 @@ function parseWaPickups(text) {
     return {
       _id: Math.random().toString(36).substr(2, 9),
       pickup_date: parseTanggal(pickup_date_raw),
-      full_name,
-      address: get(['Alamat']),
-      customer_id: get(['ID Pelanggan', 'ID']),
-      status_pelanggan: get(['Status Pelanggan', 'Status']),
-      alasan_berhenti: get(['Alasan Berhenti', 'Alasan']),
-      note: get(['Keterangan', 'Note', 'Catatan']),
-      teknisi_text: get(['Teknisi']),
-      serial_number: get(['SN Modem', 'Serial Number', 'SN ONT', 'SN']),
-      adaptor: get(['Adaptor', 'Adaptor Charger']),
+      full_name: toTitleCase(full_name),
+      address: (get(['Alamat']) || '').trim(),
+      customer_id: (get(['ID Pelanggan', 'ID']) || '').trim(),
+      status_pelanggan: toTitleCase(get(['Status Pelanggan', 'Status'])),
+      alasan_berhenti: (get(['Alasan Berhenti', 'Alasan']) || '').trim(),
+      note: (get(['Keterangan', 'Note', 'Catatan']) || '').trim(),
+      teknisi_text: formatTeknisiText(get(['Teknisi'])),
+      serial_number: (get(['SN Modem', 'Serial Number', 'SN ONT', 'SN']) || '').trim().toUpperCase(),
+      adaptor: toTitleCase(get(['Adaptor', 'Adaptor Charger'])),
     }
   }).filter(Boolean)
 
@@ -170,9 +199,9 @@ export default function Dismantle() {
     setLoading(true)
     setLoadingPickups(true)
     const [res, techRes, pickupRes] = await Promise.all([
-      supabase.from('dismantles').select('*').order('date_input', { ascending: false }).limit(1000),
+      supabase.from('dismantles').select('*').order('created_at', { ascending: false }).limit(1000),
       supabase.from('users').select('id, full_name').in('role', ['admin', 'teknisi']).eq('is_active', true),
-      supabase.from('dismantle_pickups').select('*').order('pickup_date', { ascending: false }).limit(1000),
+      supabase.from('dismantle_pickups').select('*').order('created_at', { ascending: false }).limit(1000),
     ])
     if (!res.error) setItems(res.data || [])
     if (!techRes.error) setTechnicians(techRes.data || [])
@@ -205,16 +234,27 @@ export default function Dismantle() {
   const handleSave = async () => {
     if (!form.customer_id || !form.full_name) { toast.error('ID Pelanggan dan nama wajib diisi'); return }
     setSaving(true)
+    const cleanForm = {
+      ...form,
+      customer_id: form.customer_id.trim(),
+      full_name: toTitleCase(form.full_name),
+      serial_number: (form.serial_number || '').trim().toUpperCase(),
+      address: (form.address || '').trim(),
+      lokasi: (form.lokasi || '').trim(),
+      koordinator: toTitleCase(form.koordinator),
+      phone_number: (form.phone_number || '').trim(),
+      note: (form.note || '').trim()
+    }
     try {
       if (editItem) {
-        const { error } = await supabase.from('dismantles').update({ ...form, updated_at: new Date().toISOString() }).eq('id', editItem.id)
+        const { error } = await supabase.from('dismantles').update({ ...cleanForm, updated_at: new Date().toISOString() }).eq('id', editItem.id)
         if (error) throw error
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Edit Dismantle', detail: `ID: ${form.customer_id}` })
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Edit Dismantle', detail: `ID: ${cleanForm.customer_id}` })
         toast.success('Data dismantle diperbarui')
       } else {
-        const { error } = await supabase.from('dismantles').insert({ ...form, created_by: profile.id })
+        const { error } = await supabase.from('dismantles').insert({ ...cleanForm, created_at: new Date().toISOString(), created_by: profile.id })
         if (error) throw error
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Tambah Dismantle', detail: `ID: ${form.customer_id} - ${form.full_name}` })
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Tambah Dismantle', detail: `ID: ${cleanForm.customer_id} - ${cleanForm.full_name}` })
         toast.success('Data dismantle ditambahkan')
       }
       setIsModalOpen(false)
@@ -303,8 +343,19 @@ export default function Dismantle() {
     try {
       showProgress('Menyimpan Data', 'Memulai proses penyimpanan...', 10)
       
-      const toInsert = parsedPickups.map(({ _id, ...rest }) => ({
+      const now = Date.now()
+      const toInsert = parsedPickups.map(({ _id, ...rest }, idx) => ({
         ...rest,
+        full_name: toTitleCase(rest.full_name),
+        teknisi_text: formatTeknisiText(rest.teknisi_text),
+        serial_number: (rest.serial_number || '').trim().toUpperCase(),
+        customer_id: (rest.customer_id || '').trim(),
+        status_pelanggan: toTitleCase(rest.status_pelanggan),
+        alasan_berhenti: (rest.alasan_berhenti || '').trim(),
+        adaptor: toTitleCase(rest.adaptor),
+        note: (rest.note || '').trim(),
+        address: (rest.address || '').trim(),
+        created_at: new Date(now + (parsedPickups.length - idx) * 100).toISOString(),
         created_by: profile.id
       }))
 
@@ -344,16 +395,29 @@ export default function Dismantle() {
     if (!pickupForm.full_name || !pickupForm.pickup_date) { toast.error('Nama & Tanggal Pengambilan wajib diisi'); return }
     setSavingPickup(true)
     try {
+      const cleanData = {
+        pickup_date: pickupForm.pickup_date,
+        full_name: toTitleCase(pickupForm.full_name),
+        address: (pickupForm.address || '').trim(),
+        customer_id: (pickupForm.customer_id || '').trim(),
+        status_pelanggan: toTitleCase(pickupForm.status_pelanggan),
+        alasan_berhenti: (pickupForm.alasan_berhenti || '').trim(),
+        note: (pickupForm.note || '').trim(),
+        teknisi_text: formatTeknisiText(pickupForm.teknisi_text),
+        serial_number: (pickupForm.serial_number || '').trim().toUpperCase(),
+        adaptor: toTitleCase(pickupForm.adaptor),
+      }
+
       if (editPickup) {
-        const { error } = await supabase.from('dismantle_pickups').update({ ...pickupForm, updated_at: new Date().toISOString() }).eq('id', editPickup.id)
+        const { error } = await supabase.from('dismantle_pickups').update({ ...cleanData, updated_at: new Date().toISOString() }).eq('id', editPickup.id)
         if (error) throw error
         toast.success('Data pengambilan diperbarui')
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Edit Pengambilan', detail: pickupForm.full_name })
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Edit Pengambilan', detail: cleanData.full_name })
       } else {
-        const { error } = await supabase.from('dismantle_pickups').insert({ ...pickupForm, created_by: profile.id })
+        const { error } = await supabase.from('dismantle_pickups').insert({ ...cleanData, created_at: new Date().toISOString(), created_by: profile.id })
         if (error) throw error
         toast.success('Data pengambilan berhasil dicatat!')
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Catat Pengambilan', detail: `${pickupForm.full_name} - ${pickupForm.customer_id}` })
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Dismantle', action: 'Catat Pengambilan', detail: `${cleanData.full_name} - ${cleanData.customer_id}` })
       }
       setIsPickupModalOpen(false)
       fetchAll()
@@ -411,6 +475,13 @@ export default function Dismantle() {
         fileLabel = `${bln} ${exportYear}`
       }
 
+      // Sort data to export so newest input is on top
+      dataToExport = [...dataToExport].sort((a, b) => {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : (a.pickup_date ? new Date(a.pickup_date).getTime() : 0)
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : (b.pickup_date ? new Date(b.pickup_date).getTime() : 0)
+        return timeB - timeA
+      })
+
       if (!dataToExport.length) {
         toast.error('Tidak ada data untuk periode yang dipilih')
         hideProgress()
@@ -450,14 +521,14 @@ export default function Dismantle() {
         const p = dataToExport[i]
         const row = ws.addRow([
           p.pickup_date ? format(parseISO(p.pickup_date), 'd MMMM yyyy', { locale: id }) : '',
-          p.full_name,
+          toTitleCase(p.full_name),
           p.customer_id || '',
           p.address || '',
-          p.status_pelanggan || '',
+          toTitleCase(p.status_pelanggan) || '',
           p.alasan_berhenti || '',
-          p.teknisi_text || '',
-          p.serial_number || '',
-          p.adaptor || '',
+          formatTeknisiText(p.teknisi_text) || '',
+          (p.serial_number || '').toUpperCase() || '',
+          toTitleCase(p.adaptor) || '',
           p.note || '',
         ])
         // Alternate row colors
@@ -555,13 +626,19 @@ export default function Dismantle() {
   // ── Filters ────────────────────────────────────────────────────────────────
   const koordinatorList = [...new Set(items.map(i => i.koordinator).filter(Boolean))].sort()
 
-  const filtered = items.filter(i => {
-    const matchSearch = i.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || i.customer_id?.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchStatus = statusFilter === 'all' || i.aksi === statusFilter
-    const matchDate = !dateFilter || i.date_input === dateFilter
-    const matchKoordinator = koordinatorFilter === 'all' || (i.koordinator || '') === koordinatorFilter
-    return matchSearch && matchStatus && matchDate && matchKoordinator
-  })
+  const filtered = items
+    .filter(i => {
+      const matchSearch = i.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || i.customer_id?.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchStatus = statusFilter === 'all' || i.aksi === statusFilter
+      const matchDate = !dateFilter || i.date_input === dateFilter
+      const matchKoordinator = koordinatorFilter === 'all' || (i.koordinator || '') === koordinatorFilter
+      return matchSearch && matchStatus && matchDate && matchKoordinator
+    })
+    .sort((a, b) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : (a.date_input ? new Date(a.date_input).getTime() : 0)
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : (b.date_input ? new Date(b.date_input).getTime() : 0)
+      return timeB - timeA
+    })
   const paginated = filtered.slice((page - 1) * perPage, page * perPage)
 
   // Pickup month options derived from data
@@ -569,14 +646,20 @@ export default function Dismantle() {
     pickups.map(p => p.pickup_date ? p.pickup_date.slice(0, 7) : null).filter(Boolean)
   )].sort((a, b) => b.localeCompare(a))
 
-  const filteredPickups = pickups.filter(p => {
-    const matchSearch = !searchPickup ||
-      p.full_name?.toLowerCase().includes(searchPickup.toLowerCase()) ||
-      p.customer_id?.toLowerCase().includes(searchPickup.toLowerCase()) ||
-      p.teknisi_text?.toLowerCase().includes(searchPickup.toLowerCase())
-    const matchMonth = pickupMonthFilter === 'all' || (p.pickup_date && p.pickup_date.startsWith(pickupMonthFilter))
-    return matchSearch && matchMonth
-  })
+  const filteredPickups = pickups
+    .filter(p => {
+      const matchSearch = !searchPickup ||
+        p.full_name?.toLowerCase().includes(searchPickup.toLowerCase()) ||
+        p.customer_id?.toLowerCase().includes(searchPickup.toLowerCase()) ||
+        p.teknisi_text?.toLowerCase().includes(searchPickup.toLowerCase())
+      const matchMonth = pickupMonthFilter === 'all' || (p.pickup_date && p.pickup_date.startsWith(pickupMonthFilter))
+      return matchSearch && matchMonth
+    })
+    .sort((a, b) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : (a.pickup_date ? new Date(a.pickup_date).getTime() : 0)
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : (b.pickup_date ? new Date(b.pickup_date).getTime() : 0)
+      return timeB - timeA
+    })
   const paginatedPickups = filteredPickups.slice((pickupPage - 1) * pickupPerPage, pickupPage * pickupPerPage)
 
   // ── Status badge helper ────────────────────────────────────────────────────
@@ -865,17 +948,17 @@ export default function Dismantle() {
                           </div>
                         </td>
                         <td>
-                          <div className="font-semibold">{item.full_name}</div>
+                          <div className="font-semibold">{toTitleCase(item.full_name)}</div>
                           {item.customer_id && <div className="text-secondary" style={{ fontSize: '11px' }}>{item.customer_id}</div>}
                           {item.address && <div className="text-secondary" style={{ fontSize: '11px', marginTop: '2px' }}>{item.address}</div>}
                         </td>
                         <td>
-                          {item.status_pelanggan && <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--danger)' }}>{item.status_pelanggan}</div>}
+                          {item.status_pelanggan && <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--danger)' }}>{toTitleCase(item.status_pelanggan)}</div>}
                           {item.alasan_berhenti && <div className="text-secondary" style={{ fontSize: '11px' }}>{item.alasan_berhenti}</div>}
                         </td>
-                        <td style={{ fontSize: '12px' }}>{item.teknisi_text || '-'}</td>
-                        <td><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{item.serial_number || '-'}</span></td>
-                        <td style={{ fontSize: '12px' }}>{item.adaptor || '-'}</td>
+                        <td style={{ fontSize: '12px' }}>{formatTeknisiText(item.teknisi_text) || '-'}</td>
+                        <td><span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{(item.serial_number || '').toUpperCase() || '-'}</span></td>
+                        <td style={{ fontSize: '12px' }}>{toTitleCase(item.adaptor) || '-'}</td>
                         <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{item.note || '-'}</td>
                         <td style={{ textAlign: 'right' }}>
                           <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
@@ -898,7 +981,7 @@ export default function Dismantle() {
                     <div key={item.id} className="mobile-card">
                       <div className="mobile-card-header" onClick={() => setExpandedPickupId(expandedPickupId === item.id ? null : item.id)}>
                         <div>
-                          <div className="mobile-card-title">{item.full_name}</div>
+                          <div className="mobile-card-title">{toTitleCase(item.full_name)}</div>
                           <div className="mobile-card-subtitle">{item.pickup_date ? format(parseISO(item.pickup_date), 'dd MMM yyyy', { locale: id }) : '-'}</div>
                         </div>
                         <span className="badge badge-success" style={{ fontSize: '10px' }}><PackageCheck size={10} /> Diambil</span>
@@ -907,11 +990,11 @@ export default function Dismantle() {
                         <div className="mobile-card-body">
                           <div className="mobile-info-row"><span className="mobile-info-label">ID Pelanggan</span><span className="mobile-info-value">{item.customer_id || '-'}</span></div>
                           <div className="mobile-info-row"><span className="mobile-info-label">Alamat</span><span className="mobile-info-value">{item.address || '-'}</span></div>
-                          <div className="mobile-info-row"><span className="mobile-info-label">Status</span><span className="mobile-info-value">{item.status_pelanggan || '-'}</span></div>
+                          <div className="mobile-info-row"><span className="mobile-info-label">Status</span><span className="mobile-info-value">{toTitleCase(item.status_pelanggan) || '-'}</span></div>
                           <div className="mobile-info-row"><span className="mobile-info-label">Alasan</span><span className="mobile-info-value">{item.alasan_berhenti || '-'}</span></div>
-                          <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{item.teknisi_text || '-'}</span></div>
-                          <div className="mobile-info-row"><span className="mobile-info-label">SN Modem</span><span className="mobile-info-value" style={{ fontFamily: 'monospace' }}>{item.serial_number || '-'}</span></div>
-                          <div className="mobile-info-row"><span className="mobile-info-label">Adaptor</span><span className="mobile-info-value">{item.adaptor || '-'}</span></div>
+                          <div className="mobile-info-row"><span className="mobile-info-label">Teknisi</span><span className="mobile-info-value">{formatTeknisiText(item.teknisi_text) || '-'}</span></div>
+                          <div className="mobile-info-row"><span className="mobile-info-label">SN Modem</span><span className="mobile-info-value" style={{ fontFamily: 'monospace' }}>{(item.serial_number || '').toUpperCase() || '-'}</span></div>
+                          <div className="mobile-info-row"><span className="mobile-info-label">Adaptor</span><span className="mobile-info-value">{toTitleCase(item.adaptor) || '-'}</span></div>
                           <div className="mobile-info-row"><span className="mobile-info-label">Keterangan</span><span className="mobile-info-value">{item.note || '-'}</span></div>
                           <div className="mobile-card-actions">
                             {can(role, 'dismantle.edit') && (
