@@ -7,7 +7,8 @@ import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
 import { 
   Search, Filter, Plus, Trash2, Edit2, CheckCircle, Clock,
-  MapPin, Phone, MessageCircle, AlertCircle, X, Download, Wrench, Calendar
+  MapPin, Phone, MessageCircle, AlertCircle, X, Download, Wrench, Calendar,
+  Copy, ClipboardList
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
@@ -37,6 +38,8 @@ export default function Maintenance() {
   const [globalTechnicians, setGlobalTechnicians] = useState([]) // Teknisi hari ini, berlaku ke semua tiket
   const [actionModal, setActionModal] = useState({ open: false, ticket: null, type: 'close', note: '' })
   const [exportModal, setExportModal] = useState(false)
+  const [isRawModalOpen, setIsRawModalOpen] = useState(false)
+  const [rawFilterStatus, setRawFilterStatus] = useState('all')
 
   useEffect(() => {
     fetchTickets()
@@ -260,7 +263,8 @@ export default function Maintenance() {
         (t.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (t.customer_id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (t.ticket_number?.toString() || '').includes(searchTerm) ||
-        (t.village || '').toLowerCase().includes(searchTerm.toLowerCase())
+        (t.village || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.address || '').toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchStatus = statusFilter === 'all' || t.status === statusFilter
 
@@ -295,6 +299,63 @@ export default function Maintenance() {
   const totalPages = Math.ceil(filteredTickets.length / ITEMS_PER_PAGE)
   const paginated = filteredTickets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
+  // ─── HELPER FORMAT MENTAH WA ──────────────────────────────────────────────
+  const formatRawTicket = (t, index) => {
+    const num = t.ticket_number || (index !== undefined ? index + 1 : '1')
+    let village = (t.village || '').trim()
+    if (village) {
+      if (!village.toLowerCase().startsWith('desa')) {
+        village = `Desa ${village}`
+      }
+    } else {
+      village = 'Desa -'
+    }
+
+    const lines = [
+      `${num}.${village}`,
+      `Nama : ${t.customer_name || '-'}`,
+      `Alamat : ${t.address || '-'}`,
+      `ID Pelanggan : ${t.customer_id || '-'}`,
+      `No Hp : ${t.phone_number || '-'}`,
+      `Keluhan : ${t.complaint || '-'}`
+    ]
+
+    if (t.note && t.note.trim()) {
+      lines.push(`Note : ${t.note.trim()}`)
+    }
+
+    if (t.sharelok && t.sharelok.trim()) {
+      const cleanMaps = t.sharelok.trim().replace(/^-+/, '')
+      lines.push(`Sharelok : ${cleanMaps}`)
+    }
+
+    return lines.join('\n')
+  }
+
+  const handleCopySingleRaw = (ticket) => {
+    const text = formatRawTicket(ticket)
+    navigator.clipboard.writeText(text)
+    toast.success(`Format mentah tiket #${ticket.ticket_number} berhasil disalin!`)
+  }
+
+  const rawTicketsList = useMemo(() => {
+    if (rawFilterStatus === 'all') return filteredTickets
+    return filteredTickets.filter(t => t.status === rawFilterStatus)
+  }, [filteredTickets, rawFilterStatus])
+
+  const rawText = useMemo(() => {
+    return rawTicketsList.map((t, idx) => formatRawTicket(t, idx)).join('\n\n')
+  }, [rawTicketsList])
+
+  const handleCopyAllRaw = () => {
+    if (!rawText) {
+      toast.error('Tidak ada tiket untuk disalin')
+      return
+    }
+    navigator.clipboard.writeText(rawText)
+    toast.success(`${rawTicketsList.length} tiket format mentah berhasil disalin!`)
+  }
+
   const handleExport = async (range) => {
     try {
       setExportModal(false)
@@ -326,10 +387,10 @@ export default function Maintenance() {
       const headers = [
         'No Tiket', 'Tgl Tiket', 'Tgl Selesai',
         'ID Pelanggan', 'Nama Pelanggan', 'No HP',
-        'Keluhan', 'Note', 'Desa', 'Titik Maps',
+        'Keluhan', 'Note', 'Alamat Lengkap', 'Desa', 'Titik Maps',
         'Di Close Oleh', 'Status'
       ]
-      setColumnWidths(ws, [10, 14, 14, 26, 26, 16, 34, 28, 18, 34, 22, 12])
+      setColumnWidths(ws, [10, 14, 14, 26, 26, 16, 34, 28, 36, 18, 34, 22, 12])
       applyHeaderStyle(ws, headers)
 
       const statusLabel = { aktif: 'Aktif', pending: 'Pending', close: 'Selesai' }
@@ -347,8 +408,9 @@ export default function Maintenance() {
           t.phone_number || '',
           t.complaint || '',
           t.note || '',
+          t.address || '',
           t.village || '',
-          t.sharelok || '',
+          t.sharelok ? t.sharelok.trim().replace(/^-+/, '') : '',
           t.closed_by_name || '-',
           statusLabel[t.status] || t.status || ''
         ])
@@ -364,7 +426,7 @@ export default function Maintenance() {
       const startRow = 2
       ws.eachRow((row, rowNumber) => {
         if (rowNumber < startRow) return
-        const statusCell = row.getCell(12)
+        const statusCell = row.getCell(13)
         const val = statusCell.value
         if (val === 'Selesai') {
           statusCell.font = { bold: true, color: { argb: 'FF16A34A' } }
@@ -399,6 +461,9 @@ export default function Maintenance() {
           <p>Kelola tiket keluhan pelanggan dan penjadwalan</p>
         </div>
         <div className="page-header-right">
+          <button className="btn btn-secondary" onClick={() => setIsRawModalOpen(true)} title="Ambil format mentah WA">
+            <ClipboardList size={16} /> Ambil Format Mentah
+          </button>
           {can(role, 'maintenance.export') && (
             <button className="btn btn-secondary" onClick={() => setExportModal(true)}>
               <Download size={16} /> Export
@@ -507,9 +572,16 @@ export default function Maintenance() {
                         {ticket.note && <div className="text-secondary mt-2" style={{ fontSize: '12px' }}>Note: {ticket.note}</div>}
                       </td>
                       <td>
-                        <div>{ticket.village}</div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: '1.4' }}>
+                          {ticket.address || ticket.village || '-'}
+                        </div>
+                        {ticket.address && ticket.village && !ticket.address.toLowerCase().includes(ticket.village.toLowerCase()) && (
+                          <div className="text-secondary" style={{ fontSize: '11px', marginTop: '2px' }}>
+                            {ticket.village}
+                          </div>
+                        )}
                         {ticket.sharelok && (
-                          <a href={ticket.sharelok} target="_blank" rel="noreferrer" className="text-accent" style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                          <a href={ticket.sharelok.trim().replace(/^-+/, '')} target="_blank" rel="noreferrer" className="text-accent" style={{ fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px', textDecoration: 'none' }}>
                             <MapPin size={12} /> Buka Maps
                           </a>
                         )}
@@ -535,6 +607,13 @@ export default function Maintenance() {
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
+                          <button 
+                            className="btn-icon" 
+                            title="Salin Format Mentah WA"
+                            onClick={() => handleCopySingleRaw(ticket)}
+                          >
+                            <Copy size={16} />
+                          </button>
                           {ticket.status === 'aktif' && (
                             <button 
                               className="btn-icon text-success" 
@@ -564,7 +643,7 @@ export default function Maintenance() {
                     <div className="mobile-card-header" onClick={() => setExpandedId(expandedId === ticket.id ? null : ticket.id)}>
                       <div>
                         <div className="mobile-card-title">{ticket.customer_name}</div>
-                        <div className="mobile-card-subtitle">#{ticket.ticket_number} - {ticket.village}</div>
+                        <div className="mobile-card-subtitle">#{ticket.ticket_number} · {ticket.address || ticket.village}</div>
                       </div>
                       <div>
                         {ticket.status === 'close' ? (
@@ -586,6 +665,13 @@ export default function Maintenance() {
                         <div className="mobile-info-row"><span className="mobile-info-label">Tanggal</span><span className="mobile-info-value">{format(new Date(ticket.date_input), 'dd MMM yyyy', { locale: id })}</span></div>
                         <div className="mobile-info-row"><span className="mobile-info-label">ID Pelanggan</span><span className="mobile-info-value">{ticket.customer_id}</span></div>
                         
+                        <div className="mobile-info-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                          <span className="mobile-info-label">Alamat Lengkap:</span>
+                          <span className="mobile-info-value" style={{ textAlign: 'left', maxWidth: '100%', marginTop: '4px', fontSize: '13px', fontWeight: 500 }}>
+                            {ticket.address || ticket.village || '-'}
+                          </span>
+                        </div>
+                        
                         {ticket.phone_number && (
                           <div className="mobile-info-row">
                             <span className="mobile-info-label">WhatsApp</span>
@@ -601,7 +687,7 @@ export default function Maintenance() {
                           <div className="mobile-info-row">
                             <span className="mobile-info-label">Maps</span>
                             <span className="mobile-info-value">
-                              <a href={ticket.sharelok} target="_blank" rel="noreferrer" className="text-accent" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
+                              <a href={ticket.sharelok.trim().replace(/^-+/, '')} target="_blank" rel="noreferrer" className="text-accent" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
                                 <MapPin size={14} /> Buka Maps
                               </a>
                             </span>
@@ -631,6 +717,9 @@ export default function Maintenance() {
                         </div>
 
                         <div className="mobile-card-actions">
+                          <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); handleCopySingleRaw(ticket) }}>
+                            <Copy size={14} /> Salin Mentah
+                          </button>
                           {ticket.status === 'aktif' && (
                             <button className="btn btn-secondary btn-sm text-success" onClick={() => handleOpenAction(ticket)}>
                               <CheckCircle size={14} /> Update Status
@@ -893,6 +982,75 @@ export default function Maintenance() {
                   <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{desc}</span>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal Format Mentah WA */}
+      {isRawModalOpen && createPortal(
+        <div className="modal-overlay" onClick={() => setIsRawModalOpen(false)}>
+          <div className="modal modal-lg" style={{ display: 'flex', flexDirection: 'column', maxHeight: '90vh', width: '90%', maxWidth: '750px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header" style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', padding: '16px 20px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ClipboardList size={18} style={{ color: 'var(--accent)' }} />
+                Format Mentah Tiket WhatsApp
+              </h3>
+              <button className="btn-icon" onClick={() => setIsRawModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ overflowY: 'auto', flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  Total <b>{rawTicketsList.length} tiket</b> {dateFilter ? `(${format(new Date(dateFilter + 'T00:00:00'), 'dd MMM yyyy', { locale: id })})` : '(Semua Tanggal)'}
+                </div>
+                {/* Filter status tab inside modal */}
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {[
+                    { id: 'all', label: `Semua (${filteredTickets.length})` },
+                    { id: 'aktif', label: `Aktif (${filteredTickets.filter(t => t.status === 'aktif').length})` },
+                    { id: 'pending', label: `Pending (${filteredTickets.filter(t => t.status === 'pending').length})` },
+                    { id: 'close', label: `Close (${filteredTickets.filter(t => t.status === 'close').length})` },
+                  ].map(({ id: st, label }) => (
+                    <button
+                      key={st}
+                      type="button"
+                      className={`badge ${rawFilterStatus === st ? 'badge-accent' : 'badge-muted'}`}
+                      style={{ border: 'none', cursor: 'pointer', padding: '5px 10px', fontSize: '11px' }}
+                      onClick={() => setRawFilterStatus(st)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <textarea
+                className="form-input"
+                rows={16}
+                readOnly
+                value={rawText}
+                placeholder="Tidak ada tiket untuk ditampilkan."
+                style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: '13px', padding: '14px', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', lineHeight: '1.6' }}
+              />
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {rawTicketsList.length} tiket siap disalin ke WhatsApp
+              </span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn btn-secondary" onClick={() => setIsRawModalOpen(false)}>Tutup</button>
+                <button 
+                  className="btn btn-primary" 
+                  disabled={!rawText}
+                  onClick={handleCopyAllRaw}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Copy size={16} /> Salin ke Clipboard
+                </button>
+              </div>
             </div>
           </div>
         </div>,
