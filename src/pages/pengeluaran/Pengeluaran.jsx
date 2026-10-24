@@ -122,7 +122,7 @@ export default function Pengeluaran() {
       supabase.from('dropcore_haspels').select('id, haspel_code, type, initial_meters, used_meters').eq('status', 'tersedia'),
       supabase.from('adss_haspels').select('id, haspel_code, type, tube_type, brand, initial_meters, used_meters').eq('status', 'tersedia'),
       supabase.from('technician_schedules').select('*').order('schedule_date', { ascending: false }).limit(500),
-      supabase.from('warehouses').select('id, item_name, initial_stock').eq('item_type', 'other')
+      supabase.from('warehouses').select('id, item_name').eq('item_type', 'other')
     ])
     if (!expRes.error) setExpenses(expRes.data || [])
     if (!techRes.error) setTechnicians(techRes.data || [])
@@ -170,12 +170,7 @@ export default function Pengeluaran() {
       return { value: h.id, label: `${h.haspel_code} (${typeLabel}${brandInfo}, sisa: ${sisa}m)`, sisa }
     })
     .filter(h => h.sisa > 0)
-  const otherOptions = otherItems
-    .map(w => {
-      const sisa = Number(w.initial_stock || 0)
-      return { value: w.id, label: `${w.item_name} (sisa: ${sisa})`, sisa }
-    })
-    .filter(w => w.sisa > 0)
+  const otherOptions = otherItems.map(w => ({ value: w.id, label: w.item_name }))
 
   const handleSaveSchedule = async () => {
     if (!scheduleForm.schedule_date || !scheduleForm.site) { toast.error('Tanggal dan lokasi wajib diisi'); return }
@@ -259,15 +254,7 @@ export default function Pengeluaran() {
       }
     }
 
-    // 3. Revert Warehouse
-    const otherItemsList = itemsToRevert.filter(i => i.item_type === 'other')
-    for (const other of otherItemsList) {
-      const { data: wItem } = await supabase.from('warehouses').select('id, initial_stock').eq('id', other.warehouse_item_id).single()
-      if (wItem) {
-        const newStock = Number(wItem.initial_stock || 0) + Number(other.quantity)
-        await supabase.from('warehouses').update({ initial_stock: newStock }).eq('id', other.warehouse_item_id)
-      }
-    }
+    // 3. Warehouse material: stok tidak dikelola di Maintory (skip revert)
   }
 
   const openEdit = (exp) => {
@@ -380,18 +367,7 @@ export default function Pengeluaran() {
       }
     }
 
-    const otherItemsList = itemsToInsert.filter(i => i.item_type === 'other')
-    for (const other of otherItemsList) {
-      const { data: wItem } = await supabase.from('warehouses').select('item_name, initial_stock').eq('id', other.warehouse_item_id).single()
-      if (wItem) {
-        const currentStock = Number(wItem.initial_stock || 0)
-        const returned = oldOthers[other.warehouse_item_id] || 0
-        const available = currentStock + returned
-        if (Number(other.quantity) > available) {
-          return `Stok ${wItem.item_name} tidak cukup! (Tersedia: ${available})`
-        }
-      }
-    }
+    // Material gudang: stok tidak divalidasi di Maintory (skip stock check)
     return null
   }
 
@@ -546,18 +522,7 @@ export default function Pengeluaran() {
             }
           }
 
-          // Update warehouses for 'other' items
-          const otherItemsList = itemsToInsert.filter(i => i.item_type === 'other')
-          for (const other of otherItemsList) {
-            const { data: wItem } = await supabase.from('warehouses').select('id, initial_stock').eq('id', other.warehouse_item_id).single()
-            if (wItem) {
-              const newStock = Number(wItem.initial_stock || 0) - Number(other.quantity)
-              const { error: whError } = await supabase.from('warehouses')
-                .update({ initial_stock: newStock })
-                .eq('id', other.warehouse_item_id)
-              if (whError) console.error("Gagal update gudang:", whError)
-            }
-          }
+          // Warehouse material: stok tidak dikelola di Maintory (skip stock deduction)
         }
       }
 
@@ -588,7 +553,7 @@ export default function Pengeluaran() {
   }
 
   const handleDelete = async (exp) => {
-    if (!window.confirm('Hapus data pengeluaran ini dan kembalikan stok terkait?')) return
+    if (!window.confirm('Hapus data pengeluaran ini?')) return
     
     // Revert items before deleting
     if (exp.items && exp.items.length > 0) {
@@ -603,7 +568,7 @@ export default function Pengeluaran() {
     }
 
     await logActivity({ userId: profile.id, username: profile.username, role, module: 'Pengeluaran', action: 'Hapus Pengeluaran', detail: `Tanggal: ${exp.expense_date}` })
-    toast.success('Data dihapus dan stok dikembalikan')
+    toast.success('Data pengeluaran berhasil dihapus')
     fetchAll()
   }
 

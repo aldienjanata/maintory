@@ -35,7 +35,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { label: 'Maintenance', path: '/maintenance', icon: <Wrench />, section: 'MAIN MENU', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     
     // Inventory section - combined in UI or separated
-    { label: 'Stok Gudang', path: '/inventory/stok', icon: <Package />, section: 'INVENTORY', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
+    { label: 'Daftar Material', path: '/inventory/stok', icon: <Package />, section: 'INVENTORY', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     { label: 'Serial Number', path: '/inventory/sn', icon: <Hash />, section: 'INVENTORY', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     { label: 'Dropcore', path: '/inventory/dropcore', icon: <Cable />, section: 'INVENTORY', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     { label: 'Kabel ADSS', path: '/inventory/adss', icon: <Cable />, section: 'INVENTORY', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },

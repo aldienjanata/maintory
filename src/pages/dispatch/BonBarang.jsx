@@ -163,8 +163,7 @@ export default function BonBarang() {
         supabase.from('serial_numbers').select('id, serial_number').eq('status', 'tersedia'),
         supabase.from('dropcore_haspels').select('id, haspel_code, initial_meters, used_meters, type').in('status', ['tersedia']),
         supabase.from('adss_haspels').select('id, haspel_code, initial_meters, used_meters, type, tube_type, brand').in('status', ['tersedia']),
-        supabase.from('warehouses').select('id, item_name, initial_stock').gt('initial_stock', 0),
-        supabase.from('expense_items').select('warehouse_item_id, quantity').eq('item_type', 'other')
+        supabase.from('warehouses').select('id, item_name')
       ])
 
       if (techRes.data) {
@@ -190,14 +189,7 @@ export default function BonBarang() {
       if (snRes.data) setSnList(snRes.data)
       if (haspelRes.data) setHaspelList(haspelRes.data)
       if (adssRes.data) setAdssList(adssRes.data)
-      if (otherRes.data) {
-        const expenses = expRes?.data || []
-        const processedOther = otherRes.data.map(w => {
-          const out = expenses.filter(e => e.warehouse_item_id === w.id).reduce((acc, e) => acc + (Number(e.quantity) || 0), 0)
-          return { ...w, current_stock: w.initial_stock - out }
-        })
-        setOtherItems(processedOther)
-      }
+      if (otherRes.data) setOtherItems(otherRes.data)
 
       if (schedRes.data) {
         let allScheds = schedRes.data || []
@@ -232,24 +224,17 @@ export default function BonBarang() {
     if (refreshingStok) return
     setRefreshingStok(true)
     try {
-      const [snRes, haspelRes, adssRes, otherRes, expRes2] = await Promise.all([
+      const [snRes, haspelRes, adssRes, otherRes] = await Promise.all([
         supabase.from('serial_numbers').select('id, serial_number').eq('status', 'tersedia'),
         supabase.from('dropcore_haspels').select('id, haspel_code, initial_meters, used_meters, type').in('status', ['tersedia']),
         supabase.from('adss_haspels').select('id, haspel_code, initial_meters, used_meters, type, tube_type, brand').in('status', ['tersedia']),
-        supabase.from('warehouses').select('id, item_name, initial_stock').gt('initial_stock', 0)
+        supabase.from('warehouses').select('id, item_name')
       ])
       if (snRes.data) setSnList(snRes.data)
       if (haspelRes.data) setHaspelList(haspelRes.data)
       if (adssRes.data) setAdssList(adssRes.data)
-      if (otherRes.data) {
-        const expenses = expRes2?.data || []
-        const processedOther = otherRes.data.map(w => {
-          const out = expenses.filter(e => e.warehouse_item_id === w.id).reduce((acc, e) => acc + (Number(e.quantity) || 0), 0)
-          return { ...w, current_stock: w.initial_stock - out }
-        })
-        setOtherItems(processedOther)
-      }
-      if (showToast) toast.success('Data stok berhasil diperbarui!', { icon: '🔄', duration: 2000 })
+      if (otherRes.data) setOtherItems(otherRes.data)
+      if (showToast) toast.success('Daftar item berhasil diperbarui!', { icon: '🔄', duration: 2000 })
     } catch (err) {
       if (showToast) toast.error('Gagal memperbarui stok')
     } finally {
@@ -430,13 +415,7 @@ export default function BonBarang() {
           if (oldDc.length > 0) await supabase.from('dropcore_haspels').update({ status: 'tersedia' }).in('id', oldDc)
           if (oldAdss.length > 0) await supabase.from('adss_haspels').update({ status: 'tersedia' }).in('id', oldAdss)
           for (const wh of oldWh) {
-            const { data: wData } = await supabase.from('warehouses').select('initial_stock, stock_on_hold').eq('id', wh.id).single()
-            if (wData) {
-              await supabase.from('warehouses').update({ 
-                initial_stock: Number(wData.initial_stock || 0) + Number(wh.qty), 
-                stock_on_hold: Math.max(0, Number(wData.stock_on_hold || 0) - Number(wh.qty)) 
-              }).eq('id', wh.id)
-            }
+            // stok tidak dikelola di Maintory - skip warehouse update
           }
           
           // 2. DELETE OLD ITEMS
@@ -467,10 +446,7 @@ export default function BonBarang() {
 
       if (ontIds.length > 0) await supabase.from('serial_numbers').update({ status: 'dibawa teknisi' }).in('id', ontIds)
       if (dcIds.length > 0) await supabase.from('dropcore_haspels').update({ status: 'dibawa teknisi' }).in('id', dcIds)
-      for (const wh of whUpdates) {
-        const { data: wItem } = await supabase.from('warehouses').select('initial_stock, stock_on_hold').eq('id', wh.id).single()
-        if (wItem) await supabase.from('warehouses').update({ initial_stock: Number(wItem.initial_stock || 0) - Number(wh.qty), stock_on_hold: Number(wItem.stock_on_hold || 0) + Number(wh.qty) }).eq('id', wh.id)
-      }
+      // stok material tidak dikelola di Maintory - skip warehouse update
       if (selectedScheduleId) {
         await supabase.from('technician_schedules').update({ status: 'completed' }).eq('id', selectedScheduleId)
       }
@@ -635,23 +611,11 @@ export default function BonBarang() {
         const { data: hData } = await supabase.from('adss_haspels').select('initial_meters, used_meters').eq('id', adss.id).single()
         if (hData) { const newUsed = Number(hData.used_meters || 0) + Number(adss.add_meters); await supabase.from('adss_haspels').update({ used_meters: newUsed, status: newUsed >= Number(hData.initial_meters) ? 'habis' : 'tersedia' }).eq('id', adss.id) }
       }
-      for (const wh of [...whReturns]) {
-        const { data: wData } = await supabase.from('warehouses').select('initial_stock, stock_on_hold').eq('id', wh.id).single()
-        if (wData) await supabase.from('warehouses').update({ initial_stock: Number(wData.initial_stock || 0) + Number(wh.qty), stock_on_hold: Math.max(0, Number(wData.stock_on_hold || 0) - Number(wh.qty)) }).eq('id', wh.id)
-      }
-      for (const wh of whUsed) {
-        const { data: wData } = await supabase.from('warehouses').select('stock_on_hold').eq('id', wh.id).single()
-        if (wData) await supabase.from('warehouses').update({ stock_on_hold: Math.max(0, Number(wData.stock_on_hold || 0) - Number(wh.qty)) }).eq('id', wh.id)
-      }
-      // Barang rusak: keluar dari stok (kurangi initial_stock & stock_on_hold)
-      for (const wh of whRusak) {
-        const { data: wData } = await supabase.from('warehouses').select('initial_stock, stock_on_hold').eq('id', wh.id).single()
-        if (wData) await supabase.from('warehouses').update({ stock_on_hold: Math.max(0, Number(wData.stock_on_hold || 0) - Number(wh.qty)) }).eq('id', wh.id)
-      }
+      // stok material tidak dikelola di Maintory - skip warehouse update
       // ONT rusak: set status 'rusak'
       if (ontRusak.length > 0) await supabase.from('serial_numbers').update({ status: 'rusak' }).in('id', ontRusak)
 
-      toast.success('Laporan berhasil disimpan & stok diperbarui!')
+      toast.success('Laporan berhasil disimpan!')
       setIsLaporModalOpen(false)
       fetchData()
     } catch (err) {
@@ -756,13 +720,9 @@ export default function BonBarang() {
         const { data: hData } = await supabase.from('adss_haspels').select('initial_meters, used_meters').eq('id', adss.id).single()
         if (hData) { const newUsed = Number(hData.used_meters || 0) + Number(adss.add_meters); await supabase.from('adss_haspels').update({ used_meters: newUsed, status: newUsed >= Number(hData.initial_meters) ? 'habis' : 'tersedia' }).eq('id', adss.id) }
       }
-      for (const wh of whUpdates) {
-        // Kurangi initial_stock langsung, tidak sentuh stock_on_hold karena ini susulan otomatis terpakai
-        const { data: wItem } = await supabase.from('warehouses').select('initial_stock').eq('id', wh.id).single()
-        if (wItem) await supabase.from('warehouses').update({ initial_stock: Math.max(0, Number(wItem.initial_stock || 0) - Number(wh.qty)) }).eq('id', wh.id)
-      }
+      // stok material tidak dikelola di Maintory - skip warehouse update
 
-      toast.success('Barang susulan berhasil ditambahkan dan stok dipotong!')
+      toast.success('Barang susulan berhasil ditambahkan!')
       setIsSusulanModalOpen(false)
       setDetailDispatch(null) // tutup detail juga
       fetchData()
@@ -776,7 +736,7 @@ export default function BonBarang() {
     setConfirmModal({
       isOpen: true,
       title: 'Batalkan Bon Barang',
-      message: 'Yakin ingin membatalkan bon ini? Semua stok akan dikembalikan ke gudang.',
+      message: 'Yakin ingin membatalkan bon ini?',
       onConfirm: async () => {
         setConfirmModal({ isOpen: false, onConfirm: null })
         const ontR = [], whR = []
@@ -831,13 +791,10 @@ export default function BonBarang() {
           }
         }
 
-        for (const wh of whR) {
-          const { data: wData } = await supabase.from('warehouses').select('initial_stock, stock_on_hold').eq('id', wh.id).single()
-          if (wData) await supabase.from('warehouses').update({ initial_stock: Number(wData.initial_stock || 0) + Number(wh.qty), stock_on_hold: Math.max(0, Number(wData.stock_on_hold || 0) - Number(wh.qty)) }).eq('id', wh.id)
-        }
+        // stok material tidak dikelola di Maintory - skip warehouse update
         if (dispatch.schedule_id) await supabase.from('technician_schedules').update({ status: 'pending' }).eq('id', dispatch.schedule_id)
         await supabase.from('dispatches').delete().eq('id', dispatch.id)
-        toast.success('Bon berhasil dibatalkan dan stok dikembalikan')
+        toast.success('Bon berhasil dibatalkan')
         fetchData()
       }
     })
@@ -1280,7 +1237,7 @@ export default function BonBarang() {
     const brandInfo = h.brand ? ` | ${h.brand}` : ''
     return { value: h.id, label: `${h.haspel_code} [${typeLabel}${brandInfo}] — Sisa: ${sisa}m`, sisa, initial_meters: h.initial_meters, used_meters: h.used_meters }
   }).filter(h => h.sisa > 0)
-  const otherOptions = otherItems.map(w => ({ value: w.id, label: `${w.item_name} (stok: ${w.current_stock})` }))
+  const otherOptions = otherItems.map(w => ({ value: w.id, label: w.item_name }))
 
   let activeDispatches = dispatches.filter(d => d.status === 'sedang_dibawa')
   let historyDispatches = dispatches.filter(d => d.status === 'selesai')
@@ -1744,11 +1701,11 @@ export default function BonBarang() {
                   className="btn btn-secondary btn-sm"
                   onClick={() => refreshStok(true)}
                   disabled={refreshingStok}
-                  title="Perbarui daftar stok tanpa keluar dari form"
+                  title="Perbarui daftar item tanpa keluar dari form"
                   style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 12px' }}
                 >
                   <RefreshCw size={13} style={{ animation: refreshingStok ? 'spin 1s linear infinite' : 'none' }} />
-                  {refreshingStok ? 'Memperbarui...' : 'Perbarui Stok'}
+                  {refreshingStok ? 'Memperbarui...' : 'Perbarui Item'}
                 </button>
                 <button className="btn-close" onClick={() => setIsModalOpen(false)}><X size={20} /></button>
               </div>
@@ -1877,7 +1834,7 @@ export default function BonBarang() {
                 )}
               </div>
             </div>
-            <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button><button className="btn btn-primary" disabled={saving} onClick={handleSaveBon}>{saving ? 'Menyimpan...' : 'Simpan Bon & Kunci Stok'}</button></div>
+            <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button><button className="btn btn-primary" disabled={saving} onClick={handleSaveBon}>{saving ? 'Menyimpan...' : 'Simpan Bon'}</button></div>
           </div>
         </div>
       )}
@@ -1891,7 +1848,7 @@ export default function BonBarang() {
               <button className="btn-close" onClick={() => setIsLaporModalOpen(false)}><X size={20} /></button>
             </div>
             <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
-              <div style={{ padding: '10px 14px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 'var(--radius-md)', marginBottom: '14px', fontSize: '13px', color: 'var(--text-secondary)' }}>💡 Centang / isi barang yang <strong>benar-benar terpakai</strong>. Sisa otomatis dikembalikan ke gudang.</div>
+              <div style={{ padding: '10px 14px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 'var(--radius-md)', marginBottom: '14px', fontSize: '13px', color: 'var(--text-secondary)' }}>💡 Centang / isi barang yang <strong>benar-benar terpakai</strong>. Sisa dikembalikan ke penanggung jawab barang.</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {selectedDispatch.items.map((it) => (
                   <div key={it.id} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
@@ -2116,7 +2073,7 @@ export default function BonBarang() {
             </div>
             <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
               <div style={{ padding: '10px 14px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 'var(--radius-md)', marginBottom: '14px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                ℹ️ Barang yang diinput di sini akan <strong>langsung memotong stok akhir gudang</strong>.
+                ℹ️ Barang yang diinput di sini akan <strong>otomatis tercatat sebagai terpakai di lapangan</strong>.
               </div>
 
               {susulanForm.items.map((item, index) => (
