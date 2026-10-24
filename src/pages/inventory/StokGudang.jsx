@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, Edit2, X, Package, TrendingDown, TrendingUp, FileDown, Upload, Download, History, PackagePlus } from 'lucide-react'
+import { Search, Plus, Trash2, Edit2, X, Package, TrendingDown, TrendingUp, FileDown, Upload, Download, History, PackagePlus, GitMerge, AlertCircle, ArrowRight, Check } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import HistoryModal from '../../components/HistoryModal'
@@ -47,6 +47,7 @@ export default function StokGudang() {
   const [isAddStockOpen, setIsAddStockOpen] = useState(false)
   const [addStockItem, setAddStockItem] = useState(null)
   const [addStockForm, setAddStockForm] = useState({ qty: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
+  const [mergeConfirm, setMergeConfirm] = useState(null)
 
   useEffect(() => { fetchItems() }, [])
 
@@ -267,55 +268,11 @@ export default function StokGudang() {
         )
 
         if (duplicate) {
-          const confirmMerge = window.confirm(
-            `Item dengan nama "${duplicate.item_name}" sudah ada di database Stok Gudang!\n\n` +
-            `• Stok Awal "${duplicate.item_name}": ${duplicate.display_initial} ${duplicate.unit}\n` +
-            `• Stok Awal "${editItem.item_name}": ${editItem.display_initial} ${editItem.unit}\n\n` +
-            `Apakah Anda ingin MENGGABUNGKAN (Merge) kedua item ini menjadi satu?\n\n` +
-            `- Semua riwayat pengeluaran, bon barang, dan log masuk akan disatukan ke "${duplicate.item_name}".\n` +
-            `- Stok awal akan dijumlahkan (${duplicate.display_initial} + ${editItem.display_initial} = ${Number(duplicate.initial_stock || 0) + Number(editItem.initial_stock || 0)} ${duplicate.unit}).\n` +
-            `- Item "${editItem.item_name}" akan dihapus dari daftar.\n\n` +
-            `Klik OK untuk menggabungkan, atau Batal untuk membatalkan.`
-          )
-
-          if (!confirmMerge) {
-            setSaving(false)
-            return
-          }
-
-          // 1. Pindahkan expense_items
-          await supabase.from('expense_items').update({ warehouse_item_id: duplicate.id }).eq('warehouse_item_id', editItem.id)
-
-          // 2. Pindahkan dispatch_items
-          await supabase.from('dispatch_items').update({ warehouse_item_id: duplicate.id }).eq('warehouse_item_id', editItem.id)
-
-          // 3. Pindahkan inventory_log
-          await supabase.from('inventory_log').update({ item_id: duplicate.id }).eq('item_id', editItem.id).eq('item_type', 'stok_gudang')
-
-          // 4. Update stok awal target item
-          const newInitial = Number(duplicate.initial_stock || 0) + Number(editItem.initial_stock || 0)
-          const { error: updateErr } = await supabase.from('warehouses').update({
-            initial_stock: newInitial,
-            updated_at: new Date().toISOString()
-          }).eq('id', duplicate.id)
-          if (updateErr) throw updateErr
-
-          // 5. Hapus editItem yang sudah digabung
-          const { error: delErr } = await supabase.from('warehouses').delete().eq('id', editItem.id)
-          if (delErr) throw delErr
-
-          await logActivity({
-            userId: profile.id,
-            username: profile.username,
-            role,
-            module: 'Stok Gudang',
-            action: 'Gabung Item',
-            detail: `Gabungkan item ${editItem.item_name} ke ${duplicate.item_name} (Stok awal total: ${newInitial})`
+          setMergeConfirm({
+            sourceItem: editItem,
+            targetItem: duplicate,
           })
-
-          toast.success(`Berhasil menggabungkan "${editItem.item_name}" ke "${duplicate.item_name}"!`)
-          setIsModalOpen(false)
-          fetchItems()
+          setSaving(false)
           return
         }
 
@@ -345,6 +302,52 @@ export default function StokGudang() {
       fetchItems()
     } catch (err) {
       toast.error('Gagal menyimpan: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleExecuteMerge = async () => {
+    if (!mergeConfirm) return
+    const { sourceItem, targetItem } = mergeConfirm
+    setSaving(true)
+    try {
+      // 1. Pindahkan expense_items
+      await supabase.from('expense_items').update({ warehouse_item_id: targetItem.id }).eq('warehouse_item_id', sourceItem.id)
+
+      // 2. Pindahkan dispatch_items
+      await supabase.from('dispatch_items').update({ warehouse_item_id: targetItem.id }).eq('warehouse_item_id', sourceItem.id)
+
+      // 3. Pindahkan inventory_log
+      await supabase.from('inventory_log').update({ item_id: targetItem.id }).eq('item_id', sourceItem.id).eq('item_type', 'stok_gudang')
+
+      // 4. Update stok awal target item
+      const newInitial = Number(targetItem.initial_stock || 0) + Number(sourceItem.initial_stock || 0)
+      const { error: updateErr } = await supabase.from('warehouses').update({
+        initial_stock: newInitial,
+        updated_at: new Date().toISOString()
+      }).eq('id', targetItem.id)
+      if (updateErr) throw updateErr
+
+      // 5. Hapus sourceItem yang sudah digabung
+      const { error: delErr } = await supabase.from('warehouses').delete().eq('id', sourceItem.id)
+      if (delErr) throw delErr
+
+      await logActivity({
+        userId: profile.id,
+        username: profile.username,
+        role,
+        module: 'Stok Gudang',
+        action: 'Gabung Item',
+        detail: `Gabungkan ${sourceItem.item_name} ke ${targetItem.item_name} (Stok awal total: ${newInitial})`
+      })
+
+      toast.success(`Berhasil menggabungkan "${sourceItem.item_name}" ke "${targetItem.item_name}"!`)
+      setMergeConfirm(null)
+      setIsModalOpen(false)
+      fetchItems()
+    } catch (err) {
+      toast.error('Gagal menggabungkan: ' + err.message)
     } finally {
       setSaving(false)
     }
@@ -800,6 +803,116 @@ export default function StokGudang() {
               <button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : (editItem ? 'Simpan Perubahan' : 'Tambah Item')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal Konfirmasi Penggabungan (Merge) Item */}
+      {mergeConfirm && createPortal(
+        <div className="modal-overlay" style={{ zIndex: 10000 }} onClick={() => !saving && setMergeConfirm(null)}>
+          <div className="modal" style={{ maxWidth: '560px', width: '92%' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <GitMerge size={20} style={{ color: 'var(--accent)' }} />
+                Konfirmasi Gabungkan Item
+              </h3>
+              <button className="btn-icon" onClick={() => !saving && setMergeConfirm(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px', padding: '12px 14px' }}>
+                <AlertCircle size={20} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ fontSize: '13px', lineHeight: '1.5', color: 'var(--text-primary)' }}>
+                  Item dengan nama <strong>"{mergeConfirm.targetItem.item_name}"</strong> sudah ada di database Stok Gudang. Apakah Anda ingin menggabungkan item ini menjadi satu?
+                </div>
+              </div>
+
+              {/* Komparasi Item Asal vs Item Tujuan */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '10px', alignItems: 'center' }}>
+                {/* Asal */}
+                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Item Asal (Dihapus)</div>
+                  <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)', wordBreak: 'break-word', marginBottom: '8px' }}>
+                    {mergeConfirm.sourceItem.item_name}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <div>Stok Awal: <strong>{mergeConfirm.sourceItem.display_initial} {mergeConfirm.sourceItem.unit}</strong></div>
+                    <div>Stok Keluar: <strong>{mergeConfirm.sourceItem.display_out} {mergeConfirm.sourceItem.unit}</strong></div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--accent)' }}>
+                  <ArrowRight size={22} />
+                </div>
+
+                {/* Tujuan */}
+                <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--accent)', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', fontWeight: 600 }}>Item Tujuan (Hasil)</div>
+                  <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)', wordBreak: 'break-word', marginBottom: '8px' }}>
+                    {mergeConfirm.targetItem.item_name}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <div>Stok Awal: <strong>{mergeConfirm.targetItem.display_initial} {mergeConfirm.targetItem.unit}</strong></div>
+                    <div>Stok Keluar: <strong>{mergeConfirm.targetItem.display_out} {mergeConfirm.targetItem.unit}</strong></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rincian Hasil Penggabungan */}
+              <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', padding: '12px 14px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Check size={14} style={{ color: 'var(--success)' }} />
+                  Hasil Penggabungan:
+                </div>
+                <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                  <li>
+                    Total Stok Awal: <strong style={{ color: 'var(--text-primary)' }}>{Number(mergeConfirm.targetItem.initial_stock || 0) + Number(mergeConfirm.sourceItem.initial_stock || 0)} {mergeConfirm.targetItem.unit}</strong> ({mergeConfirm.targetItem.display_initial} + {mergeConfirm.sourceItem.display_initial})
+                  </li>
+                  <li>
+                    Total Stok Keluar: <strong style={{ color: 'var(--text-primary)' }}>{Number(mergeConfirm.targetItem.display_out || 0) + Number(mergeConfirm.sourceItem.display_out || 0)} {mergeConfirm.targetItem.unit}</strong> ({mergeConfirm.targetItem.display_out} + {mergeConfirm.sourceItem.display_out})
+                  </li>
+                  <li>
+                    Seluruh riwayat pengeluaran teknisi dan bon barang dari item asal akan otomatis disatukan ke item tujuan.
+                  </li>
+                  <li>
+                    Item <strong>"{mergeConfirm.sourceItem.item_name}"</strong> akan otomatis dihapus sehingga tidak ada duplikasi data.
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={() => setMergeConfirm(null)}
+                disabled={saving}
+              >
+                Batal
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                onClick={handleExecuteMerge}
+                disabled={saving}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                {saving ? (
+                  <>
+                    <span className="spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }} />
+                    Menggabungkan...
+                  </>
+                ) : (
+                  <>
+                    <GitMerge size={16} />
+                    Ya, Gabungkan Item
+                  </>
+                )}
               </button>
             </div>
           </div>
