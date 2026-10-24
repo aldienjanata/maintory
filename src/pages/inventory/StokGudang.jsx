@@ -250,19 +250,20 @@ export default function StokGudang() {
   }
 
   const handleSave = async () => {
-    if (!form.item_name || (!editItem && form.item_type === 'other' && form.initial_stock === '')) {
+    const trimmedName = form.item_name ? form.item_name.trim() : ''
+    if (!trimmedName || (!editItem && form.item_type === 'other' && form.initial_stock === '')) {
       toast.error('Nama dan stok awal wajib diisi')
       return
     }
     const finalForm = editItem
-      ? { item_name: form.item_name, unit: form.unit, item_type: form.item_type }
-      : { ...form, initial_stock: form.item_type !== 'other' ? 0 : Number(form.initial_stock) }
+      ? { item_name: trimmedName, unit: form.unit, item_type: form.item_type }
+      : { ...form, item_name: trimmedName, initial_stock: form.item_type !== 'other' ? 0 : Number(form.initial_stock) }
     setSaving(true)
     try {
       if (editItem) {
         const { error } = await supabase.from('warehouses').update({ ...finalForm, updated_at: new Date().toISOString() }).eq('id', editItem.id)
         if (error) throw error
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Edit Item', detail: `Edit item: ${form.item_name}` })
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Edit Item', detail: `Edit item: ${trimmedName}` })
         toast.success('Data item berhasil diperbarui')
       } else {
         const { data: newWh, error } = await supabase.from('warehouses').insert({ ...finalForm, created_by: profile.id }).select().single()
@@ -270,7 +271,7 @@ export default function StokGudang() {
         if (form.item_type === 'other') {
           await supabase.from('inventory_log').insert({ log_date: format(new Date(), 'yyyy-MM-dd'), item_type: 'stok_gudang', item_id: newWh.id, action: 'masuk', quantity: Number(form.initial_stock), note: 'Stok awal', created_by: profile.id })
         }
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Buat Item Baru', detail: `Buat item baru: ${form.item_name} stok awal ${form.initial_stock}` })
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Buat Item Baru', detail: `Buat item baru: ${trimmedName} stok awal ${form.initial_stock}` })
         toast.success('Item stok berhasil ditambahkan')
       }
       setIsModalOpen(false)
@@ -663,33 +664,43 @@ export default function StokGudang() {
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="form-group">
                 <label className="form-label">Nama Item <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <CreatableSelect
-                  options={items.map(i => ({ value: i.item_name, label: i.item_name, item: i }))}
-                  value={form.item_name ? { value: form.item_name, label: form.item_name } : null}
-                  onChange={val => {
-                    if (val) {
-                      setForm(f => ({ ...f, item_name: val.value, item_type: val.item?.item_type || f.item_type, unit: val.item?.unit || f.unit }))
-                    } else {
-                      setForm(f => ({ ...f, item_name: '' }))
-                    }
-                  }}
-                  placeholder="Pilih atau ketik nama item baru..."
-                  formatCreateLabel={val => `Buat item baru: "${val}"`}
-                  isClearable
-                  isDisabled={!!editItem}
-                  styles={{
-                    control: (base) => ({ ...base, borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)', minHeight: '40px' }),
-                    menu: (base) => ({ ...base, backgroundColor: 'var(--bg-secondary)', zIndex: 9999 }),
-                    option: (base, state) => ({
-                      ...base,
-                      backgroundColor: state.isFocused ? 'var(--bg-tertiary)' : 'transparent',
-                      color: 'var(--text-primary)',
-                      cursor: 'pointer'
-                    }),
-                    singleValue: (base) => ({ ...base, color: 'var(--text-primary)' }),
-                    input: (base) => ({ ...base, color: 'var(--text-primary)' })
-                  }}
-                />
+                {editItem ? (
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={form.item_name}
+                    onChange={e => setForm(f => ({ ...f, item_name: e.target.value }))}
+                    placeholder="Masukkan nama item..."
+                    required
+                  />
+                ) : (
+                  <CreatableSelect
+                    options={items.map(i => ({ value: i.item_name, label: i.item_name, item: i }))}
+                    value={form.item_name ? { value: form.item_name, label: form.item_name } : null}
+                    onChange={val => {
+                      if (val) {
+                        setForm(f => ({ ...f, item_name: val.value, item_type: val.item?.item_type || f.item_type, unit: val.item?.unit || f.unit }))
+                      } else {
+                        setForm(f => ({ ...f, item_name: '' }))
+                      }
+                    }}
+                    placeholder="Pilih atau ketik nama item baru..."
+                    formatCreateLabel={val => `Buat item baru: "${val}"`}
+                    isClearable
+                    styles={{
+                      control: (base) => ({ ...base, borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)', minHeight: '40px' }),
+                      menu: (base) => ({ ...base, backgroundColor: 'var(--bg-secondary)', zIndex: 9999 }),
+                      option: (base, state) => ({
+                        ...base,
+                        backgroundColor: state.isFocused ? 'var(--bg-tertiary)' : 'transparent',
+                        color: 'var(--text-primary)',
+                        cursor: 'pointer'
+                      }),
+                      singleValue: (base) => ({ ...base, color: 'var(--text-primary)' }),
+                      input: (base) => ({ ...base, color: 'var(--text-primary)' })
+                    }}
+                  />
+                )}
               </div>
               <div className="grid-2">
                 {!editItem && (
