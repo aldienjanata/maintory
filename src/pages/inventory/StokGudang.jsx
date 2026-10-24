@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { logActivity } from '../../utils/logActivity'
 import toast from 'react-hot-toast'
-import { Search, Plus, Trash2, Edit2, X, Package, TrendingDown, TrendingUp, FileDown, Upload, Download, History, PackagePlus, GitMerge, AlertCircle, ArrowRight, Check } from 'lucide-react'
+import { Search, Plus, Trash2, Edit2, X, Package, FileDown, Upload, Download, History, GitMerge, AlertCircle, ArrowRight, Check } from 'lucide-react'
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import HistoryModal from '../../components/HistoryModal'
@@ -33,7 +33,7 @@ export default function StokGudang() {
   const [typeFilter, setTypeFilter] = useState('all')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editItem, setEditItem] = useState(null)
-  const [form, setForm] = useState({ item_name: '', initial_stock: '', unit: 'unit', item_type: 'other' })
+  const [form, setForm] = useState({ item_name: '', unit: 'unit', item_type: 'other' })
   const [saving, setSaving] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
   const [page, setPage] = useState(1)
@@ -44,107 +44,20 @@ export default function StokGudang() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
 
-  const [isAddStockOpen, setIsAddStockOpen] = useState(false)
-  const [addStockItem, setAddStockItem] = useState(null)
-  const [addStockForm, setAddStockForm] = useState({ qty: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
   const [mergeConfirm, setMergeConfirm] = useState(null)
 
   useEffect(() => { fetchItems() }, [])
 
   const fetchItems = async () => {
     setLoading(true)
-    const [whRes, snRes, dcRes, expItemRes] = await Promise.all([
-      supabase.from('warehouses').select('*').order('item_name').limit(1000),
-      supabase.from('serial_numbers').select('status'),
-      supabase.from('dropcore_haspels').select('type, status, initial_meters, used_meters, remaining_meters'),
-      supabase.from('expense_items').select('warehouse_item_id, quantity').eq('item_type', 'other')
-    ])
-    
-    if (!whRes.error) {
-      const whItems = whRes.data || []
-      const sns = snRes.data || []
-      const haspels = dcRes.data || []
-      const expItems = expItemRes.data || []
-      
-      const totalSnCount = sns.length
-      const usedSnCount = sns.filter(s => s.status === 'terpakai').length
-      const availSnCount = totalSnCount - usedSnCount
-      
-      const dc1cList = haspels.filter(h => h.type === '1c')
-      const dc1cHaspelsTotal = dc1cList.length
-      const dc1cHaspelsCurrent = dc1cList.filter(h => (Number(h.initial_meters || 0) - Number(h.used_meters || 0)) === 1000).length
-      const dc1cHaspelsOut = dc1cHaspelsTotal - dc1cHaspelsCurrent
-      const dc1cRemainingMeters = dc1cList.reduce((acc, h) => acc + (Number(h.initial_meters || 0) - Number(h.used_meters || 0)), 0)
-      
-      const dc2cList = haspels.filter(h => h.type === '2c')
-      const dc2cHaspelsTotal = dc2cList.length
-      const dc2cHaspelsCurrent = dc2cList.filter(h => (Number(h.initial_meters || 0) - Number(h.used_meters || 0)) === 1000).length
-      const dc2cHaspelsOut = dc2cHaspelsTotal - dc2cHaspelsCurrent
-      const dc2cRemainingMeters = dc2cList.reduce((acc, h) => acc + (Number(h.initial_meters || 0) - Number(h.used_meters || 0)), 0)
-
-      const dc4cList = haspels.filter(h => h.type === '4c')
-      const dc4cHaspelsTotal = dc4cList.length
-      const dc4cHaspelsCurrent = dc4cList.filter(h => (Number(h.initial_meters || 0) - Number(h.used_meters || 0)) === 1000).length
-      const dc4cHaspelsOut = dc4cHaspelsTotal - dc4cHaspelsCurrent
-      const dc4cRemainingMeters = dc4cList.reduce((acc, h) => acc + (Number(h.initial_meters || 0) - Number(h.used_meters || 0)), 0)
-      
-      const processed = whItems.map(item => {
-        let initial = Number(item.initial_stock) || 0
-        let out = 0
-        let current = initial
-        let remaining_meters = 0
-
-        const isOnt = item.item_type === 'ont'
-        const isDc1c = item.item_type === 'dropcore_1c'
-        const isDc2c = item.item_type === 'dropcore_2c'
-        const isDc4c = item.item_type === 'dropcore_4c'
-
-        if (isOnt) {
-          initial = totalSnCount
-          out = usedSnCount
-          current = availSnCount
-        } else if (isDc1c) {
-          initial = dc1cHaspelsTotal
-          out = dc1cHaspelsOut
-          current = dc1cHaspelsCurrent
-          remaining_meters = dc1cRemainingMeters
-        } else if (isDc2c) {
-          initial = dc2cHaspelsTotal
-          out = dc2cHaspelsOut
-          current = dc2cHaspelsCurrent
-          remaining_meters = dc2cRemainingMeters
-        } else if (isDc4c) {
-          initial = dc4cHaspelsTotal
-          out = dc4cHaspelsOut
-          current = dc4cHaspelsCurrent
-          remaining_meters = dc4cRemainingMeters
-        } else {
-          const totalOut = expItems
-            .filter(ei => ei.warehouse_item_id === item.id)
-            .reduce((acc, ei) => acc + Number(ei.quantity || 0), 0)
-          out = totalOut
-          current = initial - out
-        }
-        
-        return {
-          ...item,
-          display_initial: initial,
-          display_out: out,
-          display_current: current,
-          remaining_meters
-        }
-      })
-      
-      setItems(processed)
+    const { data, error } = await supabase.from('warehouses').select('*').order('item_name').limit(1000)
+    if (!error) {
+      setItems(data || [])
     }
     setLoading(false)
   }
 
   const fetchHistory = async (item) => {
-    if (item.item_type !== 'other') {
-      toast.error('Riwayat hanya tersedia untuk Material Gudang')
-      return
-    }
     setHistoryItem(item)
     setIsHistoryOpen(true)
     setHistoryLoading(true)
@@ -205,7 +118,7 @@ export default function StokGudang() {
 
   const openAdd = () => {
     setEditItem(null)
-    setForm({ item_name: '', initial_stock: '', unit: 'unit', item_type: 'other' })
+    setForm({ item_name: '', unit: 'unit', item_type: 'other' })
     setIsModalOpen(true)
   }
 
@@ -215,50 +128,13 @@ export default function StokGudang() {
     setIsModalOpen(true)
   }
 
-  const openAddStock = (item) => {
-    setAddStockItem(item)
-    setAddStockForm({ qty: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
-    setIsAddStockOpen(true)
-  }
-
-  const handleAddStock = async () => {
-    const qty = Number(addStockForm.qty)
-    if (!qty || qty <= 0) { toast.error('Jumlah tambah stok harus lebih dari 0'); return }
-    if (!addStockForm.date) { toast.error('Tanggal masuk wajib diisi'); return }
-    setSaving(true)
-    try {
-      const newStock = Number(addStockItem.initial_stock || 0) + qty
-      const { error } = await supabase.from('warehouses').update({ initial_stock: newStock, updated_at: new Date().toISOString() }).eq('id', addStockItem.id)
-      if (error) throw error
-      await supabase.from('inventory_log').insert({
-        log_date: addStockForm.date,
-        item_type: 'stok_gudang',
-        item_id: addStockItem.id,
-        action: 'masuk',
-        quantity: qty,
-        note: addStockForm.note || `Tambah stok ${qty} ${addStockItem.unit}`,
-        created_by: profile.id
-      })
-      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Tambah Stok', detail: `Tambah ${qty} ${addStockItem.unit} ke ${addStockItem.item_name}` })
-      toast.success(`Stok ${addStockItem.item_name} berhasil ditambah ${qty} ${addStockItem.unit}`)
-      setIsAddStockOpen(false)
-      fetchItems()
-    } catch (err) {
-      toast.error('Gagal tambah stok: ' + err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
   const handleSave = async () => {
     const trimmedName = form.item_name ? form.item_name.trim() : ''
-    if (!trimmedName || (!editItem && form.item_type === 'other' && form.initial_stock === '')) {
-      toast.error('Nama dan stok awal wajib diisi')
+    if (!trimmedName) {
+      toast.error('Nama item wajib diisi')
       return
     }
-    const finalForm = editItem
-      ? { item_name: trimmedName, unit: form.unit, item_type: form.item_type }
-      : { ...form, item_name: trimmedName, initial_stock: form.item_type !== 'other' ? 0 : Number(form.initial_stock) }
+    const finalForm = { item_name: trimmedName, unit: form.unit, item_type: form.item_type }
     setSaving(true)
     try {
       if (editItem) {
@@ -278,25 +154,13 @@ export default function StokGudang() {
 
         const { error } = await supabase.from('warehouses').update({ ...finalForm, updated_at: new Date().toISOString() }).eq('id', editItem.id)
         if (error) throw error
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Edit Item', detail: `Edit item: ${trimmedName}` })
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Daftar Material', action: 'Edit Item', detail: `Edit item: ${trimmedName}` })
         toast.success('Data item berhasil diperbarui')
       } else {
-        const duplicate = items.find(
-          i => i.item_name?.trim().toLowerCase() === trimmedName.toLowerCase()
-        )
-        if (duplicate) {
-          toast.error(`Item dengan nama "${duplicate.item_name}" sudah ada di gudang. Silakan gunakan tombol Tambah Stok (+) untuk menambah stok.`)
-          setSaving(false)
-          return
-        }
-
         const { data: newWh, error } = await supabase.from('warehouses').insert({ ...finalForm, created_by: profile.id }).select().single()
         if (error) throw error
-        if (form.item_type === 'other') {
-          await supabase.from('inventory_log').insert({ log_date: format(new Date(), 'yyyy-MM-dd'), item_type: 'stok_gudang', item_id: newWh.id, action: 'masuk', quantity: Number(form.initial_stock), note: 'Stok awal', created_by: profile.id })
-        }
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Buat Item Baru', detail: `Buat item baru: ${trimmedName} stok awal ${form.initial_stock}` })
-        toast.success('Item stok berhasil ditambahkan')
+        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Daftar Material', action: 'Buat Item Baru', detail: `Buat item baru: ${trimmedName}` })
+        toast.success('Item berhasil ditambahkan')
       }
       setIsModalOpen(false)
       fetchItems()
@@ -321,15 +185,7 @@ export default function StokGudang() {
       // 3. Pindahkan inventory_log
       await supabase.from('inventory_log').update({ item_id: targetItem.id }).eq('item_id', sourceItem.id).eq('item_type', 'stok_gudang')
 
-      // 4. Update stok awal target item
-      const newInitial = Number(targetItem.initial_stock || 0) + Number(sourceItem.initial_stock || 0)
-      const { error: updateErr } = await supabase.from('warehouses').update({
-        initial_stock: newInitial,
-        updated_at: new Date().toISOString()
-      }).eq('id', targetItem.id)
-      if (updateErr) throw updateErr
-
-      // 5. Hapus sourceItem yang sudah digabung
+      // 4. Hapus sourceItem yang sudah digabung
       const { error: delErr } = await supabase.from('warehouses').delete().eq('id', sourceItem.id)
       if (delErr) throw delErr
 
@@ -337,9 +193,9 @@ export default function StokGudang() {
         userId: profile.id,
         username: profile.username,
         role,
-        module: 'Stok Gudang',
+        module: 'Daftar Material',
         action: 'Gabung Item',
-        detail: `Gabungkan ${sourceItem.item_name} ke ${targetItem.item_name} (Stok awal total: ${newInitial})`
+        detail: `Gabungkan ${sourceItem.item_name} ke ${targetItem.item_name}`
       })
 
       toast.success(`Berhasil menggabungkan "${sourceItem.item_name}" ke "${targetItem.item_name}"!`)
@@ -357,7 +213,7 @@ export default function StokGudang() {
     if (!window.confirm(`Hapus item "${item.item_name}"?`)) return
     const { error } = await supabase.from('warehouses').delete().eq('id', item.id)
     if (!error) {
-      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Hapus Stok', detail: `Hapus: ${item.item_name}` })
+      await logActivity({ userId: profile.id, username: profile.username, role, module: 'Daftar Material', action: 'Hapus Item', detail: `Hapus: ${item.item_name}` })
       toast.success('Item dihapus')
       fetchItems()
     }
@@ -374,7 +230,6 @@ export default function StokGudang() {
     (typeFilter === 'all' || i.item_type === typeFilter)
   )
 
-  const totalStok = filtered.reduce((s, i) => s + (Number(i.display_current) || 0), 0)
   const paginated = filtered.slice((page - 1) * perPage, page * perPage)
 
   const handleExportExcel = async () => {
@@ -384,15 +239,15 @@ export default function StokGudang() {
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
       
-      const ws1 = workbook.addWorksheet('Stok Gudang')
-      const headers1 = ['Nama Item', 'Tipe', 'Satuan', 'Stok Awal', 'Stok Keluar', 'Stok Saat Ini']
-      setColumnWidths(ws1, [30, 20, 12, 14, 14, 16])
+      const ws1 = workbook.addWorksheet('Daftar Material')
+      const headers1 = ['Nama Item', 'Tipe', 'Satuan']
+      setColumnWidths(ws1, [30, 20, 12])
       applyHeaderStyle(ws1, headers1)
       for (let i = 0; i < items.length; i++) {
         const item = items[i]
-        ws1.addRow([item.item_name, ITEM_TYPES.find(t => t.value === item.item_type)?.label || item.item_type, item.unit, item.display_initial, item.display_out, item.display_current])
+        ws1.addRow([item.item_name, ITEM_TYPES.find(t => t.value === item.item_type)?.label || item.item_type, item.unit])
         if (i % 20 === 0) {
-          showProgress('Mengekspor Data', `Memproses Stok Gudang... (${i + 1}/${items.length})`, 10 + ((i + 1) / items.length) * 30)
+          showProgress('Mengekspor Data', `Memproses Daftar Material... (${i + 1}/${items.length})`, 10 + ((i + 1) / items.length) * 30)
           await new Promise(r => setTimeout(r, 0))
         }
       }
@@ -432,7 +287,7 @@ export default function StokGudang() {
       applyDataRowStyles(ws2)
 
       showProgress('Menyelesaikan Export', 'Mengunduh file Excel...', 95)
-      await downloadWorkbook(workbook, `Stok Gudang ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
+      await downloadWorkbook(workbook, `Daftar Material ${format(new Date(), 'yyyy-MM-dd')}.xlsx`)
       toast.success('Export berhasil!')
     } catch (err) {
       console.error(err)
@@ -448,15 +303,15 @@ export default function StokGudang() {
       const ExcelJS = (await import('exceljs')).default
       const workbook = new ExcelJS.Workbook()
       const ws = workbook.addWorksheet('Template')
-      const headers = ['Nama Item', 'Tipe', 'Stok Awal', 'Satuan']
-      setColumnWidths(ws, [30, 20, 14, 14])
+      const headers = ['Nama Item', 'Tipe', 'Satuan']
+      setColumnWidths(ws, [30, 20, 14])
       applyHeaderStyle(ws, headers)
-      ws.addRow(['ONT ZTE F670L', 'ont', 0, 'unit'])
-      ws.addRow(['Dropcore 1C Haspel A', 'dropcore_1c', 0, 'haspel'])
-      ws.addRow(['Dropcore 2C Haspel X', 'dropcore_2c', 0, 'haspel'])
-      ws.addRow(['Dropcore 4C Haspel B', 'dropcore_4c', 0, 'haspel'])
-      ws.addRow(['Kabel UTP CAT6', 'other', 10, 'roll'])
-      await downloadWorkbook(workbook, 'Template Import Stok Gudang.xlsx')
+      ws.addRow(['ONT ZTE F670L', 'ont', 'unit'])
+      ws.addRow(['Dropcore 1C Haspel A', 'dropcore_1c', 'haspel'])
+      ws.addRow(['Dropcore 2C Haspel X', 'dropcore_2c', 'haspel'])
+      ws.addRow(['Dropcore 4C Haspel B', 'dropcore_4c', 'haspel'])
+      ws.addRow(['Kabel UTP CAT6', 'other', 'roll'])
+      await downloadWorkbook(workbook, 'Template Import Daftar Material.xlsx')
     } catch(err) {
       toast.error('Gagal download template')
     }
@@ -498,7 +353,6 @@ export default function StokGudang() {
           return {
             item_name: (row['Nama Item'] || row['nama item'] || '').toString().trim(),
             item_type: type,
-            initial_stock: type !== 'other' ? 0 : (Number(row['Stok Awal'] || row['stok awal']) || 0),
             unit,
             created_by: profile.id,
           }
@@ -531,7 +385,7 @@ export default function StokGudang() {
       let unit = f.unit
       if (type === 'ont') unit = 'unit'
       else if (type.startsWith('dropcore')) unit = 'haspel'
-      return { ...f, item_type: type, unit, initial_stock: type !== 'other' ? 0 : f.initial_stock }
+      return { ...f, item_type: type, unit }
     })
   }
 
@@ -539,8 +393,8 @@ export default function StokGudang() {
     <div>
       <div className="page-header">
         <div className="page-header-left">
-          <h2>Stok Gudang</h2>
-          <p>Manajemen inventaris barang dan peralatan</p>
+          <h2>Daftar Material</h2>
+          <p>Daftar master item material untuk pencatatan pengeluaran</p>
         </div>
         <div className="page-header-right">
           {can(role, 'inventory.stok.manage') && (
@@ -549,35 +403,10 @@ export default function StokGudang() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="stats-grid mb-4">
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <div className="stat-card-icon" style={{ background: 'var(--accent-dim)' }}>
-              <Package size={20} style={{ color: 'var(--accent)' }} />
-            </div>
-          </div>
-          <div className="stat-card-value">{items.length}</div>
-          <div className="stat-card-label">Total Jenis Item</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <div className="stat-card-icon" style={{ background: 'var(--success-dim)' }}>
-              <TrendingUp size={20} style={{ color: 'var(--success)' }} />
-            </div>
-          </div>
-          <div className="stat-card-value">{items.filter(i => i.item_type === 'ont').length}</div>
-          <div className="stat-card-label">Jenis ONT/Modem</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <div className="stat-card-icon" style={{ background: 'var(--purple-dim)' }}>
-              <TrendingDown size={20} style={{ color: 'var(--purple)' }} />
-            </div>
-          </div>
-          <div className="stat-card-value">{items.filter(i => i.item_type?.startsWith('dropcore')).length}</div>
-          <div className="stat-card-label">Jenis Dropcore</div>
-        </div>
+      {/* Total Item Label */}
+      <div style={{ marginBottom: '16px', fontSize: '14px', color: 'var(--text-secondary)' }}>
+        <Package size={15} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
+        Total: <strong>{items.length} item</strong> terdaftar
       </div>
 
       <div className="card">
@@ -620,9 +449,6 @@ export default function StokGudang() {
                   <tr>
                     <th>Nama Item</th>
                     <th>Tipe</th>
-                    <th>Stok Awal</th>
-                    <th>Stok Keluar</th>
-                    <th>Stok Saat Ini</th>
                     <th>Satuan</th>
                     {can(role, 'inventory.stok.manage') && <th style={{ textAlign: 'right' }}>Aksi</th>}
                   </tr>
@@ -632,26 +458,11 @@ export default function StokGudang() {
                     <tr key={item.id}>
                       <td className="font-semibold">{item.item_name}</td>
                       <td>{getTypeBadge(item.item_type)}</td>
-                      <td>{item.item_type?.startsWith('dropcore') ? `${item.display_initial} Haspel` : item.display_initial}</td>
-                      <td>{item.item_type?.startsWith('dropcore') ? `${item.display_out} Haspel` : item.display_out}</td>
-                      <td>
-                        <span style={{ fontSize: '16px', fontWeight: 700, color: item.display_current <= 0 ? 'var(--danger)' : 'var(--accent)' }}>
-                          {item.item_type?.startsWith('dropcore')
-                            ? `${item.display_current} Haspel (${Math.round(item.remaining_meters || 0)} m)`
-                            : item.display_current
-                          }
-                        </span>
-                      </td>
                       <td className="text-secondary">{item.unit}</td>
                       {can(role, 'inventory.stok.manage') && (
                         <td style={{ textAlign: 'right' }}>
                           <div className="flex" style={{ gap: '6px', justifyContent: 'flex-end' }}>
-                            {item.item_type === 'other' && (
-                              <button className="btn-icon" title="Riwayat" onClick={() => fetchHistory(item)}><History size={15} /></button>
-                            )}
-                            {item.item_type === 'other' && (
-                              <button className="btn-icon text-success" title="Tambah Stok" onClick={() => openAddStock(item)}><PackagePlus size={15} /></button>
-                            )}
+                            <button className="btn-icon" title="Riwayat" onClick={() => fetchHistory(item)}><History size={15} /></button>
                             {role === 'superadmin' && (
                               <button className="btn-icon" title="Edit" onClick={() => openEdit(item)}><Edit2 size={15} /></button>
                             )}
@@ -673,28 +484,15 @@ export default function StokGudang() {
                         <div className="mobile-card-title">{item.item_name}</div>
                         <div className="mobile-card-subtitle">{getTypeBadge(item.item_type)}</div>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '15px', fontWeight: 'bold', color: item.display_current <= 0 ? 'var(--danger)' : 'var(--accent)' }}>
-                          {item.item_type?.startsWith('dropcore') ? `${item.display_current} Hsp` : item.display_current}
-                        </div>
+                      <div style={{ textAlign: 'right', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                        {item.unit}
                       </div>
                     </div>
                     {expandedId === item.id && (
                       <div className="mobile-card-body">
-                        <div className="mobile-info-row"><span className="mobile-info-label">Stok Awal</span><span className="mobile-info-value">{item.item_type?.startsWith('dropcore') ? `${item.display_initial} Haspel` : item.display_initial}</span></div>
-                        <div className="mobile-info-row"><span className="mobile-info-label">Stok Keluar</span><span className="mobile-info-value">{item.item_type?.startsWith('dropcore') ? `${item.display_out} Haspel` : item.display_out}</span></div>
-                        <div className="mobile-info-row"><span className="mobile-info-label">Satuan</span><span className="mobile-info-value">{item.unit}</span></div>
-                        {item.item_type?.startsWith('dropcore') && (
-                          <div className="mobile-info-row"><span className="mobile-info-label">Sisa Meter</span><span className="mobile-info-value">{Math.round(item.remaining_meters || 0)} m</span></div>
-                        )}
                         {can(role, 'inventory.stok.manage') && (
                           <div className="mobile-card-actions">
-                            {item.item_type === 'other' && (
-                              <button className="btn btn-secondary btn-sm" onClick={() => fetchHistory(item)}><History size={14} /> Riwayat</button>
-                            )}
-                            {item.item_type === 'other' && (
-                              <button className="btn btn-secondary btn-sm text-success" onClick={() => openAddStock(item)}><PackagePlus size={14} /> Tambah Stok</button>
-                            )}
+                            <button className="btn btn-secondary btn-sm" onClick={() => fetchHistory(item)}><History size={14} /> Riwayat</button>
                             {role === 'superadmin' && (
                               <button className="btn btn-secondary btn-sm" onClick={() => openEdit(item)}><Edit2 size={14} /> Edit</button>
                             )}
@@ -718,7 +516,7 @@ export default function StokGudang() {
               />
             </>
           ) : (
-            <div className="empty-state"><Package size={48} /><h3>Stok Kosong</h3><p>Belum ada item tersimpan.</p></div>
+            <div className="empty-state"><Package size={48} /><h3>Belum Ada Item</h3><p>Belum ada item tersimpan.</p></div>
           )}
         </div>
       </div>
@@ -728,7 +526,7 @@ export default function StokGudang() {
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-header">
-              <h3>{editItem ? 'Edit Item Stok' : 'Tambah Item Stok'}</h3>
+              <h3>{editItem ? 'Edit Item' : 'Tambah Item'}</h3>
               <button className="btn-icon" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -773,30 +571,19 @@ export default function StokGudang() {
                 )}
               </div>
               <div className="grid-2">
-                {!editItem && (
-                  <div className="form-group">
-                    <label className="form-label">Stok Awal <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <input className="form-input" type="number" min="0" placeholder="0" value={form.item_type !== 'other' ? '0' : (form.initial_stock ?? '')} onChange={e => setForm(f => ({ ...f, initial_stock: e.target.value }))} disabled={form.item_type !== 'other'} />
-                    {form.item_type !== 'other' && (
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block', lineHeight: '1.4' }}>
-                        Stok {form.item_type === 'ont' ? 'ONT' : 'Dropcore'} dihitung otomatis dari sub-menu {form.item_type === 'ont' ? 'Serial Number' : 'Dropcore Haspel'}.
-                      </span>
-                    )}
-                  </div>
-                )}
                 <div className="form-group">
                   <label className="form-label">Satuan</label>
                   <select className="form-input filter-select" style={{ height: 'auto', padding: '9px 12px' }} value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}>
                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Tipe Item</label>
-                <select className="form-input filter-select" style={{ height: 'auto', padding: '9px 12px' }} value={form.item_type} onChange={e => handleTypeChange(e.target.value)} disabled={!!editItem}>
-                  {ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-                {editItem && <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>Tipe item tidak bisa diubah. Gunakan tombol Tambah Stok (+) untuk menambah stok.</span>}
+                <div className="form-group">
+                  <label className="form-label">Tipe Item</label>
+                  <select className="form-input filter-select" style={{ height: 'auto', padding: '9px 12px' }} value={form.item_type} onChange={e => handleTypeChange(e.target.value)} disabled={!!editItem}>
+                    {ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                  {editItem && <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>Tipe item tidak bisa diubah.</span>}
+                </div>
               </div>
             </div>
             <div className="modal-footer">
@@ -828,7 +615,7 @@ export default function StokGudang() {
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px', padding: '12px 14px' }}>
                 <AlertCircle size={20} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '2px' }} />
                 <div style={{ fontSize: '13px', lineHeight: '1.5', color: 'var(--text-primary)' }}>
-                  Item dengan nama <strong>"{mergeConfirm.targetItem.item_name}"</strong> sudah ada di database Stok Gudang. Apakah Anda ingin menggabungkan item ini menjadi satu?
+                  Item dengan nama <strong>"{mergeConfirm.targetItem.item_name}"</strong> sudah ada di database. Apakah Anda ingin menggabungkan item ini menjadi satu?
                 </div>
               </div>
 
@@ -840,9 +627,8 @@ export default function StokGudang() {
                   <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)', wordBreak: 'break-word', marginBottom: '8px' }}>
                     {mergeConfirm.sourceItem.item_name}
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <div>Stok Awal: <strong>{mergeConfirm.sourceItem.display_initial} {mergeConfirm.sourceItem.unit}</strong></div>
-                    <div>Stok Keluar: <strong>{mergeConfirm.sourceItem.display_out} {mergeConfirm.sourceItem.unit}</strong></div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    Satuan: <strong>{mergeConfirm.sourceItem.unit}</strong>
                   </div>
                 </div>
 
@@ -856,9 +642,8 @@ export default function StokGudang() {
                   <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)', wordBreak: 'break-word', marginBottom: '8px' }}>
                     {mergeConfirm.targetItem.item_name}
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <div>Stok Awal: <strong>{mergeConfirm.targetItem.display_initial} {mergeConfirm.targetItem.unit}</strong></div>
-                    <div>Stok Keluar: <strong>{mergeConfirm.targetItem.display_out} {mergeConfirm.targetItem.unit}</strong></div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    Satuan: <strong>{mergeConfirm.targetItem.unit}</strong>
                   </div>
                 </div>
               </div>
@@ -870,12 +655,6 @@ export default function StokGudang() {
                   Hasil Penggabungan:
                 </div>
                 <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
-                  <li>
-                    Total Stok Awal: <strong style={{ color: 'var(--text-primary)' }}>{Number(mergeConfirm.targetItem.initial_stock || 0) + Number(mergeConfirm.sourceItem.initial_stock || 0)} {mergeConfirm.targetItem.unit}</strong> ({mergeConfirm.targetItem.display_initial} + {mergeConfirm.sourceItem.display_initial})
-                  </li>
-                  <li>
-                    Total Stok Keluar: <strong style={{ color: 'var(--text-primary)' }}>{Number(mergeConfirm.targetItem.display_out || 0) + Number(mergeConfirm.sourceItem.display_out || 0)} {mergeConfirm.targetItem.unit}</strong> ({mergeConfirm.targetItem.display_out} + {mergeConfirm.sourceItem.display_out})
-                  </li>
                   <li>
                     Seluruh riwayat pengeluaran teknisi dan bon barang dari item asal akan otomatis disatukan ke item tujuan.
                   </li>
@@ -920,46 +699,6 @@ export default function StokGudang() {
         document.body
       )}
 
-      {/* Modal Tambah Stok */}
-      {isAddStockOpen && addStockItem && createPortal(
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h3><PackagePlus size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} />Tambah Stok</h3>
-              <button className="btn-icon" onClick={() => setIsAddStockOpen(false)}><X size={18} /></button>
-            </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ padding: '12px', borderRadius: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
-                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Item</div>
-                <div style={{ fontWeight: 700, fontSize: '15px' }}>{addStockItem.item_name}</div>
-                <div style={{ fontSize: '13px', marginTop: '6px' }}>
-                  Stok saat ini: <strong style={{ color: addStockItem.display_current <= 0 ? 'var(--danger)' : addStockItem.display_current <= 5 ? 'var(--warning)' : 'var(--accent)' }}>{addStockItem.display_current} {addStockItem.unit}</strong>
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Jumlah Tambah <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input className="form-input" type="number" min="1" placeholder="Masukkan jumlah..." value={addStockForm.qty} onChange={e => setAddStockForm(f => ({ ...f, qty: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Tanggal Masuk <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input className="form-input" type="date" value={addStockForm.date} onChange={e => setAddStockForm(f => ({ ...f, date: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Keterangan <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>(opsional)</span></label>
-                <input className="form-input" type="text" placeholder="Contoh: Pembelian September 2026, Stok awal..." value={addStockForm.note} onChange={e => setAddStockForm(f => ({ ...f, note: e.target.value }))} />
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setIsAddStockOpen(false)}>Batal</button>
-              <button className="btn btn-primary" onClick={handleAddStock} disabled={saving}>
-                {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : 'Tambah Stok'}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
       <HistoryModal
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
@@ -972,5 +711,3 @@ export default function StokGudang() {
     </div>
   )
 }
-
-
