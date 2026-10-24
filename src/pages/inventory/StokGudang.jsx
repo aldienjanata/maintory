@@ -261,11 +261,78 @@ export default function StokGudang() {
     setSaving(true)
     try {
       if (editItem) {
+        // Cek apakah ada item lain yang namanya sama (case-insensitive)
+        const duplicate = items.find(
+          i => i.id !== editItem.id && i.item_name?.trim().toLowerCase() === trimmedName.toLowerCase()
+        )
+
+        if (duplicate) {
+          const confirmMerge = window.confirm(
+            `Item dengan nama "${duplicate.item_name}" sudah ada di database Stok Gudang!\n\n` +
+            `• Stok Awal "${duplicate.item_name}": ${duplicate.display_initial} ${duplicate.unit}\n` +
+            `• Stok Awal "${editItem.item_name}": ${editItem.display_initial} ${editItem.unit}\n\n` +
+            `Apakah Anda ingin MENGGABUNGKAN (Merge) kedua item ini menjadi satu?\n\n` +
+            `- Semua riwayat pengeluaran, bon barang, dan log masuk akan disatukan ke "${duplicate.item_name}".\n` +
+            `- Stok awal akan dijumlahkan (${duplicate.display_initial} + ${editItem.display_initial} = ${Number(duplicate.initial_stock || 0) + Number(editItem.initial_stock || 0)} ${duplicate.unit}).\n` +
+            `- Item "${editItem.item_name}" akan dihapus dari daftar.\n\n` +
+            `Klik OK untuk menggabungkan, atau Batal untuk membatalkan.`
+          )
+
+          if (!confirmMerge) {
+            setSaving(false)
+            return
+          }
+
+          // 1. Pindahkan expense_items
+          await supabase.from('expense_items').update({ warehouse_item_id: duplicate.id }).eq('warehouse_item_id', editItem.id)
+
+          // 2. Pindahkan dispatch_items
+          await supabase.from('dispatch_items').update({ warehouse_item_id: duplicate.id }).eq('warehouse_item_id', editItem.id)
+
+          // 3. Pindahkan inventory_log
+          await supabase.from('inventory_log').update({ item_id: duplicate.id }).eq('item_id', editItem.id).eq('item_type', 'stok_gudang')
+
+          // 4. Update stok awal target item
+          const newInitial = Number(duplicate.initial_stock || 0) + Number(editItem.initial_stock || 0)
+          const { error: updateErr } = await supabase.from('warehouses').update({
+            initial_stock: newInitial,
+            updated_at: new Date().toISOString()
+          }).eq('id', duplicate.id)
+          if (updateErr) throw updateErr
+
+          // 5. Hapus editItem yang sudah digabung
+          const { error: delErr } = await supabase.from('warehouses').delete().eq('id', editItem.id)
+          if (delErr) throw delErr
+
+          await logActivity({
+            userId: profile.id,
+            username: profile.username,
+            role,
+            module: 'Stok Gudang',
+            action: 'Gabung Item',
+            detail: `Gabungkan item ${editItem.item_name} ke ${duplicate.item_name} (Stok awal total: ${newInitial})`
+          })
+
+          toast.success(`Berhasil menggabungkan "${editItem.item_name}" ke "${duplicate.item_name}"!`)
+          setIsModalOpen(false)
+          fetchItems()
+          return
+        }
+
         const { error } = await supabase.from('warehouses').update({ ...finalForm, updated_at: new Date().toISOString() }).eq('id', editItem.id)
         if (error) throw error
         await logActivity({ userId: profile.id, username: profile.username, role, module: 'Stok Gudang', action: 'Edit Item', detail: `Edit item: ${trimmedName}` })
         toast.success('Data item berhasil diperbarui')
       } else {
+        const duplicate = items.find(
+          i => i.item_name?.trim().toLowerCase() === trimmedName.toLowerCase()
+        )
+        if (duplicate) {
+          toast.error(`Item dengan nama "${duplicate.item_name}" sudah ada di gudang. Silakan gunakan tombol Tambah Stok (+) untuk menambah stok.`)
+          setSaving(false)
+          return
+        }
+
         const { data: newWh, error } = await supabase.from('warehouses').insert({ ...finalForm, created_by: profile.id }).select().single()
         if (error) throw error
         if (form.item_type === 'other') {
