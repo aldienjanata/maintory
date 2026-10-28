@@ -11,7 +11,6 @@ import { id } from 'date-fns/locale'
 import HistoryModal from '../../components/HistoryModal'
 import { useProgress } from '../../contexts/ProgressContext'
 import Pagination from '../../components/common/Pagination'
-import CreatableSelect from 'react-select/creatable'
 
 const UNITS = ['unit', 'buah', 'pcs', 'meter', 'roll', 'set', 'dus', 'kg', 'haspel']
 const ITEM_TYPES = [
@@ -128,7 +127,8 @@ export default function StokGudang() {
     setIsModalOpen(true)
   }
 
-  const handleSave = async () => {
+  const handleSave = async (e) => {
+    if (e && e.preventDefault) e.preventDefault()
     const trimmedName = form.item_name ? form.item_name.trim() : ''
     if (!trimmedName) {
       toast.error('Nama item wajib diisi')
@@ -154,12 +154,21 @@ export default function StokGudang() {
 
         const { error } = await supabase.from('warehouses').update({ ...finalForm, updated_at: new Date().toISOString() }).eq('id', editItem.id)
         if (error) throw error
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Daftar Material', action: 'Edit Item', detail: `Edit item: ${trimmedName}` })
+        await logActivity({ userId: profile?.id, username: profile?.username, role, module: 'Daftar Material', action: 'Edit Item', detail: `Edit item: ${trimmedName}` })
         toast.success('Data item berhasil diperbarui')
       } else {
-        const { data: newWh, error } = await supabase.from('warehouses').insert({ ...finalForm, created_by: profile.id }).select().single()
+        const duplicate = items.find(
+          i => i.item_name?.trim().toLowerCase() === trimmedName.toLowerCase()
+        )
+        if (duplicate) {
+          toast.error(`Item "${duplicate.item_name}" sudah terdaftar di Daftar Material!`)
+          setSaving(false)
+          return
+        }
+
+        const { data: newWh, error } = await supabase.from('warehouses').insert({ ...finalForm, created_by: profile?.id || null }).select().single()
         if (error) throw error
-        await logActivity({ userId: profile.id, username: profile.username, role, module: 'Daftar Material', action: 'Buat Item Baru', detail: `Buat item baru: ${trimmedName}` })
+        await logActivity({ userId: profile?.id, username: profile?.username, role, module: 'Daftar Material', action: 'Buat Item Baru', detail: `Buat item baru: ${trimmedName}` })
         toast.success('Item berhasil ditambahkan')
       }
       setIsModalOpen(false)
@@ -529,69 +538,43 @@ export default function StokGudang() {
               <h3>{editItem ? 'Edit Item' : 'Tambah Item'}</h3>
               <button className="btn-icon" onClick={() => setIsModalOpen(false)}><X size={18} /></button>
             </div>
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div className="form-group">
-                <label className="form-label">Nama Item <span style={{ color: 'var(--danger)' }}>*</span></label>
-                {editItem ? (
+            <form onSubmit={handleSave}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label">Nama Item <span style={{ color: 'var(--danger)' }}>*</span></label>
                   <input
                     className="form-input"
                     type="text"
                     value={form.item_name}
                     onChange={e => setForm(f => ({ ...f, item_name: e.target.value }))}
-                    placeholder="Masukkan nama item..."
+                    placeholder="Contoh: PATCHCORD SC-SC BIRU 2M"
+                    autoFocus
                     required
                   />
-                ) : (
-                  <CreatableSelect
-                    options={items.map(i => ({ value: i.item_name, label: i.item_name, item: i }))}
-                    value={form.item_name ? { value: form.item_name, label: form.item_name } : null}
-                    onChange={val => {
-                      if (val) {
-                        setForm(f => ({ ...f, item_name: val.value, item_type: val.item?.item_type || f.item_type, unit: val.item?.unit || f.unit }))
-                      } else {
-                        setForm(f => ({ ...f, item_name: '' }))
-                      }
-                    }}
-                    placeholder="Pilih atau ketik nama item baru..."
-                    formatCreateLabel={val => `Buat item baru: "${val}"`}
-                    isClearable
-                    styles={{
-                      control: (base) => ({ ...base, borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)', minHeight: '40px' }),
-                      menu: (base) => ({ ...base, backgroundColor: 'var(--bg-secondary)', zIndex: 9999 }),
-                      option: (base, state) => ({
-                        ...base,
-                        backgroundColor: state.isFocused ? 'var(--bg-tertiary)' : 'transparent',
-                        color: 'var(--text-primary)',
-                        cursor: 'pointer'
-                      }),
-                      singleValue: (base) => ({ ...base, color: 'var(--text-primary)' }),
-                      input: (base) => ({ ...base, color: 'var(--text-primary)' })
-                    }}
-                  />
-                )}
-              </div>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">Satuan</label>
-                  <select className="form-input filter-select" style={{ height: 'auto', padding: '9px 12px' }} value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}>
-                    {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                  </select>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Tipe Item</label>
-                  <select className="form-input filter-select" style={{ height: 'auto', padding: '9px 12px' }} value={form.item_type} onChange={e => handleTypeChange(e.target.value)} disabled={!!editItem}>
-                    {ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
-                  {editItem && <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>Tipe item tidak bisa diubah.</span>}
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Satuan</label>
+                    <select className="form-input filter-select" style={{ height: 'auto', padding: '9px 12px' }} value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}>
+                      {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Tipe Item</label>
+                    <select className="form-input filter-select" style={{ height: 'auto', padding: '9px 12px' }} value={form.item_type} onChange={e => handleTypeChange(e.target.value)} disabled={!!editItem}>
+                      {ITEM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                    {editItem && <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>Tipe item tidak bisa diubah.</span>}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : (editItem ? 'Simpan Perubahan' : 'Tambah Item')}
-              </button>
-            </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
+                <button type="submit" className="btn btn-primary" disabled={saving}>
+                  {saving ? <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} /> : (editItem ? 'Simpan Perubahan' : 'Tambah Item')}
+                </button>
+              </div>
+            </form>
           </div>
         </div>,
         document.body
