@@ -13,6 +13,7 @@ import {
 import { format } from 'date-fns'
 import { id } from 'date-fns/locale'
 import { useProgress } from '../../contexts/ProgressContext'
+import Pagination from '../../components/common/Pagination'
 
 export default function Maintenance() {
   const { profile } = useAuth()
@@ -21,8 +22,8 @@ export default function Maintenance() {
   
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
-  const ITEMS_PER_PAGE = 20
   const [currentPage, setCurrentPage] = useState(1)
+  const [perPage, setPerPage] = useState(20)
   const [technicians, setTechnicians] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   
@@ -30,6 +31,11 @@ export default function Maintenance() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [dateFilter, setDateFilter] = useState(format(new Date(), 'yyyy-MM-dd'))
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, statusFilter, dateFilter])
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -65,7 +71,7 @@ export default function Maintenance() {
       .from('maintenance_tickets')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(1000)
+      .limit(2500)
       
     if (error) {
       toast.error('Gagal mengambil data maintenance')
@@ -296,8 +302,7 @@ export default function Maintenance() {
     })
 
   // ─── EXPORT ───────────────────────────────────────────────────────────────
-  const totalPages = Math.ceil(filteredTickets.length / ITEMS_PER_PAGE)
-  const paginated = filteredTickets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+  const paginated = filteredTickets.slice((currentPage - 1) * perPage, currentPage * perPage)
 
   // ─── HELPER FORMAT MENTAH WA ──────────────────────────────────────────────
   const formatRawTicket = (t, index) => {
@@ -736,27 +741,16 @@ export default function Maintenance() {
                   </div>
                 ))}
               
-          {totalPages > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', flexWrap: 'wrap', gap: '8px', borderTop: '1px solid var(--border)' }}>
-              <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                Menampilkan {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredTickets.length)}�{Math.min(currentPage * ITEMS_PER_PAGE, filteredTickets.length)} dari {filteredTickets.length} data
               </div>
-              <div style={{ display: 'flex', gap: '4px' }}>
-                <button className="btn btn-secondary btn-sm" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>� Prev</button>
-                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                  const start = Math.max(1, currentPage - 2)
-                  const page = start + i
-                  if (page > totalPages) return null
-                  return (
-                    <button key={page} className={`btn btn-sm ${currentPage === page ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setCurrentPage(page)}>{page}</button>
-                  )
-                })}
-                <button className="btn btn-secondary btn-sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Next �</button>
-              </div>
-            </div>
-          )}
 
-              </div>
+              {/* Pagination */}
+              <Pagination 
+                page={currentPage} 
+                setPage={setCurrentPage} 
+                perPage={perPage} 
+                setPerPage={setPerPage} 
+                totalItems={filteredTickets.length} 
+              />
             </>
           ) : (
             <div className="empty-state">
