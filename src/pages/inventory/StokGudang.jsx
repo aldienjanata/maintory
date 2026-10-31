@@ -63,7 +63,7 @@ export default function StokGudang() {
 
     const { data: logs } = await supabase.from('inventory_log').select('*, user:users(full_name)').eq('item_type', 'stok_gudang').eq('item_id', item.id).order('log_date', { ascending: true })
     const { data: expItems } = await supabase.from('expense_items').select('*, expense:daily_expenses(expense_date, site, technicians, work_type, note)').eq('item_type', 'other').eq('warehouse_item_id', item.id).order('created_at', { ascending: true })
-    const { data: dispItems } = await supabase.from('dispatch_items').select('*, dispatch:dispatches(dispatch_date, site, technicians, technician_id, technician_ids, work_type, status, notes)').eq('item_type', 'other').eq('warehouse_item_id', item.id)
+    const { data: dispItems } = await supabase.from('dispatch_items').select('*, dispatch:dispatches(dispatch_date, site, technicians, technician_id, work_type, status, notes)').eq('item_type', 'other').eq('warehouse_item_id', item.id)
 
     const { data: usersData } = await supabase.from('users').select('id, full_name')
     const usersMap = Object.fromEntries((usersData || []).map(u => [u.id, u.full_name]))
