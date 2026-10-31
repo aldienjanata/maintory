@@ -225,7 +225,7 @@ export default function Dropcore() {
 
     const { data: dispItems, error: dispErr } = await supabase
       .from('dispatch_items')
-      .select('*, dispatch:dispatches(id, dispatch_date, site, location, technicians, technician_id, technician_ids, work_type, status, notes)')
+      .select('*, dispatch:dispatches(id, dispatch_date, site, technicians, technician_id, technician_ids, work_type, status, notes)')
       .eq('item_type', 'dropcore')
       .eq('haspel_id', haspel.id)
     if (dispErr) {
