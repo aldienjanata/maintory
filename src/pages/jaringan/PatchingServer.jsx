@@ -22,7 +22,7 @@ import {
   ExternalLink,
   ChevronRight,
   Filter,
-  Check
+  MapPin
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -74,7 +74,24 @@ export default function PatchingServer() {
   })
   const [savingConnection, setSavingConnection] = useState(false)
 
-  // Initial load
+  // Add Device Modal state
+  const [isAddDeviceModalOpen, setIsAddDeviceModalOpen] = useState(false)
+  const [newDeviceForm, setNewDeviceForm] = useState({
+    name: '',
+    device_type: 'olt', // 'olt', 'otb'
+    brand_model: '',
+    // OLT props
+    start_slot: 1,
+    end_slot: 4,
+    ports_per_slot: 8,
+    // OTB props
+    rows_count: 4,
+    cols_count: 24,
+    total_ports: 96
+  })
+  const [savingDevice, setSavingDevice] = useState(false)
+
+  // Initial load or site change
   useEffect(() => {
     fetchData()
   }, [site])
@@ -82,7 +99,7 @@ export default function PatchingServer() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      // 1. Fetch devices
+      // 1. Fetch devices for current site
       const { data: devData, error: devErr } = await supabase
         .from('server_devices')
         .select('*')
@@ -102,12 +119,15 @@ export default function PatchingServer() {
       const devList = devData || []
       setDevices(devList)
 
-      if (devList.length > 0 && !activeTab) {
+      // Set active tab: default to first OLT, or first device, or empty if no devices
+      if (devList.length > 0) {
         const olt = devList.find(d => d.device_type === 'olt')
         setActiveTab(olt ? olt.id : devList[0].id)
+      } else {
+        setActiveTab('')
       }
 
-      // 2. Fetch ports for these devices (excluding slot 1 and 2 as requested)
+      // 2. Fetch ports for these devices
       const devIds = devList.map(d => d.id)
       if (devIds.length > 0) {
         const { data: portData, error: portErr } = await supabase
@@ -118,8 +138,11 @@ export default function PatchingServer() {
 
         if (portErr) throw portErr
 
-        // Filter out slot 1 & 2 in case they still exist in any query
-        const validPorts = (portData || []).filter(p => p.slot_number !== 1 && p.slot_number !== 2)
+        // For Banyumas site, ensure slot 1 and 2 are excluded as requested
+        const validPorts = (portData || []).filter(p => {
+          if (site === 'banyumas' && (p.slot_number === 1 || p.slot_number === 2)) return false
+          return true
+        })
         setPorts(validPorts)
 
         // 3. Fetch connections
@@ -190,15 +213,16 @@ export default function PatchingServer() {
     return map
   }, [ports, devices, connections])
 
-  // Active Device
+  // Active Device (safely null if not found)
   const activeDevice = useMemo(() => {
+    if (!activeTab || activeTab === 'rekap') return null
     return devices.find(d => d.id === activeTab) || null
   }, [devices, activeTab])
 
   // Ports for the active device
   const activeDevicePorts = useMemo(() => {
     if (!activeDevice) return []
-    return ports.filter(p => p.device_id === activeDevice.id && p.slot_number !== 1 && p.slot_number !== 2)
+    return ports.filter(p => p.device_id === activeDevice.id)
   }, [ports, activeDevice])
 
   // Available slots for OLT active device (e.g. 3, 4, 5, ..., 16)
@@ -212,13 +236,11 @@ export default function PatchingServer() {
   const filteredOltSlots = useMemo(() => {
     if (activeDevice?.device_type !== 'olt') return []
 
-    // 1. Filter by selected slot
     let slotList = availableSlots
     if (selectedSlotFilter !== 'all') {
       slotList = slotList.filter(s => s === Number(selectedSlotFilter))
     }
 
-    // 2. Filter ports inside slots by search query & status
     const query = deviceSearchQuery.trim().toLowerCase()
 
     return slotList.map(slotNum => {
@@ -248,7 +270,7 @@ export default function PatchingServer() {
         usedInSlot,
         freeInSlot: totalInSlot - usedInSlot
       }
-    }).filter(s => s.ports.length > 0 || !query) // hide empty slot if searching and no match
+    }).filter(s => s.ports.length > 0 || !query)
   }, [activeDevice, availableSlots, activeDevicePorts, selectedSlotFilter, deviceStatusFilter, deviceSearchQuery, portConnectionMap])
 
   // Rekap all connections
@@ -265,7 +287,6 @@ export default function PatchingServer() {
       const devA = devMap.get(portA.device_id)
       const devB = devMap.get(portB.device_id)
 
-      // Normalize so OLT is on the left if applicable
       let leftPort = portA, leftDev = devA, rightPort = portB, rightDev = devB
       if (devB?.device_type === 'olt' && devA?.device_type !== 'olt') {
         leftPort = portB; leftDev = devB; rightPort = portA; rightDev = devA
@@ -286,7 +307,6 @@ export default function PatchingServer() {
       })
     })
 
-    // Sort by OLT slot & pon if possible
     list.sort((a, b) => {
       if (a.leftPort.slot_number !== b.leftPort.slot_number) {
         return (a.leftPort.slot_number || 0) - (b.leftPort.slot_number || 0)
@@ -317,7 +337,7 @@ export default function PatchingServer() {
   const stats = useMemo(() => {
     const totalConnections = connections.length
     const oltDev = devices.find(d => d.device_type === 'olt')
-    const oltPorts = oltDev ? ports.filter(p => p.device_id === oltDev.id && p.slot_number !== 1 && p.slot_number !== 2) : []
+    const oltPorts = oltDev ? ports.filter(p => p.device_id === oltDev.id) : []
     const oltUsed = oltPorts.filter(p => p.status === 'connected').length
 
     const otbDevices = devices.filter(d => d.device_type === 'otb')
@@ -340,7 +360,6 @@ export default function PatchingServer() {
     const conn = portConnectionMap.get(port.id)
     const currentDevice = devices.find(d => d.id === port.device_id)
 
-    // Default target device (if port is OLT, target first OTB; if OTB, target OLT)
     let defaultTargetDevId = ''
     if (currentDevice?.device_type === 'olt') {
       const otb = devices.find(d => d.device_type === 'otb')
@@ -364,8 +383,7 @@ export default function PatchingServer() {
   // Available target ports for connect modal
   const targetAvailablePorts = useMemo(() => {
     if (!connectForm.targetDeviceId) return []
-    const list = ports.filter(p => p.device_id === connectForm.targetDeviceId && p.slot_number !== 1 && p.slot_number !== 2)
-    // Filter to available OR currently connected to portA
+    const list = ports.filter(p => p.device_id === connectForm.targetDeviceId)
     return list.filter(p => {
       const conn = portConnectionMap.get(p.id)
       return p.status === 'available' || conn?.targetPort?.id === connectForm.portAId
@@ -444,10 +462,123 @@ export default function PatchingServer() {
     }
   }
 
+  // Action: Add New Device for current site
+  const handleSaveNewDevice = async (e) => {
+    if (e && e.preventDefault) e.preventDefault()
+    if (!newDeviceForm.name.trim()) {
+      toast.error('Nama perangkat wajib diisi!')
+      return
+    }
+
+    setSavingDevice(true)
+    try {
+      const isOlt = newDeviceForm.device_type === 'olt'
+      let totalPorts = 0
+      let rowsCount = 1
+      let colsCount = 1
+
+      if (isOlt) {
+        const startSlot = Number(newDeviceForm.start_slot) || 1
+        const endSlot = Number(newDeviceForm.end_slot) || 4
+        const pps = Number(newDeviceForm.ports_per_slot) || 8
+        const totalSlots = Math.max(1, endSlot - startSlot + 1)
+        totalPorts = totalSlots * pps
+        rowsCount = totalSlots
+        colsCount = pps
+      } else {
+        rowsCount = Number(newDeviceForm.rows_count) || 4
+        colsCount = Number(newDeviceForm.cols_count) || 24
+        totalPorts = rowsCount * colsCount
+      }
+
+      // 1. Insert device
+      const { data: newDev, error: devErr } = await supabase
+        .from('server_devices')
+        .insert({
+          site,
+          name: newDeviceForm.name.trim(),
+          device_type: newDeviceForm.device_type,
+          brand_model: newDeviceForm.brand_model.trim() || (isOlt ? 'ZTE' : 'OTB Rackmount'),
+          total_ports: totalPorts,
+          rows_count: rowsCount,
+          cols_count: colsCount,
+          description: `Perangkat di Site ${site.toUpperCase()}`
+        })
+        .select()
+        .single()
+
+      if (devErr) throw devErr
+
+      // 2. Bulk generate ports
+      const portsToInsert = []
+      if (isOlt) {
+        const startSlot = Number(newDeviceForm.start_slot) || 1
+        const endSlot = Number(newDeviceForm.end_slot) || 4
+        const pps = Number(newDeviceForm.ports_per_slot) || 8
+
+        for (let s = startSlot; s <= endSlot; s++) {
+          for (let p = 1; p <= pps; p++) {
+            portsToInsert.push({
+              device_id: newDev.id,
+              slot_number: s,
+              port_number: p,
+              port_label: `PON ${s}/${p}`,
+              status: 'available'
+            })
+          }
+        }
+      } else {
+        // OTB ports
+        for (let r = 1; r <= rowsCount; r++) {
+          for (let c = 1; c <= colsCount; c++) {
+            const portNo = (r - 1) * colsCount + c
+            const label = totalPorts === 144 ? `No ${portNo}` : `Baris ${r} No ${c}`
+            portsToInsert.push({
+              device_id: newDev.id,
+              row_number: r,
+              col_number: c,
+              port_number: portNo,
+              port_label: label,
+              status: 'available'
+            })
+          }
+        }
+      }
+
+      // Batch insert ports
+      const chunkSize = 50
+      for (let i = 0; i < portsToInsert.length; i += chunkSize) {
+        const chunk = portsToInsert.slice(i, i + chunkSize)
+        const { error: portErr } = await supabase.from('server_ports').insert(chunk)
+        if (portErr) throw portErr
+      }
+
+      toast.success(`Perangkat "${newDev.name}" dengan ${totalPorts} port berhasil dibuat!`)
+      setIsAddDeviceModalOpen(false)
+      setNewDeviceForm({
+        name: '',
+        device_type: 'olt',
+        brand_model: '',
+        start_slot: 1,
+        end_slot: 4,
+        ports_per_slot: 8,
+        rows_count: 4,
+        cols_count: 24,
+        total_ports: 96
+      })
+      fetchData()
+    } catch (err) {
+      console.error(err)
+      toast.error('Gagal menambahkan perangkat: ' + err.message)
+    } finally {
+      setSavingDevice(false)
+    }
+  }
+
   // Export to Excel
   const handleExportExcel = () => {
     if (rekapList.length === 0) {
-      toast.error('Belum ada data koneksi untuk diekspor')
+      toast.error('Belum ada data koneksi untuk diekspor di site ini')
       return
     }
 
@@ -527,12 +658,15 @@ export default function PatchingServer() {
         <div className="page-header-right" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <select 
             className="form-input filter-select" 
-            style={{ minWidth: '150px', height: '38px', fontWeight: 600 }}
+            style={{ minWidth: '160px', height: '38px', fontWeight: 600 }}
             value={site} 
             onChange={e => setSite(e.target.value)}
           >
             {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
+          <button className="btn btn-secondary btn-sm" onClick={() => setIsAddDeviceModalOpen(true)} title="Tambah Perangkat Baru di Site Ini">
+            <Plus size={15} /> Tambah Device
+          </button>
           <button className="btn btn-secondary btn-sm" onClick={handleExportExcel} title="Export Rekap Koneksi ke Excel">
             <Download size={15} /> Export Excel
           </button>
@@ -561,7 +695,7 @@ export default function PatchingServer() {
             <Server size={22} />
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Port OLT ZTE C300</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Port OLT ({SITES.find(s => s.value === site)?.label || site})</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--accent)' }}>{stats.oltUsed} Terhubung</span>
               <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--success)' }}>· {stats.oltFree} Kosong</span>
@@ -575,7 +709,7 @@ export default function PatchingServer() {
             <Cable size={22} />
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Kapasitas OTB</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Kapasitas OTB ({SITES.find(s => s.value === site)?.label || site})</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--accent)' }}>{stats.otbUsed} Terhubung</span>
               <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--success)' }}>· {stats.otbFree} Kosong</span>
@@ -585,87 +719,107 @@ export default function PatchingServer() {
         </div>
       </div>
 
-      {/* Main Tabs Navigation */}
-      <div style={{ display: 'flex', gap: '6px', borderBottom: '1px solid var(--border)', overflowX: 'auto', paddingBottom: '2px' }}>
-        {devices.map(dev => {
-          const isOlt = dev.device_type === 'olt'
-          const devPorts = ports.filter(p => p.device_id === dev.id && p.slot_number !== 1 && p.slot_number !== 2)
-          const usedCount = devPorts.filter(p => p.status === 'connected').length
-          const freeCount = devPorts.length - usedCount
-          const isActive = activeTab === dev.id
+      {/* Main Tabs Navigation (Device list for current site) */}
+      {devices.length > 0 && (
+        <div style={{ display: 'flex', gap: '6px', borderBottom: '1px solid var(--border)', overflowX: 'auto', paddingBottom: '2px' }}>
+          {devices.map(dev => {
+            const isOlt = dev.device_type === 'olt'
+            const devPorts = ports.filter(p => p.device_id === dev.id)
+            const usedCount = devPorts.filter(p => p.status === 'connected').length
+            const freeCount = devPorts.length - usedCount
+            const isActive = activeTab === dev.id
 
-          return (
-            <button
-              key={dev.id}
-              onClick={() => {
-                setActiveTab(dev.id)
-                setSelectedSlotFilter('all')
-                setDeviceSearchQuery('')
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '9px 14px',
-                background: isActive ? 'var(--bg-card)' : 'transparent',
-                border: '1px solid',
-                borderColor: isActive ? 'var(--border)' : 'transparent',
-                borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
-                borderRadius: '8px 8px 0 0',
-                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                fontWeight: isActive ? 600 : 500,
-                fontSize: '13px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {isOlt ? <Server size={15} style={{ color: isActive ? 'var(--accent)' : 'inherit' }} /> : <Cable size={15} style={{ color: isActive ? 'var(--warning)' : 'inherit' }} />}
-              {dev.name}
-              <span 
-                style={{ 
-                  fontSize: '11px', 
-                  padding: '1px 6px', 
-                  borderRadius: '10px', 
-                  background: isActive ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-tertiary)',
-                  color: isActive ? 'var(--accent)' : 'var(--text-muted)',
-                  fontWeight: 600 
+            return (
+              <button
+                key={dev.id}
+                onClick={() => {
+                  setActiveTab(dev.id)
+                  setSelectedSlotFilter('all')
+                  setDeviceSearchQuery('')
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '9px 14px',
+                  background: isActive ? 'var(--bg-card)' : 'transparent',
+                  border: '1px solid',
+                  borderColor: isActive ? 'var(--border)' : 'transparent',
+                  borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+                  borderRadius: '8px 8px 0 0',
+                  color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  fontWeight: isActive ? 600 : 500,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
                 }}
               >
-                {usedCount}/{devPorts.length} ({freeCount} kosong)
-              </span>
-            </button>
-          )
-        })}
+                {isOlt ? <Server size={15} style={{ color: isActive ? 'var(--accent)' : 'inherit' }} /> : <Cable size={15} style={{ color: isActive ? 'var(--warning)' : 'inherit' }} />}
+                {dev.name}
+                <span 
+                  style={{ 
+                    fontSize: '11px', 
+                    padding: '1px 6px', 
+                    borderRadius: '10px', 
+                    background: isActive ? 'rgba(59, 130, 246, 0.15)' : 'var(--bg-tertiary)',
+                    color: isActive ? 'var(--accent)' : 'var(--text-muted)',
+                    fontWeight: 600 
+                  }}
+                >
+                  {usedCount}/{devPorts.length} ({freeCount} kosong)
+                </span>
+              </button>
+            )
+          })}
 
-        <button
-          onClick={() => setActiveTab('rekap')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '9px 14px',
-            background: activeTab === 'rekap' ? 'var(--bg-card)' : 'transparent',
-            border: '1px solid',
-            borderColor: activeTab === 'rekap' ? 'var(--border)' : 'transparent',
-            borderBottom: activeTab === 'rekap' ? '2px solid var(--accent)' : '2px solid transparent',
-            borderRadius: '8px 8px 0 0',
-            color: activeTab === 'rekap' ? 'var(--text-primary)' : 'var(--text-secondary)',
-            fontWeight: activeTab === 'rekap' ? 600 : 500,
-            fontSize: '13px',
-            cursor: 'pointer',
-            marginLeft: 'auto',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          <Layers size={15} />
-          Daftar Rekap Koneksi ({rekapList.length})
-        </button>
-      </div>
+          <button
+            onClick={() => setActiveTab('rekap')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '9px 14px',
+              background: activeTab === 'rekap' ? 'var(--bg-card)' : 'transparent',
+              border: '1px solid',
+              borderColor: activeTab === 'rekap' ? 'var(--border)' : 'transparent',
+              borderBottom: activeTab === 'rekap' ? '2px solid var(--accent)' : '2px solid transparent',
+              borderRadius: '8px 8px 0 0',
+              color: activeTab === 'rekap' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              fontWeight: activeTab === 'rekap' ? 600 : 500,
+              fontSize: '13px',
+              cursor: 'pointer',
+              marginLeft: 'auto',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <Layers size={15} />
+            Daftar Rekap Koneksi ({rekapList.length})
+          </button>
+        </div>
+      )}
 
-      {/* Loading indicator */}
+      {/* Content Area */}
       {loading ? (
         <div className="card" style={{ height: '320px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div className="spinner" />
+        </div>
+      ) : devices.length === 0 ? (
+        /* ========================================================
+           EMPTY STATE UNTUK SITE YANG BELUM MEMILIKI PERANGKAT
+           ======================================================== */
+        <div className="card" style={{ padding: '60px 20px', textAlign: 'center', border: '1px dashed var(--border)' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(59, 130, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: 'var(--accent)' }}>
+            <Server size={32} />
+          </div>
+          <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)' }}>
+            Belum Ada Perangkat Terdaftar di {SITES.find(s => s.value === site)?.label || site}
+          </h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', maxWidth: '480px', margin: '0 auto 24px', lineHeight: 1.6 }}>
+            Setiap site memiliki konfigurasi perangkat server mandiri. Anda dapat mendaftarkan perangkat OLT atau OTB khusus untuk site ini untuk mulai mencatat patching.
+          </p>
+          <button className="btn btn-primary" onClick={() => setIsAddDeviceModalOpen(true)} style={{ margin: '0 auto' }}>
+            <Plus size={16} /> Tambah Perangkat di {SITES.find(s => s.value === site)?.label || site}
+          </button>
         </div>
       ) : activeTab === 'rekap' ? (
         /* ========================================================
@@ -677,7 +831,7 @@ export default function PatchingServer() {
               <Search size={16} className="search-icon" />
               <input
                 type="text"
-                placeholder="Cari port (3/1, no 109, OTB 96)..."
+                placeholder="Cari port (3/1, no 109, OTB 96, Pageralang)..."
                 value={searchQuery}
                 onChange={e => { setSearchQuery(e.target.value); setRekapPage(1); }}
               />
@@ -709,7 +863,7 @@ export default function PatchingServer() {
                   <th>Tipe Patchcord</th>
                   <th>Perangkat OTB Tujuan</th>
                   <th>Posisi / Port OTB</th>
-                  <th>Keterangan / Arah</th>
+                  <th>Arah / Catatan</th>
                   <th style={{ textAlign: 'right' }}>Aksi</th>
                 </tr>
               </thead>
@@ -739,9 +893,24 @@ export default function PatchingServer() {
                         </span>
                       </td>
                       <td>
-                        <span style={{ fontSize: '12px', color: item.note === '-' ? 'var(--text-muted)' : 'var(--text-primary)' }}>
-                          {item.note}
-                        </span>
+                        {item.note && item.note !== '-' ? (
+                          <span style={{ 
+                            fontSize: '12px', 
+                            fontWeight: 600, 
+                            color: '#38bdf8', 
+                            background: 'rgba(56, 189, 248, 0.1)', 
+                            padding: '3px 8px', 
+                            borderRadius: '4px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}>
+                            <MapPin size={12} />
+                            {item.note}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>-</span>
+                        )}
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
@@ -784,16 +953,16 @@ export default function PatchingServer() {
         </div>
       ) : activeDevice?.device_type === 'olt' ? (
         /* ========================================================
-           TAB TAMPILAN OLT DENGAN SEARCH, FILTER & MOBILE EFFICIENCY
+           TAB TAMPILAN OLT DENGAN SEARCH, FILTER & TAMPILAN ARAH CATATAN
            ======================================================== */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* Header Summary Banner */}
           <div className="card" style={{ padding: '14px 18px', background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>{activeDevice.name}</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>{activeDevice?.name || 'OLT'}</h3>
                 <p style={{ margin: '3px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {activeDevice.brand_model || 'ZTE C300'} · Slot 3 s/d 16 (Card GPON)
+                  {activeDevice?.brand_model || 'ZTE C300'} · Slot 3 s/d 16 (Card GPON)
                 </p>
               </div>
 
@@ -830,11 +999,11 @@ export default function PatchingServer() {
           <div className="card" style={{ padding: '12px 16px' }}>
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
               {/* Search Box */}
-              <div className="search-box" style={{ maxWidth: '280px', flex: '1 1 200px' }}>
+              <div className="search-box" style={{ maxWidth: '300px', flex: '1 1 200px' }}>
                 <Search size={16} className="search-icon" />
                 <input
                   type="text"
-                  placeholder="Cari port PON (misal 3/1, 16/2, OTB)..."
+                  placeholder="Cari port / arah (misal 3/1, Pageralang)..."
                   value={deviceSearchQuery}
                   onChange={e => setDeviceSearchQuery(e.target.value)}
                 />
@@ -869,7 +1038,7 @@ export default function PatchingServer() {
               )}
             </div>
 
-            {/* Quick Slot Filter Pills (Sangat Efisien untuk Mobile & Desktop) */}
+            {/* Quick Slot Filter Pills */}
             <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Filter size={12} /> Pilih Slot Cepat (Mobile / Desktop):
@@ -948,7 +1117,7 @@ export default function PatchingServer() {
                     </div>
                   </div>
 
-                  {/* Ports Grid: 2 Baris x 4 Kolom (Compact Faceplate Layout) */}
+                  {/* Ports Grid */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '8px' }}>
                     {slotData.ports.map(port => {
                       const conn = portConnectionMap.get(port.id)
@@ -998,9 +1167,9 @@ export default function PatchingServer() {
                             </span>
                           </div>
 
-                          {/* Body: Connected Target or Clear Prompt */}
+                          {/* Body: Connected Target & REVISI #1: Arah Catatan Desa/ODC */}
                           {isConnected ? (
-                            <div style={{ fontSize: '12px' }}>
+                            <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, color: '#f8fafc' }}>
                                 <ChevronRight size={13} style={{ color: 'var(--accent)' }} />
                                 {conn.targetDevice?.name}
@@ -1008,6 +1177,31 @@ export default function PatchingServer() {
                               <div style={{ paddingLeft: '17px', color: '#fbbf24', fontWeight: 700, fontSize: '12px' }}>
                                 {conn.targetPort?.port_label}
                               </div>
+
+                              {/* REVISI 1: Tampilkan Arah Catatan (Desa/ODC/Jalur) */}
+                              {conn.note && (
+                                <div 
+                                  style={{ 
+                                    marginTop: '4px', 
+                                    padding: '4px 8px', 
+                                    borderRadius: '5px', 
+                                    background: 'rgba(56, 189, 248, 0.12)', 
+                                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                                    color: '#38bdf8', 
+                                    fontSize: '11px', 
+                                    fontWeight: 700,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px'
+                                  }}
+                                  title={`Arah / Catatan: ${conn.note}`}
+                                >
+                                  <MapPin size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {conn.note}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <div style={{ 
@@ -1018,7 +1212,7 @@ export default function PatchingServer() {
                               alignItems: 'center', 
                               gap: '5px',
                               background: 'rgba(255,255,255,0.03)',
-                              padding: '4px 6px',
+                              padding: '5px 8px',
                               borderRadius: '4px',
                               border: '1px dashed rgba(255,255,255,0.15)'
                             }}>
@@ -1039,18 +1233,18 @@ export default function PatchingServer() {
             )}
           </div>
         </div>
-      ) : (
+      ) : activeDevice ? (
         /* ========================================================
-           TAB TAMPILAN OTB (VISUAL GRID MATRIKS DENGAN CONTRAST BAIK)
+           TAB TAMPILAN OTB (VISUAL GRID MATRIKS)
            ======================================================== */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* Header Summary Banner */}
           <div className="card" style={{ padding: '14px 18px', background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>{activeDevice.name}</h3>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>{activeDevice?.name || 'OTB'}</h3>
                 <p style={{ margin: '3px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  Matriks Port ({activeDevice.rows_count} Baris kebawah × {activeDevice.cols_count} Kolom kesamping = {activeDevice.total_ports} Port)
+                  Matriks Port ({activeDevice?.rows_count || 1} Baris kebawah × {activeDevice?.cols_count || 1} Kolom kesamping = {activeDevice?.total_ports || activeDevicePorts.length} Port)
                 </p>
               </div>
 
@@ -1084,8 +1278,8 @@ export default function PatchingServer() {
           </div>
 
           <div className="card" style={{ padding: '24px 20px', overflowX: 'auto' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: `${Math.max(activeDevice.cols_count * 40 + 120, 600)}px` }}>
-              {Array.from({ length: activeDevice.rows_count || 1 }, (_, rIdx) => {
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: `${Math.max((activeDevice?.cols_count || 12) * 40 + 120, 600)}px` }}>
+              {Array.from({ length: activeDevice?.rows_count || 1 }, (_, rIdx) => {
                 const rowNum = rIdx + 1
                 const rowPorts = activeDevicePorts.filter(p => p.row_number === rowNum).sort((a, b) => a.col_number - b.col_number)
 
@@ -1095,7 +1289,7 @@ export default function PatchingServer() {
                       Baris {rowNum}
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${activeDevice.cols_count}, minmax(36px, 1fr))`, gap: '8px', flex: 1 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${activeDevice?.cols_count || 12}, minmax(36px, 1fr))`, gap: '8px', flex: 1 }}>
                       {rowPorts.map(port => {
                         const conn = portConnectionMap.get(port.id)
                         const isConnected = port.status === 'connected' && !!conn
@@ -1104,7 +1298,7 @@ export default function PatchingServer() {
                           <div
                             key={port.id}
                             onClick={() => openConnectModal(port)}
-                            title={isConnected ? `${port.port_label} ➔ Terhubung: ${conn.targetDevice?.name} (${conn.targetPort?.port_label})\nCatatan: ${conn.note || '-'}` : `${port.port_label} (Kosong)`}
+                            title={isConnected ? `${port.port_label} ➔ Terhubung: ${conn.targetDevice?.name} (${conn.targetPort?.port_label})\nArah/Catatan: ${conn.note || '-'}` : `${port.port_label} (Kosong)`}
                             style={{
                               height: '42px',
                               borderRadius: '6px',
@@ -1147,6 +1341,164 @@ export default function PatchingServer() {
                 )
               })}
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ========================================================
+         MODAL TAMBAH PERANGKAT DI SITE INI (REVISI #2)
+         ======================================================== */}
+      {isAddDeviceModalOpen && (
+        <div className="modal-overlay" onClick={() => !savingDevice && setIsAddDeviceModalOpen(false)}>
+          <div className="modal" style={{ maxWidth: '520px', width: '92%' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Server size={18} style={{ color: 'var(--accent)' }} />
+                Tambah Perangkat di Site {SITES.find(s => s.value === site)?.label || site}
+              </h3>
+              <button className="btn-icon" onClick={() => !savingDevice && setIsAddDeviceModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveNewDevice}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '20px' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Tipe Perangkat <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <select
+                    className="form-input filter-select"
+                    value={newDeviceForm.device_type}
+                    onChange={e => setNewDeviceForm(f => ({
+                      ...f,
+                      device_type: e.target.value,
+                      name: e.target.value === 'olt' ? `OLT ${site.toUpperCase()}` : `OTB 96 Core 1`,
+                      brand_model: e.target.value === 'olt' ? 'ZTE C320' : 'OTB Rackmount'
+                    }))}
+                  >
+                    <option value="olt">OLT (Optical Line Terminal)</option>
+                    <option value="otb">OTB / ODF Patch Panel</option>
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Nama Perangkat <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Contoh: OLT ZTE C320 Cilacap"
+                    value={newDeviceForm.name}
+                    onChange={e => setNewDeviceForm(f => ({ ...f, name: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Merk / Model</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Contoh: ZTE C320 / Huawei / Fiberhome"
+                    value={newDeviceForm.brand_model}
+                    onChange={e => setNewDeviceForm(f => ({ ...f, brand_model: e.target.value }))}
+                  />
+                </div>
+
+                {newDeviceForm.device_type === 'olt' ? (
+                  <div style={{ background: 'var(--bg-primary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent)' }}>Konfigurasi Slot &amp; Port PON:</div>
+                    <div className="grid-3" style={{ gap: '8px' }}>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontSize: '11px' }}>Mulai Slot</label>
+                        <input
+                          type="number"
+                          className="form-input"
+                          min="1"
+                          max="20"
+                          value={newDeviceForm.start_slot}
+                          onChange={e => setNewDeviceForm(f => ({ ...f, start_slot: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontSize: '11px' }}>Sampai Slot</label>
+                        <input
+                          type="number"
+                          className="form-input"
+                          min="1"
+                          max="20"
+                          value={newDeviceForm.end_slot}
+                          onChange={e => setNewDeviceForm(f => ({ ...f, end_slot: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontSize: '11px' }}>Port / Slot</label>
+                        <select
+                          className="form-input filter-select"
+                          value={newDeviceForm.ports_per_slot}
+                          onChange={e => setNewDeviceForm(f => ({ ...f, ports_per_slot: e.target.value }))}
+                        >
+                          <option value="8">8 Port PON</option>
+                          <option value="16">16 Port PON</option>
+                          <option value="4">4 Port PON</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ background: 'var(--bg-primary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--warning)' }}>Konfigurasi Grid OTB:</div>
+                    <div className="grid-2" style={{ gap: '8px' }}>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontSize: '11px' }}>Baris Kebawah</label>
+                        <input
+                          type="number"
+                          className="form-input"
+                          min="1"
+                          max="24"
+                          value={newDeviceForm.rows_count}
+                          onChange={e => setNewDeviceForm(f => ({ ...f, rows_count: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontSize: '11px' }}>Kolom Kesamping</label>
+                        <input
+                          type="number"
+                          className="form-input"
+                          min="1"
+                          max="48"
+                          value={newDeviceForm.cols_count}
+                          onChange={e => setNewDeviceForm(f => ({ ...f, cols_count: e.target.value }))}
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Total port yang akan otomatis dibuat: <strong>{(Number(newDeviceForm.rows_count) || 4) * (Number(newDeviceForm.cols_count) || 24)} port</strong>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsAddDeviceModalOpen(false)}
+                  disabled={savingDevice}
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={savingDevice}
+                >
+                  {savingDevice ? 'Membuat Perangkat & Port...' : 'Simpan Perangkat'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1192,8 +1544,8 @@ export default function PatchingServer() {
                       Terhubung ke: <strong>{portConnectionMap.get(selectedPort.id).targetDevice?.name}</strong> ({portConnectionMap.get(selectedPort.id).targetPort?.port_label})
                     </div>
                     {portConnectionMap.get(selectedPort.id).note && (
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                        Catatan: {portConnectionMap.get(selectedPort.id).note}
+                      <div style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 600, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <MapPin size={12} /> Arah: {portConnectionMap.get(selectedPort.id).note}
                       </div>
                     )}
                   </div>
@@ -1237,7 +1589,7 @@ export default function PatchingServer() {
                   )}
                 </div>
 
-                {/* Tipe Patchcord & Catatan */}
+                {/* Tipe Patchcord & Arah / Catatan (Desa/ODC) */}
                 <div className="grid-2">
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Tipe Patchcord</label>
@@ -1256,11 +1608,11 @@ export default function PatchingServer() {
                   </div>
 
                   <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label">Arah / Catatan (Opsional)</label>
+                    <label className="form-label">Arah / Catatan (Desa / ODC)</label>
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="Contoh: Arah ODC Alun-Alun"
+                      placeholder="Contoh: Desa Pageralang / ODC 01"
                       value={connectForm.note}
                       onChange={e => setConnectForm(f => ({ ...f, note: e.target.value }))}
                     />
