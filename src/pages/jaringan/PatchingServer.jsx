@@ -222,7 +222,30 @@ export default function PatchingServer() {
   // Ports for the active device
   const activeDevicePorts = useMemo(() => {
     if (!activeDevice) return []
-    return ports.filter(p => p.device_id === activeDevice.id)
+    const rawPorts = ports.filter(p => p.device_id === activeDevice.id)
+
+    // REVISI OTB 144: Penomoran nyambung 1 s/d 144
+    // Baris 12 no 1 sebagai no 1 kesamping s/d no 12
+    // Baris 11 no 13 s/d no 24
+    // ...
+    // Baris 1 no 12 sebagai no terakhir yaitu 144
+    const isOtb144 = activeDevice.total_ports === 144 || activeDevice.name?.includes('144')
+    if (isOtb144) {
+      return rawPorts.map(p => {
+        const portNum = p.port_number || parseInt(p.port_label?.replace(/\D/g, ''), 10) || 1
+        // Baris 12 = port 1-12, Baris 1 = port 133-144
+        const calculatedRow = 13 - Math.ceil(portNum / 12)
+        const calculatedCol = ((portNum - 1) % 12) + 1
+        return {
+          ...p,
+          port_number: portNum,
+          row_number: calculatedRow,
+          col_number: calculatedCol
+        }
+      })
+    }
+
+    return rawPorts
   }, [ports, activeDevice])
 
   // Available slots for OLT active device (e.g. 3, 4, 5, ..., 16)
@@ -533,9 +556,11 @@ export default function PatchingServer() {
           for (let c = 1; c <= colsCount; c++) {
             const portNo = (r - 1) * colsCount + c
             const label = totalPorts === 144 ? `No ${portNo}` : `Baris ${r} No ${c}`
+            // Untuk OTB 144: Baris 12 (atas) = no 1-12, Baris 1 (bawah) = no 133-144
+            const actualRow = totalPorts === 144 ? (rowsCount + 1 - r) : r
             portsToInsert.push({
               device_id: newDev.id,
-              row_number: r,
+              row_number: actualRow,
               col_number: c,
               port_number: portNo,
               port_label: label,
@@ -1244,7 +1269,10 @@ export default function PatchingServer() {
               <div>
                 <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>{activeDevice?.name || 'OTB'}</h3>
                 <p style={{ margin: '3px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  Matriks Port ({activeDevice?.rows_count || 1} Baris kebawah × {activeDevice?.cols_count || 1} Kolom kesamping = {activeDevice?.total_ports || activeDevicePorts.length} Port)
+                  {activeDevice?.total_ports === 144
+                    ? 'Matriks Port (12 Baris kebawah × 12 Kolom kesamping = Port No 1 s/d 144 urut menyambung)'
+                    : `Matriks Port (${activeDevice?.rows_count || 1} Baris kebawah × ${activeDevice?.cols_count || 1} Kolom kesamping = ${activeDevice?.total_ports || activeDevicePorts.length} Port)`
+                  }
                 </p>
               </div>
 
@@ -1294,7 +1322,10 @@ export default function PatchingServer() {
                 </div>
               ))}
               <div style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--text-muted)', alignSelf: 'center', fontStyle: 'italic', whiteSpace: 'nowrap' }}>
-                Fisik OTB: Baris {activeDevice?.rows_count} (atas) → Baris 1 (bawah)
+                {activeDevice?.total_ports === 144
+                  ? 'Fisik OTB 144: Baris 12 (No 1-12 di atas) → Baris 1 (No 133-144 di bawah)'
+                  : `Fisik OTB: Baris ${activeDevice?.rows_count} (atas) → Baris 1 (bawah)`
+                }
               </div>
             </div>
 
@@ -1306,16 +1337,25 @@ export default function PatchingServer() {
                 const rowPorts = activeDevicePorts.filter(p => p.row_number === rowNum).sort((a, b) => a.col_number - b.col_number)
                 const usedInRow = rowPorts.filter(p => p.status === 'connected').length
 
+                const isOtb144 = activeDevice?.total_ports === 144 || activeDevice?.name?.includes('144')
+                const startNo = isOtb144 ? (totalRows - rowNum) * 12 + 1 : null
+                const endNo = isOtb144 ? (totalRows - rowNum) * 12 + 12 : null
+
                 return (
                   <div key={rowNum} style={{ display: 'flex', alignItems: 'stretch', gap: '8px' }}>
 
                     {/* Row label kiri */}
                     <div style={{
-                      width: '80px', flexShrink: 0, display: 'flex', flexDirection: 'column',
+                      width: '88px', flexShrink: 0, display: 'flex', flexDirection: 'column',
                       alignItems: 'flex-end', justifyContent: 'center',
                       paddingRight: '10px', borderRight: '2px solid var(--border)'
                     }}>
                       <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)' }}>Baris {rowNum}</div>
+                      {isOtb144 && (
+                        <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 600 }}>
+                          No {startNo}-{endNo}
+                        </div>
+                      )}
                       <div style={{ fontSize: '11px', fontWeight: 700, color: usedInRow > 0 ? 'var(--accent)' : 'var(--text-muted)' }}>
                         {usedInRow}/{rowPorts.length} port
                       </div>
@@ -1326,7 +1366,12 @@ export default function PatchingServer() {
                       {rowPorts.map(port => {
                         const conn = portConnectionMap.get(port.id)
                         const isConnected = port.status === 'connected' && !!conn
-                        const colNo = port.col_number || port.port_number
+                        
+                        // REVISI OTB 144: Penomoran nyambung 1 - 144 bukan terpisah 1 - 12 per baris
+                        const displayPortNo = isOtb144 ? port.port_number : (port.col_number || port.port_number)
+                        const portTitleLabel = isOtb144 
+                          ? `OTB 144 No ${port.port_number} (Baris ${port.row_number} Kolom ${port.col_number})`
+                          : port.port_label
 
                         const targetDevType = conn?.targetDevice?.device_type || ''
                         const isToOlt = targetDevType === 'olt'
@@ -1362,8 +1407,8 @@ export default function PatchingServer() {
                             key={port.id}
                             onClick={() => openConnectModal(port)}
                             title={isConnected
-                              ? `Port OTB: ${port.port_label}\n↔ Device: ${devName} [${targetDevType.toUpperCase()}]\n   Port: ${targetPortLabel}${noteText ? `\n📍 Arah: ${noteText}` : ''}`
-                              : `${port.port_label}\nStatus: Kosong — klik untuk hubungkan`
+                              ? `Port OTB: ${portTitleLabel}\n↔ Device: ${devName} [${targetDevType.toUpperCase()}]\n   Port: ${targetPortLabel}${noteText ? `\n📍 Arah: ${noteText}` : ''}`
+                              : `${portTitleLabel}\nStatus: Kosong — klik untuk hubungkan`
                             }
                             style={{
                               /* Tinggi seragam: semua kotak sama tinggi di semua baris */
@@ -1396,12 +1441,12 @@ export default function PatchingServer() {
                               e.currentTarget.style.borderColor = borderColor
                             }}
                           >
-                            {/* ── Nomor port OTB (besar, jelas) ── */}
+                            {/* ── Nomor port OTB (besar, jelas, nyambung 1 - 144) ── */}
                             <span style={{
                               fontSize: '14px', fontWeight: 800, lineHeight: 1,
                               color: isConnected ? '#f8fafc' : '#475569'
                             }}>
-                              {colNo}
+                              {displayPortNo}
                             </span>
 
                             {isConnected ? (
