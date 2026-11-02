@@ -21,7 +21,8 @@ import {
   RefreshCw,
   ExternalLink,
   ChevronRight,
-  Filter
+  Filter,
+  Check
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -50,7 +51,12 @@ export default function PatchingServer() {
   // Active view tab: device ID or 'rekap'
   const [activeTab, setActiveTab] = useState('')
 
-  // Tracing / Search state
+  // OLT / Device Filters & Search
+  const [deviceSearchQuery, setDeviceSearchQuery] = useState('')
+  const [deviceStatusFilter, setDeviceStatusFilter] = useState('all') // 'all', 'connected', 'available'
+  const [selectedSlotFilter, setSelectedSlotFilter] = useState('all') // 'all' or slot number (e.g. 3, 4, ...)
+
+  // Tracing / Rekap state
   const [searchQuery, setSearchQuery] = useState('')
   const [filterOtb, setFilterOtb] = useState('all')
   const [rekapPage, setRekapPage] = useState(1)
@@ -97,12 +103,11 @@ export default function PatchingServer() {
       setDevices(devList)
 
       if (devList.length > 0 && !activeTab) {
-        // Default to OLT or first device
         const olt = devList.find(d => d.device_type === 'olt')
         setActiveTab(olt ? olt.id : devList[0].id)
       }
 
-      // 2. Fetch ports for these devices
+      // 2. Fetch ports for these devices (excluding slot 1 and 2 as requested)
       const devIds = devList.map(d => d.id)
       if (devIds.length > 0) {
         const { data: portData, error: portErr } = await supabase
@@ -112,10 +117,13 @@ export default function PatchingServer() {
           .order('port_number')
 
         if (portErr) throw portErr
-        setPorts(portData || [])
+
+        // Filter out slot 1 & 2 in case they still exist in any query
+        const validPorts = (portData || []).filter(p => p.slot_number !== 1 && p.slot_number !== 2)
+        setPorts(validPorts)
 
         // 3. Fetch connections
-        const portIds = (portData || []).map(p => p.id)
+        const portIds = validPorts.map(p => p.id)
         if (portIds.length > 0) {
           const { data: connData, error: connErr } = await supabase
             .from('server_connections')
@@ -190,8 +198,58 @@ export default function PatchingServer() {
   // Ports for the active device
   const activeDevicePorts = useMemo(() => {
     if (!activeDevice) return []
-    return ports.filter(p => p.device_id === activeDevice.id)
+    return ports.filter(p => p.device_id === activeDevice.id && p.slot_number !== 1 && p.slot_number !== 2)
   }, [ports, activeDevice])
+
+  // Available slots for OLT active device (e.g. 3, 4, 5, ..., 16)
+  const availableSlots = useMemo(() => {
+    if (activeDevice?.device_type !== 'olt') return []
+    const slotSet = new Set(activeDevicePorts.map(p => p.slot_number).filter(Boolean))
+    return Array.from(slotSet).sort((a, b) => a - b)
+  }, [activeDevice, activeDevicePorts])
+
+  // Filtered slots & ports for OLT
+  const filteredOltSlots = useMemo(() => {
+    if (activeDevice?.device_type !== 'olt') return []
+
+    // 1. Filter by selected slot
+    let slotList = availableSlots
+    if (selectedSlotFilter !== 'all') {
+      slotList = slotList.filter(s => s === Number(selectedSlotFilter))
+    }
+
+    // 2. Filter ports inside slots by search query & status
+    const query = deviceSearchQuery.trim().toLowerCase()
+
+    return slotList.map(slotNum => {
+      let slotPorts = activeDevicePorts.filter(p => p.slot_number === slotNum)
+
+      if (deviceStatusFilter === 'connected') {
+        slotPorts = slotPorts.filter(p => p.status === 'connected')
+      } else if (deviceStatusFilter === 'available') {
+        slotPorts = slotPorts.filter(p => p.status === 'available')
+      }
+
+      if (query) {
+        slotPorts = slotPorts.filter(p => {
+          const conn = portConnectionMap.get(p.id)
+          const targetStr = conn ? `${conn.targetDevice?.name} ${conn.targetPort?.port_label} ${conn.note}`.toLowerCase() : ''
+          return p.port_label.toLowerCase().includes(query) || targetStr.includes(query)
+        })
+      }
+
+      const totalInSlot = activeDevicePorts.filter(p => p.slot_number === slotNum).length
+      const usedInSlot = activeDevicePorts.filter(p => p.slot_number === slotNum && p.status === 'connected').length
+
+      return {
+        slotNum,
+        ports: slotPorts,
+        totalInSlot,
+        usedInSlot,
+        freeInSlot: totalInSlot - usedInSlot
+      }
+    }).filter(s => s.ports.length > 0 || !query) // hide empty slot if searching and no match
+  }, [activeDevice, availableSlots, activeDevicePorts, selectedSlotFilter, deviceStatusFilter, deviceSearchQuery, portConnectionMap])
 
   // Rekap all connections
   const rekapList = useMemo(() => {
@@ -259,7 +317,7 @@ export default function PatchingServer() {
   const stats = useMemo(() => {
     const totalConnections = connections.length
     const oltDev = devices.find(d => d.device_type === 'olt')
-    const oltPorts = oltDev ? ports.filter(p => p.device_id === oltDev.id) : []
+    const oltPorts = oltDev ? ports.filter(p => p.device_id === oltDev.id && p.slot_number !== 1 && p.slot_number !== 2) : []
     const oltUsed = oltPorts.filter(p => p.status === 'connected').length
 
     const otbDevices = devices.filter(d => d.device_type === 'otb')
@@ -306,7 +364,7 @@ export default function PatchingServer() {
   // Available target ports for connect modal
   const targetAvailablePorts = useMemo(() => {
     if (!connectForm.targetDeviceId) return []
-    const list = ports.filter(p => p.device_id === connectForm.targetDeviceId)
+    const list = ports.filter(p => p.device_id === connectForm.targetDeviceId && p.slot_number !== 1 && p.slot_number !== 2)
     // Filter to available OR currently connected to portA
     return list.filter(p => {
       const conn = portConnectionMap.get(p.id)
@@ -344,7 +402,7 @@ export default function PatchingServer() {
       // 4. Update status on both ports to 'connected'
       await supabase.from('server_ports').update({ status: 'connected' }).in('id', [portAId, portBId])
 
-      toast.success('Jumper koneksi berhasil disimpan dan disinkronkan!')
+      toast.success('Koneksi port berhasil disimpan dan disinkronkan!')
       setIsConnectModalOpen(false)
       fetchData()
     } catch (err) {
@@ -355,17 +413,16 @@ export default function PatchingServer() {
     }
   }
 
-  // Action: Disconnect (Cabut Jumper)
+  // Action: Disconnect (Cabut Koneksi)
   const handleDisconnect = async (portId) => {
     const connInfo = portConnectionMap.get(portId)
     if (!connInfo) return
 
-    if (!window.confirm(`Yakin ingin mencabut jumper antara "${connInfo.myPort.port_label}" dan "${connInfo.targetPort.port_label}"?`)) {
+    if (!window.confirm(`Yakin ingin memutuskan koneksi antara "${connInfo.myPort.port_label}" dan "${connInfo.targetPort.port_label}"?`)) {
       return
     }
 
     try {
-      // 1. Delete connection record
       const { error: delErr } = await supabase
         .from('server_connections')
         .delete()
@@ -373,25 +430,24 @@ export default function PatchingServer() {
 
       if (delErr) throw delErr
 
-      // 2. Set both ports back to 'available'
       await supabase
         .from('server_ports')
         .update({ status: 'available' })
         .in('id', [connInfo.myPort.id, connInfo.targetPort.id])
 
-      toast.success('Jumper berhasil dicabut! Kedua port kini kembali KOSONG.')
+      toast.success('Koneksi port berhasil diputuskan! Kedua port kini berstatus KOSONG.')
       setIsConnectModalOpen(false)
       fetchData()
     } catch (err) {
       console.error(err)
-      toast.error('Gagal mencabut jumper: ' + err.message)
+      toast.error('Gagal memutuskan koneksi: ' + err.message)
     }
   }
 
   // Export to Excel
   const handleExportExcel = () => {
     if (rekapList.length === 0) {
-      toast.error('Belum ada data jumper untuk diekspor')
+      toast.error('Belum ada data koneksi untuk diekspor')
       return
     }
 
@@ -399,7 +455,7 @@ export default function PatchingServer() {
       'No': idx + 1,
       'Perangkat Asal': item.leftDev?.name || 'OLT',
       'Port Asal': item.leftPort.port_label,
-      'Tipe Kabel': item.cableType,
+      'Tipe Patchcord': item.cableType,
       'Perangkat Tujuan': item.rightDev?.name || 'OTB',
       'Port / Posisi Tujuan': item.rightPort.port_label,
       'Arah / Keterangan': item.note || '-'
@@ -407,8 +463,8 @@ export default function PatchingServer() {
 
     const ws = XLSX.utils.json_to_sheet(rows)
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Jumper Server')
-    XLSX.writeFile(wb, `Rekap_Jumper_Server_${site.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    XLSX.utils.book_append_sheet(wb, ws, 'Patching Server')
+    XLSX.writeFile(wb, `Rekap_Koneksi_Server_${site.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.xlsx`)
     toast.success('File Excel berhasil diunduh!')
   }
 
@@ -458,7 +514,7 @@ export default function PatchingServer() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Page Header */}
       <div className="page-header" style={{ marginBottom: 0 }}>
         <div className="page-header-left">
@@ -477,7 +533,7 @@ export default function PatchingServer() {
           >
             {SITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
-          <button className="btn btn-secondary btn-sm" onClick={handleExportExcel} title="Export Rekap Jumper ke Excel">
+          <button className="btn btn-secondary btn-sm" onClick={handleExportExcel} title="Export Rekap Koneksi ke Excel">
             <Download size={15} /> Export Excel
           </button>
           <button className="btn btn-secondary btn-sm" onClick={() => { setRefreshing(true); fetchData(); }} title="Segarkan Data">
@@ -486,15 +542,17 @@ export default function PatchingServer() {
         </div>
       </div>
 
-      {/* KPI Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px' }}>
+      {/* KPI Stats: Detail Terhubung & Kosong */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
         <div className="card" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '14px' }}>
           <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(59, 130, 246, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
             <Link2 size={22} />
           </div>
           <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Jumper Terhubung</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>{stats.totalConnections} <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--text-muted)' }}>jumper</span></div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Port Terhubung</div>
+            <div style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>
+              {stats.totalConnections} <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)' }}>port aktif</span>
+            </div>
           </div>
         </div>
 
@@ -502,11 +560,13 @@ export default function PatchingServer() {
           <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--success)' }}>
             <Server size={22} />
           </div>
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Port OLT Terpakai</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>
-              {stats.oltUsed} <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--text-muted)' }}>/ {stats.oltTotal} port ({stats.oltFree} kosong)</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Port OLT ZTE C300</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--accent)' }}>{stats.oltUsed} Terhubung</span>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--success)' }}>· {stats.oltFree} Kosong</span>
             </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Total: {stats.oltTotal} port PON</div>
           </div>
         </div>
 
@@ -514,11 +574,13 @@ export default function PatchingServer() {
           <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--warning)' }}>
             <Cable size={22} />
           </div>
-          <div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Kapasitas OTB Terpakai</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>
-              {stats.otbUsed} <span style={{ fontSize: '12px', fontWeight: 400, color: 'var(--text-muted)' }}>/ {stats.otbTotal} port ({stats.otbFree} kosong)</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Kapasitas OTB</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--accent)' }}>{stats.otbUsed} Terhubung</span>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--success)' }}>· {stats.otbFree} Kosong</span>
             </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Total: {stats.otbTotal} port OTB</div>
           </div>
         </div>
       </div>
@@ -527,19 +589,24 @@ export default function PatchingServer() {
       <div style={{ display: 'flex', gap: '6px', borderBottom: '1px solid var(--border)', overflowX: 'auto', paddingBottom: '2px' }}>
         {devices.map(dev => {
           const isOlt = dev.device_type === 'olt'
-          const devPorts = ports.filter(p => p.device_id === dev.id)
+          const devPorts = ports.filter(p => p.device_id === dev.id && p.slot_number !== 1 && p.slot_number !== 2)
           const usedCount = devPorts.filter(p => p.status === 'connected').length
+          const freeCount = devPorts.length - usedCount
           const isActive = activeTab === dev.id
 
           return (
             <button
               key={dev.id}
-              onClick={() => setActiveTab(dev.id)}
+              onClick={() => {
+                setActiveTab(dev.id)
+                setSelectedSlotFilter('all')
+                setDeviceSearchQuery('')
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '9px 16px',
+                padding: '9px 14px',
                 background: isActive ? 'var(--bg-card)' : 'transparent',
                 border: '1px solid',
                 borderColor: isActive ? 'var(--border)' : 'transparent',
@@ -564,7 +631,7 @@ export default function PatchingServer() {
                   fontWeight: 600 
                 }}
               >
-                {usedCount}/{dev.total_ports || devPorts.length}
+                {usedCount}/{devPorts.length} ({freeCount} kosong)
               </span>
             </button>
           )
@@ -576,7 +643,7 @@ export default function PatchingServer() {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            padding: '9px 16px',
+            padding: '9px 14px',
             background: activeTab === 'rekap' ? 'var(--bg-card)' : 'transparent',
             border: '1px solid',
             borderColor: activeTab === 'rekap' ? 'var(--border)' : 'transparent',
@@ -591,7 +658,7 @@ export default function PatchingServer() {
           }}
         >
           <Layers size={15} />
-          Daftar Rekap Jumper ({rekapList.length})
+          Daftar Rekap Koneksi ({rekapList.length})
         </button>
       </div>
 
@@ -629,7 +696,7 @@ export default function PatchingServer() {
             </select>
 
             <div style={{ marginLeft: 'auto', fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Menampilkan <strong>{filteredRekap.length}</strong> jalur jumper
+              Menampilkan <strong>{filteredRekap.length}</strong> jalur koneksi
             </div>
           </div>
 
@@ -687,7 +754,7 @@ export default function PatchingServer() {
                           </button>
                           <button
                             className="btn-icon text-danger"
-                            title="Cabut Jumper"
+                            title="Putuskan Koneksi"
                             onClick={() => handleDisconnect(item.leftPort.id)}
                           >
                             <Unlink size={14} />
@@ -699,7 +766,7 @@ export default function PatchingServer() {
                 ) : (
                   <tr>
                     <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
-                      Tidak ditemukan data jumper yang sesuai kriteria pencarian.
+                      Tidak ditemukan data koneksi yang sesuai kriteria pencarian.
                     </td>
                   </tr>
                 )}
@@ -717,51 +784,173 @@ export default function PatchingServer() {
         </div>
       ) : activeDevice?.device_type === 'olt' ? (
         /* ========================================================
-           TAB TAMPILAN OLT (GROUPED BY SLOTS)
+           TAB TAMPILAN OLT DENGAN SEARCH, FILTER & MOBILE EFFICIENCY
            ======================================================== */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div className="card" style={{ padding: '16px 20px', background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          {/* Header Summary Banner */}
+          <div className="card" style={{ padding: '14px 18px', background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div>
                 <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>{activeDevice.name}</h3>
                 <p style={{ margin: '3px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  {activeDevice.brand_model || 'ZTE C300'} · Tampilan Card Slot &amp; Port PON
+                  {activeDevice.brand_model || 'ZTE C300'} · Slot 3 s/d 16 (Card GPON)
                 </p>
               </div>
-              <div style={{ display: 'flex', gap: '16px', fontSize: '12px' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'rgba(59, 130, 246, 0.25)', border: '1px solid var(--accent)' }} />
-                  <strong>Terhubung (Connected)</strong>
+
+              {/* Status Legenda & Total Terhubung/Kosong */}
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', fontSize: '12px' }}>
+                <span style={{ 
+                  display: 'flex', alignItems: 'center', gap: '6px', 
+                  padding: '4px 10px', borderRadius: '6px', 
+                  background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)',
+                  color: 'var(--accent)', fontWeight: 600
+                }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)' }} />
+                  {activeDevicePorts.filter(p => p.status === 'connected').length} Terhubung
                 </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)' }} />
-                  <strong>Kosong (Available)</strong>
+
+                <span style={{ 
+                  display: 'flex', alignItems: 'center', gap: '6px', 
+                  padding: '4px 10px', borderRadius: '6px', 
+                  background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)',
+                  color: 'var(--success)', fontWeight: 600
+                }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)' }} />
+                  {activeDevicePorts.filter(p => p.status === 'available').length} Kosong
+                </span>
+
+                <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                  Total {activeDevicePorts.length} port
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Group ports by slot */}
-          {Array.from(new Set(activeDevicePorts.map(p => p.slot_number || 1)))
-            .sort((a, b) => a - b)
-            .map(slotNum => {
-              const slotPorts = activeDevicePorts.filter(p => (p.slot_number || 1) === slotNum)
-              const slotUsed = slotPorts.filter(p => p.status === 'connected').length
+          {/* Search & Filter Toolbar */}
+          <div className="card" style={{ padding: '12px 16px' }}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+              {/* Search Box */}
+              <div className="search-box" style={{ maxWidth: '280px', flex: '1 1 200px' }}>
+                <Search size={16} className="search-icon" />
+                <input
+                  type="text"
+                  placeholder="Cari port PON (misal 3/1, 16/2, OTB)..."
+                  value={deviceSearchQuery}
+                  onChange={e => setDeviceSearchQuery(e.target.value)}
+                />
+              </div>
 
-              return (
-                <div key={slotNum} className="card" style={{ padding: '16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className="badge badge-accent" style={{ fontSize: '11px' }}>SLOT {slotNum}</span>
-                      <span>Card GPON ({slotPorts.length} Port)</span>
+              {/* Status Filter */}
+              <select
+                className="filter-select"
+                value={deviceStatusFilter}
+                onChange={e => setDeviceStatusFilter(e.target.value)}
+                style={{ height: '38px', minWidth: '140px' }}
+              >
+                <option value="all">Semua Status</option>
+                <option value="connected">Hanya Terhubung</option>
+                <option value="available">Hanya Kosong</option>
+              </select>
+
+              {/* Reset filter button if active */}
+              {(deviceSearchQuery || deviceStatusFilter !== 'all' || selectedSlotFilter !== 'all') && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setDeviceSearchQuery('')
+                    setDeviceStatusFilter('all')
+                    setSelectedSlotFilter('all')
+                  }}
+                  title="Reset Filter"
+                  style={{ fontSize: '12px', height: '38px' }}
+                >
+                  <X size={14} /> Reset Filter
+                </button>
+              )}
+            </div>
+
+            {/* Quick Slot Filter Pills (Sangat Efisien untuk Mobile & Desktop) */}
+            <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Filter size={12} /> Pilih Slot Cepat (Mobile / Desktop):
+              </div>
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+                <button
+                  onClick={() => setSelectedSlotFilter('all')}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    border: '1px solid',
+                    borderColor: selectedSlotFilter === 'all' ? 'var(--accent)' : 'var(--border)',
+                    background: selectedSlotFilter === 'all' ? 'var(--accent)' : 'var(--bg-secondary)',
+                    color: selectedSlotFilter === 'all' ? '#0d1117' : 'var(--text-secondary)'
+                  }}
+                >
+                  Semua Slot ({availableSlots.length})
+                </button>
+
+                {availableSlots.map(slotNum => {
+                  const sPorts = activeDevicePorts.filter(p => p.slot_number === slotNum)
+                  const used = sPorts.filter(p => p.status === 'connected').length
+                  const isSel = selectedSlotFilter === String(slotNum)
+
+                  return (
+                    <button
+                      key={slotNum}
+                      onClick={() => setSelectedSlotFilter(isSel ? 'all' : String(slotNum))}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        border: '1px solid',
+                        borderColor: isSel ? 'var(--accent)' : 'var(--border)',
+                        background: isSel ? 'var(--accent)' : 'var(--bg-secondary)',
+                        color: isSel ? '#0d1117' : 'var(--text-secondary)'
+                      }}
+                    >
+                      Slot {slotNum} <span style={{ opacity: 0.8, fontSize: '10px' }}>({used}/{sPorts.length})</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Slot Cards Layout: 2 Kolom Kesamping pada Desktop / Rapi pada Mobile */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', 
+            gap: '14px',
+            alignItems: 'start'
+          }}>
+            {filteredOltSlots.length > 0 ? (
+              filteredOltSlots.map(slotData => (
+                <div key={slotData.slotNum} className="card" style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {/* Slot Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ fontWeight: 700, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="badge badge-accent" style={{ fontSize: '11px', padding: '2px 8px' }}>
+                        SLOT {slotData.slotNum}
+                      </span>
+                      <span style={{ color: 'var(--text-primary)' }}>Card GPON</span>
                     </div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      Terpakai: <strong>{slotUsed}</strong> / {slotPorts.length}
+                    <div style={{ fontSize: '12px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{slotData.usedInSlot} Terhubung</span>
+                      <span style={{ color: 'var(--text-muted)' }}>·</span>
+                      <span style={{ color: 'var(--success)', fontWeight: 600 }}>{slotData.freeInSlot} Kosong</span>
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '10px' }}>
-                    {slotPorts.map(port => {
+                  {/* Ports Grid: 2 Baris x 4 Kolom (Compact Faceplate Layout) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '8px' }}>
+                    {slotData.ports.map(port => {
                       const conn = portConnectionMap.get(port.id)
                       const isConnected = port.status === 'connected' && !!conn
 
@@ -770,21 +959,28 @@ export default function PatchingServer() {
                           key={port.id}
                           onClick={() => openConnectModal(port)}
                           style={{
-                            padding: '12px',
+                            padding: '10px 12px',
                             borderRadius: '8px',
-                            background: isConnected ? 'rgba(59, 130, 246, 0.08)' : 'var(--bg-secondary)',
-                            border: `1px solid ${isConnected ? 'rgba(59, 130, 246, 0.4)' : 'var(--border)'}`,
+                            background: isConnected ? 'rgba(59, 130, 246, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                            border: `1px solid ${isConnected ? 'rgba(59, 130, 246, 0.5)' : 'var(--border)'}`,
                             cursor: 'pointer',
                             transition: 'all 0.15s ease',
                             display: 'flex',
                             flexDirection: 'column',
                             gap: '6px'
                           }}
-                          onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.transform = 'translateY(-2px)'
+                            e.currentTarget.style.borderColor = isConnected ? 'var(--accent)' : '#94a3b8'
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.transform = 'translateY(0)'
+                            e.currentTarget.style.borderColor = isConnected ? 'rgba(59, 130, 246, 0.5)' : 'var(--border)'
+                          }}
                         >
+                          {/* Top: Port Label & Status Badge */}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: 700, fontSize: '13px', color: isConnected ? 'var(--accent)' : 'var(--text-primary)' }}>
+                            <span style={{ fontWeight: 700, fontSize: '13px', color: isConnected ? '#38bdf8' : '#f1f5f9' }}>
                               {port.port_label}
                             </span>
                             <span 
@@ -792,8 +988,8 @@ export default function PatchingServer() {
                                 fontSize: '10px', 
                                 padding: '2px 6px', 
                                 borderRadius: '4px',
-                                background: isConnected ? 'var(--accent)' : 'var(--bg-tertiary)',
-                                color: isConnected ? '#0d1117' : 'var(--text-muted)',
+                                background: isConnected ? 'var(--accent)' : 'rgba(255,255,255,0.08)',
+                                color: isConnected ? '#0d1117' : '#94a3b8',
                                 fontWeight: 700,
                                 textTransform: 'uppercase'
                               }}
@@ -802,19 +998,32 @@ export default function PatchingServer() {
                             </span>
                           </div>
 
+                          {/* Body: Connected Target or Clear Prompt */}
                           {isConnected ? (
-                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                            <div style={{ fontSize: '12px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, color: '#f8fafc' }}>
                                 <ChevronRight size={13} style={{ color: 'var(--accent)' }} />
                                 {conn.targetDevice?.name}
                               </div>
-                              <div style={{ paddingLeft: '17px', color: 'var(--warning)', fontWeight: 600, fontSize: '11px' }}>
+                              <div style={{ paddingLeft: '17px', color: '#fbbf24', fontWeight: 700, fontSize: '12px' }}>
                                 {conn.targetPort?.port_label}
                               </div>
                             </div>
                           ) : (
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                              Klik untuk hubungkan jumper
+                            <div style={{ 
+                              fontSize: '11px', 
+                              fontWeight: 600,
+                              color: '#94a3b8', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '5px',
+                              background: 'rgba(255,255,255,0.03)',
+                              padding: '4px 6px',
+                              borderRadius: '4px',
+                              border: '1px dashed rgba(255,255,255,0.15)'
+                            }}>
+                              <Plus size={12} style={{ color: 'var(--accent)' }} />
+                              <span>Klik untuk hubungkan port</span>
                             </div>
                           )}
                         </div>
@@ -822,30 +1031,53 @@ export default function PatchingServer() {
                     })}
                   </div>
                 </div>
-              )
-            })}
+              ))
+            ) : (
+              <div className="card" style={{ gridColumn: '1 / -1', padding: '36px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                Tidak ada port PON yang cocok dengan filter pencarian.
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         /* ========================================================
-           TAB TAMPILAN OTB (VISUAL GRID / RACK FRAME)
+           TAB TAMPILAN OTB (VISUAL GRID MATRIKS DENGAN CONTRAST BAIK)
            ======================================================== */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div className="card" style={{ padding: '16px 20px', background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          {/* Header Summary Banner */}
+          <div className="card" style={{ padding: '14px 18px', background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div>
                 <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>{activeDevice.name}</h3>
                 <p style={{ margin: '3px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
                   Matriks Port ({activeDevice.rows_count} Baris kebawah × {activeDevice.cols_count} Kolom kesamping = {activeDevice.total_ports} Port)
                 </p>
               </div>
-              <div style={{ display: 'flex', gap: '16px', fontSize: '12px' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ width: '14px', height: '14px', borderRadius: '4px', background: 'var(--accent)', border: '1px solid var(--accent)' }} />
-                  <strong>Terhubung ke OLT</strong>
+
+              {/* Status Legenda & Total Terhubung/Kosong */}
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', fontSize: '12px' }}>
+                <span style={{ 
+                  display: 'flex', alignItems: 'center', gap: '6px', 
+                  padding: '4px 10px', borderRadius: '6px', 
+                  background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)',
+                  color: 'var(--accent)', fontWeight: 600
+                }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)' }} />
+                  {activeDevicePorts.filter(p => p.status === 'connected').length} Terhubung ke OLT
                 </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ width: '14px', height: '14px', borderRadius: '4px', background: 'var(--bg-primary)', border: '1px solid var(--border)' }} />
-                  <strong>Port Kosong</strong>
+
+                <span style={{ 
+                  display: 'flex', alignItems: 'center', gap: '6px', 
+                  padding: '4px 10px', borderRadius: '6px', 
+                  background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)',
+                  color: 'var(--success)', fontWeight: 600
+                }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)' }} />
+                  {activeDevicePorts.filter(p => p.status === 'available').length} Port Kosong
+                </span>
+
+                <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                  Total {activeDevicePorts.length} port
                 </span>
               </div>
             </div>
@@ -874,11 +1106,11 @@ export default function PatchingServer() {
                             onClick={() => openConnectModal(port)}
                             title={isConnected ? `${port.port_label} ➔ Terhubung: ${conn.targetDevice?.name} (${conn.targetPort?.port_label})\nCatatan: ${conn.note || '-'}` : `${port.port_label} (Kosong)`}
                             style={{
-                              height: '40px',
+                              height: '42px',
                               borderRadius: '6px',
-                              background: isConnected ? 'rgba(59, 130, 246, 0.2)' : 'var(--bg-primary)',
+                              background: isConnected ? 'rgba(59, 130, 246, 0.22)' : 'var(--bg-primary)',
                               border: `2px solid ${isConnected ? 'var(--accent)' : 'var(--border)'}`,
-                              color: isConnected ? 'var(--accent)' : 'var(--text-secondary)',
+                              color: isConnected ? '#38bdf8' : '#cbd5e1',
                               display: 'flex',
                               flexDirection: 'column',
                               alignItems: 'center',
@@ -891,17 +1123,19 @@ export default function PatchingServer() {
                             onMouseEnter={e => {
                               e.currentTarget.style.transform = 'scale(1.08)'
                               e.currentTarget.style.zIndex = '5'
+                              e.currentTarget.style.borderColor = '#38bdf8'
                             }}
                             onMouseLeave={e => {
                               e.currentTarget.style.transform = 'scale(1)'
                               e.currentTarget.style.zIndex = '1'
+                              e.currentTarget.style.borderColor = isConnected ? 'var(--accent)' : 'var(--border)'
                             }}
                           >
                             <span style={{ fontSize: '11px', fontWeight: 700, lineHeight: 1 }}>
                               {port.col_number || port.port_number}
                             </span>
                             {isConnected && (
-                              <span style={{ fontSize: '9px', fontWeight: 600, color: '#38bdf8', lineHeight: 1, marginTop: '2px', maxWidth: '34px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <span style={{ fontSize: '9px', fontWeight: 700, color: '#facc15', lineHeight: 1, marginTop: '2px', maxWidth: '34px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {conn.targetPort?.port_label.replace('PON ', '')}
                               </span>
                             )}
@@ -943,7 +1177,7 @@ export default function PatchingServer() {
                   <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
                     {devices.find(d => d.id === selectedPort.device_id)?.name}
                   </div>
-                  <div style={{ fontSize: '13px', color: 'var(--accent)', fontWeight: 600, marginTop: '2px' }}>
+                  <div style={{ fontSize: '14px', color: 'var(--accent)', fontWeight: 700, marginTop: '2px' }}>
                     {selectedPort.port_label}
                   </div>
                 </div>
@@ -1003,7 +1237,7 @@ export default function PatchingServer() {
                   )}
                 </div>
 
-                {/* Tipe Kabel & Catatan */}
+                {/* Tipe Patchcord & Catatan */}
                 <div className="grid-2">
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Tipe Patchcord</label>
@@ -1043,7 +1277,7 @@ export default function PatchingServer() {
                       onClick={() => handleDisconnect(selectedPort.id)}
                       disabled={savingConnection}
                     >
-                      <Unlink size={14} /> Cabut Jumper
+                      <Unlink size={14} /> Putuskan Koneksi
                     </button>
                   )}
                 </div>

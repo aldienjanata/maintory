@@ -75,7 +75,7 @@ CREATE INDEX IF NOT EXISTS idx_server_conn_port_b ON public.server_connections(p
 -- 1. Insert 4 Devices
 INSERT INTO public.server_devices (id, site, name, device_type, brand_model, total_ports, rows_count, cols_count, description)
 VALUES 
-  ('e0000000-0000-0000-0000-000000000001', 'banyumas', 'OLT ZTE C300', 'olt', 'ZTE C300', 128, 16, 8, 'OLT Utama Ruang Server (Slot 1-16, PON Ports)'),
+  ('e0000000-0000-0000-0000-000000000001', 'banyumas', 'OLT ZTE C300', 'olt', 'ZTE C300', 112, 14, 8, 'OLT Utama Ruang Server (Slot 3-16, PON Ports)'),
   ('e0000000-0000-0000-0000-000000000002', 'banyumas', 'OTB 96 Core 1', 'otb', 'OTB 96 Core Rackmount', 96, 4, 24, 'OTB 96 Core #1 (4 Baris x 24 Port)'),
   ('e0000000-0000-0000-0000-000000000003', 'banyumas', 'OTB 96 Core 2', 'otb', 'OTB 96 Core Rackmount', 96, 4, 24, 'OTB 96 Core #2 (4 Baris x 24 Port)'),
   ('e0000000-0000-0000-0000-000000000004', 'banyumas', 'OTB 144 Core', 'otb', 'OTB 144 Core Rackmount', 144, 12, 12, 'OTB 144 Core (12 Baris x 12 Port / No 1-144)')
@@ -428,23 +428,7 @@ INSERT INTO public.server_ports (device_id, row_number, col_number, port_number,
 INSERT INTO public.server_ports (device_id, row_number, col_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000004', 12, 11, 143, 'No 143') ON CONFLICT (device_id, port_label) DO NOTHING;
 INSERT INTO public.server_ports (device_id, row_number, col_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000004', 12, 12, 144, 'No 144') ON CONFLICT (device_id, port_label) DO NOTHING;
 
--- 5. Insert Ports for OLT ZTE C300 (Slots 1-16, PON 1-8 each)
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 1, 1, 'PON 1/1') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 1, 2, 'PON 1/2') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 1, 3, 'PON 1/3') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 1, 4, 'PON 1/4') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 1, 5, 'PON 1/5') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 1, 6, 'PON 1/6') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 1, 7, 'PON 1/7') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 1, 8, 'PON 1/8') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 2, 1, 'PON 2/1') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 2, 2, 'PON 2/2') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 2, 3, 'PON 2/3') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 2, 4, 'PON 2/4') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 2, 5, 'PON 2/5') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 2, 6, 'PON 2/6') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 2, 7, 'PON 2/7') ON CONFLICT (device_id, port_label) DO NOTHING;
-INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 2, 8, 'PON 2/8') ON CONFLICT (device_id, port_label) DO NOTHING;
+-- 5. Insert Ports for OLT ZTE C300 (Slots 3-16, PON 1-8 each)
 INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 3, 1, 'PON 3/1') ON CONFLICT (device_id, port_label) DO NOTHING;
 INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 3, 2, 'PON 3/2') ON CONFLICT (device_id, port_label) DO NOTHING;
 INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 3, 3, 'PON 3/3') ON CONFLICT (device_id, port_label) DO NOTHING;
@@ -559,7 +543,7 @@ INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label
 INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('e0000000-0000-0000-0000-000000000001', 16, 8, 'PON 16/8') ON CONFLICT (device_id, port_label) DO NOTHING;
 
 -- =====================================================
--- 6. CONNECT THE 91 INITIAL JUMPERS (FROM DATA SERVER.TXT)
+-- 6. CONNECT THE 91 INITIAL PORTS (FROM DATA SERVER.TXT)
 -- =====================================================
 
 INSERT INTO public.server_connections (port_a_id, port_b_id, cable_type, note)

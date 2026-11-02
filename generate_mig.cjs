@@ -87,7 +87,7 @@ CREATE INDEX IF NOT EXISTS idx_server_conn_port_b ON public.server_connections(p
 -- 1. Insert 4 Devices
 INSERT INTO public.server_devices (id, site, name, device_type, brand_model, total_ports, rows_count, cols_count, description)
 VALUES 
-  ('${ID_OLT}', 'banyumas', 'OLT ZTE C300', 'olt', 'ZTE C300', 128, 16, 8, 'OLT Utama Ruang Server (Slot 1-16, PON Ports)'),
+  ('${ID_OLT}', 'banyumas', 'OLT ZTE C300', 'olt', 'ZTE C300', 112, 14, 8, 'OLT Utama Ruang Server (Slot 3-16, PON Ports)'),
   ('${ID_OTB_96_1}', 'banyumas', 'OTB 96 Core 1', 'otb', 'OTB 96 Core Rackmount', 96, 4, 24, 'OTB 96 Core #1 (4 Baris x 24 Port)'),
   ('${ID_OTB_96_2}', 'banyumas', 'OTB 96 Core 2', 'otb', 'OTB 96 Core Rackmount', 96, 4, 24, 'OTB 96 Core #2 (4 Baris x 24 Port)'),
   ('${ID_OTB_144}', 'banyumas', 'OTB 144 Core', 'otb', 'OTB 144 Core Rackmount', 144, 12, 12, 'OTB 144 Core (12 Baris x 12 Port / No 1-144)')
@@ -126,16 +126,16 @@ for (let p = 1; p <= 144; p++) {
   sql += `INSERT INTO public.server_ports (device_id, row_number, col_number, port_number, port_label) VALUES ('${ID_OTB_144}', ${r}, ${c}, ${p}, '${label}') ON CONFLICT (device_id, port_label) DO NOTHING;\n`;
 }
 
-sql += `\n-- 5. Insert Ports for OLT ZTE C300 (Slots 1-16, PON 1-8 each)\n`;
-// Slots 1 to 16, ports 1 to 8 (or 16)
-for (let s = 1; s <= 16; s++) {
+sql += `\n-- 5. Insert Ports for OLT ZTE C300 (Slots 3-16, PON 1-8 each)\n`;
+// Slots 3 to 16, ports 1 to 8
+for (let s = 3; s <= 16; s++) {
   for (let p = 1; p <= 8; p++) {
     const label = `PON ${s}/${p}`;
     sql += `INSERT INTO public.server_ports (device_id, slot_number, port_number, port_label) VALUES ('${ID_OLT}', ${s}, ${p}, '${label}') ON CONFLICT (device_id, port_label) DO NOTHING;\n`;
   }
 }
 
-sql += `\n-- =====================================================\n-- 6. CONNECT THE 91 INITIAL JUMPERS (FROM DATA SERVER.TXT)\n-- =====================================================\n`;
+sql += `\n-- =====================================================\n-- 6. CONNECT THE 91 INITIAL PORTS (FROM DATA SERVER.TXT)\n-- =====================================================\n`;
 
 lines.forEach((line) => {
   const parts = line.split(/\s*-\s*/);
