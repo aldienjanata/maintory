@@ -1298,8 +1298,8 @@ export default function PatchingServer() {
               </div>
             </div>
 
-            {/* CELL WIDTH: 62px per kolom agar tulisan terbaca; scroll horizontal otomatis */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: `${(activeDevice?.cols_count || 12) * 68 + 100}px` }}>
+            {/* Grid: sel mengembang mengisi lebar, minimal 62px. Scroll horisontal hanya jika > layar */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {Array.from({ length: activeDevice?.rows_count || 1 }, (_, rIdx) => {
                 const totalRows = activeDevice?.rows_count || 1
                 const rowNum = totalRows - rIdx   // reversed: Baris teratas = rows_count
@@ -1321,8 +1321,8 @@ export default function PatchingServer() {
                       </div>
                     </div>
 
-                    {/* Port cells — lebar tetap 62px agar teks terbaca */}
-                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'nowrap' }}>
+                    {/* Port cells — Grid: isi lebar penuh (1fr), minimal 62px agar teks terbaca. Scroll jika overflow */}
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${activeDevice?.cols_count || 12}, minmax(62px, 1fr))`, gap: '5px', flex: 1, minWidth: 0 }}>
                       {rowPorts.map(port => {
                         const conn = portConnectionMap.get(port.id)
                         const isConnected = port.status === 'connected' && !!conn
@@ -1367,7 +1367,6 @@ export default function PatchingServer() {
                               : `${port.port_label}\nStatus: Kosong — klik untuk hubungkan`
                             }
                             style={{
-                              width: '62px',
                               minHeight: isConnected ? '80px' : '48px',
                               borderRadius: '7px',
                               background: bgColor,
@@ -1379,10 +1378,9 @@ export default function PatchingServer() {
                               cursor: 'pointer',
                               transition: 'all 0.15s ease',
                               userSelect: 'none',
-                              padding: '5px 3px',
+                              padding: '5px 4px',
                               gap: '2px',
-                              overflow: 'hidden',
-                              flexShrink: 0
+                              overflow: 'hidden'
                             }}
                             onMouseEnter={e => {
                               e.currentTarget.style.transform = 'translateY(-2px)'
@@ -1408,13 +1406,13 @@ export default function PatchingServer() {
                             {isConnected ? (
                               <>
                                 {/* Divider tipis */}
-                                <div style={{ width: '48px', height: '1px', background: `${borderColor}66`, margin: '1px 0' }} />
+                                <div style={{ width: '80%', height: '1px', background: `${borderColor}66`, margin: '1px 0' }} />
 
                                 {/* Nama device target — mis "OLT" / "OTB96C1" */}
                                 <span style={{
                                   fontSize: '10px', fontWeight: 700, lineHeight: 1.2,
                                   color: labelColor, textAlign: 'center',
-                                  width: '58px', overflow: 'hidden',
+                                  width: '90%', overflow: 'hidden',
                                   textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                                 }}>
                                   {shortDevName}
@@ -1424,7 +1422,7 @@ export default function PatchingServer() {
                                 <span style={{
                                   fontSize: '12px', fontWeight: 800, lineHeight: 1.2,
                                   color: '#fbbf24', textAlign: 'center',
-                                  width: '58px', overflow: 'hidden',
+                                  width: '90%', overflow: 'hidden',
                                   textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                                 }}>
                                   {shortPort}
@@ -1435,7 +1433,7 @@ export default function PatchingServer() {
                                   <span style={{
                                     fontSize: '9px', fontWeight: 600, lineHeight: 1.1,
                                     color: '#38bdf8', textAlign: 'center',
-                                    width: '58px', overflow: 'hidden',
+                                    width: '90%', overflow: 'hidden',
                                     textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                                   }}>
                                     📍 {shortNote}
