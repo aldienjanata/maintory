@@ -1281,103 +1281,95 @@ export default function PatchingServer() {
 
             {/* Legend */}
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '4px', alignSelf: 'center' }}>Legenda:</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
-                <div style={{ width: '18px', height: '18px', borderRadius: '4px', background: 'rgba(59,130,246,0.22)', border: '2px solid var(--accent)' }} />
-                <span style={{ color: 'var(--text-secondary)' }}>Terhubung ke OLT</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
-                <div style={{ width: '18px', height: '18px', borderRadius: '4px', background: 'rgba(168,85,247,0.22)', border: '2px solid #a855f7' }} />
-                <span style={{ color: 'var(--text-secondary)' }}>Terhubung ke OTB lain</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
-                <div style={{ width: '18px', height: '18px', borderRadius: '4px', background: 'rgba(16,185,129,0.15)', border: '2px solid var(--success)' }} />
-                <span style={{ color: 'var(--text-secondary)' }}>Terhubung ke Device lain</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
-                <div style={{ width: '18px', height: '18px', borderRadius: '4px', background: 'var(--bg-primary)', border: '2px solid var(--border)' }} />
-                <span style={{ color: 'var(--text-secondary)' }}>Kosong</span>
-              </div>
-              <div style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--text-muted)', alignSelf: 'center', fontStyle: 'italic' }}>
-                Fisik: Baris teratas = Baris {activeDevice?.rows_count} (atas OTB), Baris terbawah = Baris 1 (bawah OTB)
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '4px', alignSelf: 'center' }}>Legenda:</div>
+              {[
+                { bg: 'rgba(59,130,246,0.22)', border: 'var(--accent)', label: 'Terhubung ke OLT' },
+                { bg: 'rgba(168,85,247,0.22)', border: '#a855f7', label: 'Terhubung ke OTB lain' },
+                { bg: 'rgba(16,185,129,0.15)', border: 'var(--success)', label: 'Terhubung ke Device lain' },
+                { bg: 'var(--bg-primary)', border: 'var(--border)', label: 'Kosong' },
+              ].map(item => (
+                <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+                  <div style={{ width: '20px', height: '20px', borderRadius: '4px', background: item.bg, border: `2px solid ${item.border}`, flexShrink: 0 }} />
+                  <span style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{item.label}</span>
+                </div>
+              ))}
+              <div style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--text-muted)', alignSelf: 'center', fontStyle: 'italic', whiteSpace: 'nowrap' }}>
+                Fisik OTB: Baris {activeDevice?.rows_count} (atas) → Baris 1 (bawah)
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', minWidth: `${Math.max((activeDevice?.cols_count || 12) * 48 + 100, 600)}px` }}>
-              {/* Baris dibalik: Baris paling tinggi (rows_count) tampil di atas, Baris 1 di bawah — sesuai susunan fisik OTB */}
+            {/* CELL WIDTH: 62px per kolom agar tulisan terbaca; scroll horizontal otomatis */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: `${(activeDevice?.cols_count || 12) * 68 + 100}px` }}>
               {Array.from({ length: activeDevice?.rows_count || 1 }, (_, rIdx) => {
                 const totalRows = activeDevice?.rows_count || 1
-                const rowNum = totalRows - rIdx  // reversed: rIdx=0 → row terbesar (atas fisik)
+                const rowNum = totalRows - rIdx   // reversed: Baris teratas = rows_count
                 const rowPorts = activeDevicePorts.filter(p => p.row_number === rowNum).sort((a, b) => a.col_number - b.col_number)
                 const usedInRow = rowPorts.filter(p => p.status === 'connected').length
 
                 return (
-                  <div key={rowNum} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {/* Row label */}
-                    <div style={{ width: '72px', flexShrink: 0, textAlign: 'right', paddingRight: '8px', borderRight: '2px solid var(--border)' }}>
-                      <div style={{ fontWeight: 700, fontSize: '12px', color: 'var(--text-primary)' }}>Baris {rowNum}</div>
-                      <div style={{ fontSize: '10px', color: usedInRow > 0 ? 'var(--accent)' : 'var(--text-muted)', fontWeight: 600 }}>
-                        {usedInRow}/{rowPorts.length}
+                  <div key={rowNum} style={{ display: 'flex', alignItems: 'stretch', gap: '8px' }}>
+
+                    {/* Row label kiri */}
+                    <div style={{
+                      width: '80px', flexShrink: 0, display: 'flex', flexDirection: 'column',
+                      alignItems: 'flex-end', justifyContent: 'center',
+                      paddingRight: '10px', borderRight: '2px solid var(--border)'
+                    }}>
+                      <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)' }}>Baris {rowNum}</div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: usedInRow > 0 ? 'var(--accent)' : 'var(--text-muted)' }}>
+                        {usedInRow}/{rowPorts.length} port
                       </div>
                     </div>
 
-                    {/* Port cells */}
-                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${activeDevice?.cols_count || 12}, minmax(46px, 1fr))`, gap: '5px', flex: 1 }}>
+                    {/* Port cells — lebar tetap 62px agar teks terbaca */}
+                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'nowrap' }}>
                       {rowPorts.map(port => {
                         const conn = portConnectionMap.get(port.id)
                         const isConnected = port.status === 'connected' && !!conn
                         const colNo = port.col_number || port.port_number
 
-                        // Determine target device type for color coding
                         const targetDevType = conn?.targetDevice?.device_type || ''
                         const isToOlt = targetDevType === 'olt'
                         const isToOtb = targetDevType === 'otb'
 
-                        // Colors based on connection target type
-                        const bgColor = !isConnected
-                          ? 'var(--bg-primary)'
-                          : isToOlt
-                            ? 'rgba(59, 130, 246, 0.22)'
-                            : isToOtb
-                              ? 'rgba(168, 85, 247, 0.22)'
-                              : 'rgba(16, 185, 129, 0.15)'
+                        const bgColor = !isConnected ? 'var(--bg-primary)'
+                          : isToOlt  ? 'rgba(59, 130, 246, 0.25)'
+                          : isToOtb  ? 'rgba(168, 85, 247, 0.25)'
+                          : 'rgba(16, 185, 129, 0.18)'
 
-                        const borderColor = !isConnected
-                          ? 'var(--border)'
-                          : isToOlt
-                            ? 'var(--accent)'         // blue for OLT
-                            : isToOtb
-                              ? '#a855f7'             // purple for OTB
-                              : 'var(--success)'      // green for other
+                        const borderColor = !isConnected ? 'var(--border)'
+                          : isToOlt  ? '#3b82f6'
+                          : isToOtb  ? '#a855f7'
+                          : '#10b981'
 
-                        // Short label for target port — OLT: "3/1", OTB: "B2/5", other: first 6 chars
-                        const targetPortLabel = conn?.targetPort?.port_label || ''
-                        const shortPortLabel = isToOlt
-                          ? targetPortLabel.replace('PON ', '')          // "3/1"
-                          : isToOtb
-                            ? targetPortLabel.replace('Baris ', 'B').replace(' No ', '/') // "B2/5"
-                            : targetPortLabel.slice(0, 6)
-
-                        // Device short name: "OLT ZTE C300" → "OLT", "OTB 96 Core 1" → "OTB96-1"
                         const devName = conn?.targetDevice?.name || ''
-                        const shortDevName = isToOlt
-                          ? 'OLT'
-                          : devName.length > 8 ? devName.slice(0, 7) + '…' : devName
+                        // OLT: tampilkan "OLT" saja. OTB: nama singkat mis "OTB96-1". Lain: 9 char
+                        const shortDevName = isToOlt ? 'OLT'
+                          : devName.replace('Core ', 'C').replace(' ', '').slice(0, 9)
+
+                        const targetPortLabel = conn?.targetPort?.port_label || ''
+                        // OLT port: "PON 3/1" → "3/1". OTB: "Baris 2 No 5" → "B2/5". Lain: raw
+                        const shortPort = isToOlt
+                          ? targetPortLabel.replace('PON ', '')
+                          : targetPortLabel.replace('Baris ', 'B').replace(' No ', '/')
 
                         const noteText = conn?.note || ''
-                        const shortNote = noteText.length > 7 ? noteText.slice(0, 6) + '…' : noteText
+                        const shortNote = noteText.length > 9 ? noteText.slice(0, 8) + '…' : noteText
+
+                        const labelColor = isToOlt ? '#93c5fd' : isToOtb ? '#d8b4fe' : '#6ee7b7'
 
                         return (
                           <div
                             key={port.id}
                             onClick={() => openConnectModal(port)}
                             title={isConnected
-                              ? `Port: ${port.port_label}\n↔ ${devName} [${conn?.targetDevice?.device_type?.toUpperCase()}]\n   Port: ${targetPortLabel}${noteText ? `\n📍 Arah: ${noteText}` : ''}`
-                              : `${port.port_label} — Kosong\n(Klik untuk hubungkan)`
+                              ? `Port OTB: ${port.port_label}\n↔ Device: ${devName} [${targetDevType.toUpperCase()}]\n   Port: ${targetPortLabel}${noteText ? `\n📍 Arah: ${noteText}` : ''}`
+                              : `${port.port_label}\nStatus: Kosong — klik untuk hubungkan`
                             }
                             style={{
-                              minHeight: isConnected ? '66px' : '42px',
-                              borderRadius: '6px',
+                              width: '62px',
+                              minHeight: isConnected ? '80px' : '48px',
+                              borderRadius: '7px',
                               background: bgColor,
                               border: `2px solid ${borderColor}`,
                               display: 'flex',
@@ -1385,65 +1377,73 @@ export default function PatchingServer() {
                               alignItems: 'center',
                               justifyContent: 'center',
                               cursor: 'pointer',
-                              position: 'relative',
                               transition: 'all 0.15s ease',
                               userSelect: 'none',
-                              padding: '4px 2px',
-                              gap: '1px',
-                              overflow: 'hidden'
+                              padding: '5px 3px',
+                              gap: '2px',
+                              overflow: 'hidden',
+                              flexShrink: 0
                             }}
                             onMouseEnter={e => {
-                              e.currentTarget.style.transform = 'scale(1.07)'
+                              e.currentTarget.style.transform = 'translateY(-2px)'
                               e.currentTarget.style.zIndex = '5'
+                              e.currentTarget.style.boxShadow = `0 4px 12px ${borderColor}55`
                               e.currentTarget.style.borderColor = '#38bdf8'
                             }}
                             onMouseLeave={e => {
-                              e.currentTarget.style.transform = 'scale(1)'
+                              e.currentTarget.style.transform = 'translateY(0)'
                               e.currentTarget.style.zIndex = '1'
+                              e.currentTarget.style.boxShadow = 'none'
                               e.currentTarget.style.borderColor = borderColor
                             }}
                           >
-                            {/* No. port OTB */}
-                            <span style={{ fontSize: '11px', fontWeight: 800, lineHeight: 1, color: isConnected ? '#f1f5f9' : '#64748b' }}>
+                            {/* ── Nomor port OTB (besar, jelas) ── */}
+                            <span style={{
+                              fontSize: '14px', fontWeight: 800, lineHeight: 1,
+                              color: isConnected ? '#f8fafc' : '#475569'
+                            }}>
                               {colNo}
                             </span>
 
                             {isConnected ? (
                               <>
-                                {/* Label device: OLT / OTB 96-1 / dll */}
+                                {/* Divider tipis */}
+                                <div style={{ width: '48px', height: '1px', background: `${borderColor}66`, margin: '1px 0' }} />
+
+                                {/* Nama device target — mis "OLT" / "OTB96C1" */}
                                 <span style={{
-                                  fontSize: '8px', fontWeight: 700, lineHeight: 1.1,
-                                  color: isToOlt ? '#93c5fd' : isToOtb ? '#d8b4fe' : '#6ee7b7',
-                                  textAlign: 'center', maxWidth: '44px',
-                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                                  fontSize: '10px', fontWeight: 700, lineHeight: 1.2,
+                                  color: labelColor, textAlign: 'center',
+                                  width: '58px', overflow: 'hidden',
+                                  textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                                 }}>
                                   {shortDevName}
                                 </span>
 
-                                {/* Port target: 3/1 / B2/5 */}
+                                {/* Port target — mis "3/1" / "B2/5" */}
                                 <span style={{
-                                  fontSize: '10px', fontWeight: 800, lineHeight: 1.1,
-                                  color: '#facc15',
-                                  textAlign: 'center', maxWidth: '44px',
-                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                                  fontSize: '12px', fontWeight: 800, lineHeight: 1.2,
+                                  color: '#fbbf24', textAlign: 'center',
+                                  width: '58px', overflow: 'hidden',
+                                  textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                                 }}>
-                                  {shortPortLabel}
+                                  {shortPort}
                                 </span>
 
-                                {/* Arah/catatan jika ada */}
+                                {/* Arah/catatan */}
                                 {noteText && (
                                   <span style={{
-                                    fontSize: '8px', fontWeight: 600, lineHeight: 1,
-                                    color: '#38bdf8',
-                                    textAlign: 'center', maxWidth: '44px',
-                                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                                    fontSize: '9px', fontWeight: 600, lineHeight: 1.1,
+                                    color: '#38bdf8', textAlign: 'center',
+                                    width: '58px', overflow: 'hidden',
+                                    textOverflow: 'ellipsis', whiteSpace: 'nowrap'
                                   }}>
-                                    📍{shortNote}
+                                    📍 {shortNote}
                                   </span>
                                 )}
                               </>
                             ) : (
-                              <span style={{ fontSize: '9px', color: 'rgba(148,163,184,0.35)', lineHeight: 1 }}>—</span>
+                              <span style={{ fontSize: '10px', color: 'rgba(148,163,184,0.4)', lineHeight: 1 }}>—</span>
                             )}
                           </div>
                         )
