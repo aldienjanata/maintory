@@ -1279,28 +1279,41 @@ export default function PatchingServer() {
 
           <div className="card" style={{ padding: '24px 20px', overflowX: 'auto' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: `${Math.max((activeDevice?.cols_count || 12) * 40 + 120, 600)}px` }}>
+              {/* Baris dibalik: Baris terakhir (tertinggi) di atas, Baris 1 di bawah — sesuai fisik OTB */}
               {Array.from({ length: activeDevice?.rows_count || 1 }, (_, rIdx) => {
-                const rowNum = rIdx + 1
+                // rIdx=0 → tampilkan baris paling atas (rows_count), rIdx terakhir → tampilkan baris 1
+                const totalRows = activeDevice?.rows_count || 1
+                const rowNum = totalRows - rIdx  // reversed
                 const rowPorts = activeDevicePorts.filter(p => p.row_number === rowNum).sort((a, b) => a.col_number - b.col_number)
 
                 return (
                   <div key={rowNum} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '90px', flexShrink: 0, fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    <div style={{ width: '70px', flexShrink: 0, fontWeight: 700, fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'right' }}>
                       Baris {rowNum}
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${activeDevice?.cols_count || 12}, minmax(36px, 1fr))`, gap: '8px', flex: 1 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${activeDevice?.cols_count || 12}, minmax(44px, 1fr))`, gap: '6px', flex: 1 }}>
                       {rowPorts.map(port => {
                         const conn = portConnectionMap.get(port.id)
                         const isConnected = port.status === 'connected' && !!conn
+                        const portLabel = port.port_label // e.g. "Baris 2 No 5"
+                        const colNo = port.col_number || port.port_number
+
+                        // PON label to show: e.g. "3/1"
+                        const ponLabel = conn?.targetPort?.port_label?.replace('PON ', '') || ''
+                        // Note/direction to show
+                        const noteText = conn?.note || ''
 
                         return (
                           <div
                             key={port.id}
                             onClick={() => openConnectModal(port)}
-                            title={isConnected ? `${port.port_label} ➔ Terhubung: ${conn.targetDevice?.name} (${conn.targetPort?.port_label})\nArah/Catatan: ${conn.note || '-'}` : `${port.port_label} (Kosong)`}
+                            title={isConnected
+                              ? `${portLabel}\n↔ ${conn.targetDevice?.name} — ${conn.targetPort?.port_label}${noteText ? `\n📍 ${noteText}` : ''}`
+                              : `${portLabel} — Kosong (Klik untuk hubungkan)`
+                            }
                             style={{
-                              height: '42px',
+                              minHeight: isConnected ? '58px' : '42px',
                               borderRadius: '6px',
                               background: isConnected ? 'rgba(59, 130, 246, 0.22)' : 'var(--bg-primary)',
                               border: `2px solid ${isConnected ? 'var(--accent)' : 'var(--border)'}`,
@@ -1312,10 +1325,12 @@ export default function PatchingServer() {
                               cursor: 'pointer',
                               position: 'relative',
                               transition: 'all 0.15s ease',
-                              userSelect: 'none'
+                              userSelect: 'none',
+                              padding: '4px 2px',
+                              gap: '2px'
                             }}
                             onMouseEnter={e => {
-                              e.currentTarget.style.transform = 'scale(1.08)'
+                              e.currentTarget.style.transform = 'scale(1.06)'
                               e.currentTarget.style.zIndex = '5'
                               e.currentTarget.style.borderColor = '#38bdf8'
                             }}
@@ -1325,13 +1340,26 @@ export default function PatchingServer() {
                               e.currentTarget.style.borderColor = isConnected ? 'var(--accent)' : 'var(--border)'
                             }}
                           >
-                            <span style={{ fontSize: '11px', fontWeight: 700, lineHeight: 1 }}>
-                              {port.col_number || port.port_number}
+                            {/* Nomor kolom / no port OTB */}
+                            <span style={{ fontSize: '11px', fontWeight: 700, lineHeight: 1, color: isConnected ? '#f1f5f9' : '#94a3b8' }}>
+                              {colNo}
                             </span>
-                            {isConnected && (
-                              <span style={{ fontSize: '9px', fontWeight: 700, color: '#facc15', lineHeight: 1, marginTop: '2px', maxWidth: '34px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {conn.targetPort?.port_label.replace('PON ', '')}
-                              </span>
+
+                            {isConnected ? (
+                              <>
+                                {/* PON yang terhubung */}
+                                <span style={{ fontSize: '10px', fontWeight: 800, color: '#facc15', lineHeight: 1.1, textAlign: 'center', maxWidth: '42px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {ponLabel}
+                                </span>
+                                {/* Arah/Catatan jika ada */}
+                                {noteText && (
+                                  <span style={{ fontSize: '8px', fontWeight: 600, color: '#38bdf8', lineHeight: 1.1, textAlign: 'center', maxWidth: '42px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>
+                                    {noteText.length > 8 ? noteText.slice(0, 8) + '…' : noteText}
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span style={{ fontSize: '8px', color: 'rgba(148,163,184,0.4)', lineHeight: 1 }}>—</span>
                             )}
                           </div>
                         )
