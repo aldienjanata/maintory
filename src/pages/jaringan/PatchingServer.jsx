@@ -55,6 +55,7 @@ export default function PatchingServer() {
   const [deviceSearchQuery, setDeviceSearchQuery] = useState('')
   const [deviceStatusFilter, setDeviceStatusFilter] = useState('all') // 'all', 'connected', 'available'
   const [selectedSlotFilter, setSelectedSlotFilter] = useState('all') // 'all' or slot number (e.g. 3, 4, ...)
+  const [selectedOtbRowFilter, setSelectedOtbRowFilter] = useState('all') // 'all' or row number (e.g. 12, 11, ...)
 
   // Tracing / Rekap state
   const [searchQuery, setSearchQuery] = useState('')
@@ -295,6 +296,70 @@ export default function PatchingServer() {
       }
     }).filter(s => s.ports.length > 0 || !query)
   }, [activeDevice, availableSlots, activeDevicePorts, selectedSlotFilter, deviceStatusFilter, deviceSearchQuery, portConnectionMap])
+
+  // Available rows for active OTB device
+  const availableOtbRows = useMemo(() => {
+    if (activeDevice?.device_type !== 'otb') return []
+    const totalRows = activeDevice?.rows_count || 1
+    return Array.from({ length: totalRows }, (_, rIdx) => totalRows - rIdx)
+  }, [activeDevice])
+
+  // Filtered rows & ports for OTB active device with search & filter
+  const filteredOtbRows = useMemo(() => {
+    if (activeDevice?.device_type !== 'otb') return []
+    const totalRows = activeDevice?.rows_count || 1
+    let rowsList = availableOtbRows
+
+    if (selectedOtbRowFilter !== 'all') {
+      rowsList = rowsList.filter(r => r === Number(selectedOtbRowFilter))
+    }
+
+    const query = deviceSearchQuery.trim().toLowerCase()
+    const statusFilter = deviceStatusFilter
+    const isOtb144 = activeDevice?.total_ports === 144 || activeDevice?.name?.includes('144')
+
+    return rowsList.map(rowNum => {
+      let rowPorts = activeDevicePorts.filter(p => p.row_number === rowNum).sort((a, b) => a.col_number - b.col_number)
+
+      if (statusFilter === 'connected') {
+        rowPorts = rowPorts.filter(p => p.status === 'connected')
+      } else if (statusFilter === 'available') {
+        rowPorts = rowPorts.filter(p => p.status === 'available')
+      }
+
+      if (query) {
+        rowPorts = rowPorts.filter(p => {
+          const conn = portConnectionMap.get(p.id)
+          const pNumStr = String(p.port_number || '')
+          const pLabelStr = (p.port_label || '').toLowerCase()
+          const colStr = String(p.col_number || '')
+          const devName = (conn?.targetDevice?.name || '').toLowerCase()
+          const targetLabel = (conn?.targetPort?.port_label || '').toLowerCase()
+          const note = (conn?.note || '').toLowerCase()
+
+          return pNumStr.includes(query) ||
+                 pLabelStr.includes(query) ||
+                 colStr.includes(query) ||
+                 devName.includes(query) ||
+                 targetLabel.includes(query) ||
+                 note.includes(query)
+        })
+      }
+
+      const usedInRow = rowPorts.filter(p => p.status === 'connected').length
+      const startNo = isOtb144 ? (totalRows - rowNum) * 12 + 1 : 1
+      const endNo = isOtb144 ? (totalRows - rowNum) * 12 + 12 : (activeDevice?.cols_count || 24)
+
+      return {
+        rowNum,
+        rowPorts,
+        usedInRow,
+        totalInRow: rowPorts.length,
+        startNo,
+        endNo
+      }
+    }).filter(r => r.rowPorts.length > 0 || !query)
+  }, [activeDevice, availableOtbRows, activeDevicePorts, selectedOtbRowFilter, deviceSearchQuery, deviceStatusFilter, portConnectionMap])
 
   // Rekap all connections
   const rekapList = useMemo(() => {
@@ -760,7 +825,9 @@ export default function PatchingServer() {
                 onClick={() => {
                   setActiveTab(dev.id)
                   setSelectedSlotFilter('all')
+                  setSelectedOtbRowFilter('all')
                   setDeviceSearchQuery('')
+                  setDeviceStatusFilter('all')
                 }}
                 style={{
                   display: 'flex',
@@ -798,7 +865,13 @@ export default function PatchingServer() {
           })}
 
           <button
-            onClick={() => setActiveTab('rekap')}
+            onClick={() => {
+              setActiveTab('rekap')
+              setSelectedSlotFilter('all')
+              setSelectedOtbRowFilter('all')
+              setDeviceSearchQuery('')
+              setDeviceStatusFilter('all')
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -1305,200 +1378,326 @@ export default function PatchingServer() {
             </div>
           </div>
 
-          <div className="card" style={{ padding: '20px', overflowX: 'auto' }}>
+          {/* Search & Filter Toolbar untuk OTB (Sangat membantu di Mobile) */}
+          <div className="card" style={{ padding: '12px 16px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              {/* Search Box */}
+              <div className="search-box" style={{ maxWidth: '300px', flex: '1 1 200px' }}>
+                <Search size={15} className="search-icon" />
+                <input
+                  type="text"
+                  placeholder={activeDevice?.total_ports === 144 ? "Cari port OTB 144 (misal 109, 3/3, Pageralang)..." : "Cari port OTB (misal 16, 3/1, Pageralang)..."}
+                  value={deviceSearchQuery}
+                  onChange={e => setDeviceSearchQuery(e.target.value)}
+                  style={{ fontSize: '13px' }}
+                />
+              </div>
+
+              {/* Status Filter */}
+              <select
+                className="filter-select"
+                value={deviceStatusFilter}
+                onChange={e => setDeviceStatusFilter(e.target.value)}
+                style={{ height: '38px', minWidth: '130px', fontSize: '12px' }}
+              >
+                <option value="all">Semua Status</option>
+                <option value="connected">Hanya Terhubung</option>
+                <option value="available">Hanya Kosong</option>
+              </select>
+
+              {/* Reset filter */}
+              {(deviceSearchQuery || deviceStatusFilter !== 'all' || selectedOtbRowFilter !== 'all') && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setDeviceSearchQuery('')
+                    setDeviceStatusFilter('all')
+                    setSelectedOtbRowFilter('all')
+                  }}
+                  title="Reset Filter"
+                  style={{ fontSize: '12px', height: '38px' }}
+                >
+                  <X size={14} /> Reset
+                </button>
+              )}
+            </div>
+
+            {/* Quick Row Filter Pills (Pilih Baris Cepat untuk Mobile agar tidak perlu scroll jauh) */}
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <Filter size={11} /> Filter Baris Cepat (Mobile / Desktop):
+              </div>
+              <div style={{ display: 'flex', gap: '5px', overflowX: 'auto', paddingBottom: '3px' }}>
+                <button
+                  onClick={() => setSelectedOtbRowFilter('all')}
+                  style={{
+                    padding: '4px 9px',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    border: '1px solid',
+                    borderColor: selectedOtbRowFilter === 'all' ? 'var(--accent)' : 'var(--border)',
+                    background: selectedOtbRowFilter === 'all' ? 'var(--accent)' : 'var(--bg-secondary)',
+                    color: selectedOtbRowFilter === 'all' ? '#0d1117' : 'var(--text-secondary)'
+                  }}
+                >
+                  Semua Baris ({availableOtbRows.length})
+                </button>
+
+                {availableOtbRows.map(rNum => {
+                  const rPorts = activeDevicePorts.filter(p => p.row_number === rNum)
+                  const uCount = rPorts.filter(p => p.status === 'connected').length
+                  const isSel = selectedOtbRowFilter === String(rNum)
+                  const isOtb144 = activeDevice?.total_ports === 144 || activeDevice?.name?.includes('144')
+                  const totalRows = activeDevice?.rows_count || 1
+                  const startP = isOtb144 ? (totalRows - rNum) * 12 + 1 : 1
+                  const endP = isOtb144 ? (totalRows - rNum) * 12 + 12 : (activeDevice?.cols_count || 24)
+
+                  return (
+                    <button
+                      key={rNum}
+                      onClick={() => setSelectedOtbRowFilter(isSel ? 'all' : String(rNum))}
+                      style={{
+                        padding: '4px 9px',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        border: '1px solid',
+                        borderColor: isSel ? 'var(--accent)' : 'var(--border)',
+                        background: isSel ? 'var(--accent)' : 'var(--bg-secondary)',
+                        color: isSel ? '#0d1117' : 'var(--text-secondary)'
+                      }}
+                    >
+                      Baris {rNum} {isOtb144 ? `(#${startP}-${endP})` : ''} ({uCount}/{rPorts.length})
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Grid Matriks OTB dengan Horizontal Scroll & Sticky Row Header */}
+          <div className="card" style={{ padding: '14px 10px', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
 
             {/* Legend */}
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '4px', alignSelf: 'center' }}>Legenda:</div>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '14px', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginRight: '2px', alignSelf: 'center' }}>Legenda:</div>
               {[
-                { bg: 'rgba(59,130,246,0.22)', border: 'var(--accent)', label: 'Terhubung ke OLT' },
-                { bg: 'rgba(168,85,247,0.22)', border: '#a855f7', label: 'Terhubung ke OTB lain' },
-                { bg: 'rgba(16,185,129,0.15)', border: 'var(--success)', label: 'Terhubung ke Device lain' },
+                { bg: 'rgba(59,130,246,0.22)', border: 'var(--accent)', label: 'Ke OLT' },
+                { bg: 'rgba(168,85,247,0.22)', border: '#a855f7', label: 'Ke OTB Lain' },
+                { bg: 'rgba(16,185,129,0.15)', border: 'var(--success)', label: 'Ke Device Lain' },
                 { bg: 'var(--bg-primary)', border: 'var(--border)', label: 'Kosong' },
               ].map(item => (
-                <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
-                  <div style={{ width: '20px', height: '20px', borderRadius: '4px', background: item.bg, border: `2px solid ${item.border}`, flexShrink: 0 }} />
+                <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px' }}>
+                  <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: item.bg, border: `2px solid ${item.border}`, flexShrink: 0 }} />
                   <span style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{item.label}</span>
                 </div>
               ))}
               <div style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--text-muted)', alignSelf: 'center', fontStyle: 'italic', whiteSpace: 'nowrap' }}>
                 {activeDevice?.total_ports === 144
-                  ? 'Fisik OTB 144: Baris 12 (No 1-12 di atas) → Baris 1 (No 133-144 di bawah)'
-                  : `Fisik OTB: Baris ${activeDevice?.rows_count} (atas) → Baris 1 (bawah)`
+                  ? 'Fisik: B12 (atas) → B1 (bawah)'
+                  : `Fisik: B${activeDevice?.rows_count} (atas) → B1 (bawah)`
                 }
               </div>
             </div>
 
-            {/* Grid: sel mengembang mengisi lebar, minimal 62px. Scroll horisontal hanya jika > layar */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {Array.from({ length: activeDevice?.rows_count || 1 }, (_, rIdx) => {
-                const totalRows = activeDevice?.rows_count || 1
-                const rowNum = totalRows - rIdx   // reversed: Baris teratas = rows_count
-                const rowPorts = activeDevicePorts.filter(p => p.row_number === rowNum).sort((a, b) => a.col_number - b.col_number)
-                const usedInRow = rowPorts.filter(p => p.status === 'connected').length
+            {/* Grid Baris OTB */}
+            {filteredOtbRows.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {filteredOtbRows.map(rowData => {
+                  const { rowNum, rowPorts, usedInRow, startNo, endNo } = rowData
+                  const isOtb144 = activeDevice?.total_ports === 144 || activeDevice?.name?.includes('144')
 
-                const isOtb144 = activeDevice?.total_ports === 144 || activeDevice?.name?.includes('144')
-                const startNo = isOtb144 ? (totalRows - rowNum) * 12 + 1 : null
-                const endNo = isOtb144 ? (totalRows - rowNum) * 12 + 12 : null
+                  return (
+                    <div key={rowNum} style={{ display: 'flex', alignItems: 'stretch', gap: '6px' }}>
 
-                return (
-                  <div key={rowNum} style={{ display: 'flex', alignItems: 'stretch', gap: '8px' }}>
-
-                    {/* Row label kiri */}
-                    <div style={{
-                      width: '88px', flexShrink: 0, display: 'flex', flexDirection: 'column',
-                      alignItems: 'flex-end', justifyContent: 'center',
-                      paddingRight: '10px', borderRight: '2px solid var(--border)'
-                    }}>
-                      <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)' }}>Baris {rowNum}</div>
-                      {isOtb144 && (
-                        <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: 600 }}>
-                          No {startNo}-{endNo}
+                      {/* Row label kiri - STICKY di kiri saat geser horizontal di mobile */}
+                      <div style={{
+                        width: '74px',
+                        flexShrink: 0,
+                        position: 'sticky',
+                        left: 0,
+                        zIndex: 10,
+                        background: 'var(--bg-card)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                        justifyContent: 'center',
+                        padding: '6px 8px',
+                        borderRight: '2px solid var(--border)',
+                        boxShadow: '4px 0 8px rgba(0,0,0,0.25)'
+                      }}>
+                        <div style={{ fontWeight: 800, fontSize: '13px', color: 'var(--text-primary)' }}>
+                          B{rowNum}
                         </div>
-                      )}
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: usedInRow > 0 ? 'var(--accent)' : 'var(--text-muted)' }}>
-                        {usedInRow}/{rowPorts.length} port
+                        {isOtb144 ? (
+                          <div style={{ fontSize: '9px', color: '#94a3b8', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            #{startNo}-{endNo}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: '9px', color: '#94a3b8', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            Baris {rowNum}
+                          </div>
+                        )}
+                        <div style={{ fontSize: '10px', fontWeight: 700, color: usedInRow > 0 ? 'var(--accent)' : 'var(--text-muted)', marginTop: '2px' }}>
+                          {usedInRow}/{rowPorts.length}
+                        </div>
+                      </div>
+
+                      {/* Port cells — Grid: minimal 70px per port agar teks OLT & arah selalu terbaca */}
+                      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${activeDevice?.cols_count || 12}, minmax(70px, 1fr))`, gap: '5px', flex: 1, minWidth: 0 }}>
+                        {rowPorts.map(port => {
+                          const conn = portConnectionMap.get(port.id)
+                          const isConnected = port.status === 'connected' && !!conn
+                          
+                          // Penomoran: OTB 144 menyambung (1-144), OTB 96 per baris (1-24)
+                          const displayPortNo = isOtb144 ? port.port_number : (port.col_number || port.port_number)
+                          const portTitleLabel = isOtb144 
+                            ? `OTB 144 No ${port.port_number} (Baris ${port.row_number} Kolom ${port.col_number})`
+                            : port.port_label
+
+                          const targetDevType = conn?.targetDevice?.device_type || ''
+                          const isToOlt = targetDevType === 'olt'
+                          const isToOtb = targetDevType === 'otb'
+
+                          const bgColor = !isConnected ? 'var(--bg-primary)'
+                            : isToOlt  ? 'rgba(59, 130, 246, 0.22)'
+                            : isToOtb  ? 'rgba(168, 85, 247, 0.22)'
+                            : 'rgba(16, 185, 129, 0.18)'
+
+                          const borderColor = !isConnected ? 'var(--border)'
+                            : isToOlt  ? '#3b82f6'
+                            : isToOtb  ? '#a855f7'
+                            : '#10b981'
+
+                          const devName = conn?.targetDevice?.name || ''
+                          const shortDevName = isToOlt ? 'OLT'
+                            : devName.replace('Core ', 'C').replace(' ', '').slice(0, 8) || 'Device'
+
+                          const targetPortLabel = conn?.targetPort?.port_label || ''
+                          const shortPort = isToOlt
+                            ? targetPortLabel.replace('PON ', '')
+                            : targetPortLabel.replace('Baris ', 'B').replace(' No ', '/') || '-'
+
+                          const noteText = conn?.note || ''
+
+                          return (
+                            <div
+                              key={port.id}
+                              onClick={() => openConnectModal(port)}
+                              title={isConnected
+                                ? `Port OTB: ${portTitleLabel}\n↔ Target: ${devName} [${targetDevType.toUpperCase()}]\n   Port: ${targetPortLabel}${noteText ? `\n📍 Arah: ${noteText}` : ''}`
+                                : `${portTitleLabel}\nStatus: Kosong — klik untuk hubungkan`
+                              }
+                              style={{
+                                minWidth: '70px',
+                                minHeight: isConnected ? '82px' : '44px',
+                                borderRadius: '7px',
+                                background: bgColor,
+                                border: `2px solid ${borderColor}`,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: isConnected ? 'flex-start' : 'center',
+                                paddingTop: isConnected ? '5px' : '0',
+                                paddingBottom: '4px',
+                                paddingLeft: '3px',
+                                paddingRight: '3px',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                userSelect: 'none',
+                                gap: '3px',
+                                overflow: 'hidden',
+                                position: 'relative'
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.transform = 'translateY(-2px)'
+                                e.currentTarget.style.zIndex = '5'
+                                e.currentTarget.style.boxShadow = `0 4px 12px ${borderColor}55`
+                                e.currentTarget.style.borderColor = '#38bdf8'
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.transform = 'translateY(0)'
+                                e.currentTarget.style.zIndex = '1'
+                                e.currentTarget.style.boxShadow = 'none'
+                                e.currentTarget.style.borderColor = borderColor
+                              }}
+                            >
+                              {/* ── 1. Nomor Port OTB (Besar, Bold, Jelas) ── */}
+                              <span style={{
+                                fontSize: '13px',
+                                fontWeight: 800,
+                                lineHeight: 1,
+                                color: isConnected ? '#f8fafc' : '#64748b',
+                                flexShrink: 0
+                              }}>
+                                {displayPortNo}
+                              </span>
+
+                              {isConnected ? (
+                                <>
+                                  {/* ── 2. Badge Target Koneksi (Contoh: OLT 9/5 / OTB B2/16) - Selalu Tampil Penuh ── */}
+                                  <span style={{
+                                    fontSize: '10px',
+                                    fontWeight: 800,
+                                    padding: '2px 4px',
+                                    borderRadius: '4px',
+                                    background: isToOlt ? 'rgba(59, 130, 246, 0.28)' : isToOtb ? 'rgba(168, 85, 247, 0.28)' : 'rgba(16, 185, 129, 0.28)',
+                                    color: isToOlt ? '#60a5fa' : isToOtb ? '#c084fc' : '#34d399',
+                                    border: `1px solid ${isToOlt ? 'rgba(59, 130, 246, 0.45)' : isToOtb ? 'rgba(168, 85, 247, 0.45)' : 'rgba(16, 185, 129, 0.45)'}`,
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: '96%',
+                                    textAlign: 'center',
+                                    lineHeight: 1.15,
+                                    flexShrink: 0
+                                  }}>
+                                    {shortDevName} {shortPort}
+                                  </span>
+
+                                  {/* ── 3. Arah / Catatan Desa/ODC (Maks 2 baris, rapi) ── */}
+                                  {noteText && (
+                                    <span style={{
+                                      fontSize: '8.5px',
+                                      fontWeight: 600,
+                                      color: '#38bdf8',
+                                      textAlign: 'center',
+                                      lineHeight: 1.15,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      display: '-webkit-box',
+                                      WebkitLineClamp: 2,
+                                      WebkitBoxOrient: 'vertical',
+                                      wordBreak: 'break-word',
+                                      width: '96%'
+                                    }}>
+                                      📍 {noteText}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span style={{ fontSize: '9px', color: 'rgba(148,163,184,0.35)', fontWeight: 600, flexShrink: 0 }}>
+                                  Kosong
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
-
-                    {/* Port cells — Grid: isi lebar penuh (1fr), minimal 62px agar teks terbaca. Scroll jika overflow */}
-                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${activeDevice?.cols_count || 12}, minmax(62px, 1fr))`, gap: '5px', flex: 1, minWidth: 0 }}>
-                      {rowPorts.map(port => {
-                        const conn = portConnectionMap.get(port.id)
-                        const isConnected = port.status === 'connected' && !!conn
-                        
-                        // REVISI OTB 144: Penomoran nyambung 1 - 144 bukan terpisah 1 - 12 per baris
-                        const displayPortNo = isOtb144 ? port.port_number : (port.col_number || port.port_number)
-                        const portTitleLabel = isOtb144 
-                          ? `OTB 144 No ${port.port_number} (Baris ${port.row_number} Kolom ${port.col_number})`
-                          : port.port_label
-
-                        const targetDevType = conn?.targetDevice?.device_type || ''
-                        const isToOlt = targetDevType === 'olt'
-                        const isToOtb = targetDevType === 'otb'
-
-                        const bgColor = !isConnected ? 'var(--bg-primary)'
-                          : isToOlt  ? 'rgba(59, 130, 246, 0.25)'
-                          : isToOtb  ? 'rgba(168, 85, 247, 0.25)'
-                          : 'rgba(16, 185, 129, 0.18)'
-
-                        const borderColor = !isConnected ? 'var(--border)'
-                          : isToOlt  ? '#3b82f6'
-                          : isToOtb  ? '#a855f7'
-                          : '#10b981'
-
-                        const devName = conn?.targetDevice?.name || ''
-                        // OLT: tampilkan "OLT" saja. OTB: nama singkat mis "OTB96-1". Lain: 9 char
-                        const shortDevName = isToOlt ? 'OLT'
-                          : devName.replace('Core ', 'C').replace(' ', '').slice(0, 9)
-
-                        const targetPortLabel = conn?.targetPort?.port_label || ''
-                        // OLT port: "PON 3/1" → "3/1". OTB: "Baris 2 No 5" → "B2/5". Lain: raw
-                        const shortPort = isToOlt
-                          ? targetPortLabel.replace('PON ', '')
-                          : targetPortLabel.replace('Baris ', 'B').replace(' No ', '/')
-
-                        const noteText = conn?.note || ''
-
-                        const labelColor = isToOlt ? '#93c5fd' : isToOtb ? '#d8b4fe' : '#6ee7b7'
-
-                        return (
-                          <div
-                            key={port.id}
-                            onClick={() => openConnectModal(port)}
-                            title={isConnected
-                              ? `Port OTB: ${portTitleLabel}\n↔ Device: ${devName} [${targetDevType.toUpperCase()}]\n   Port: ${targetPortLabel}${noteText ? `\n📍 Arah: ${noteText}` : ''}`
-                              : `${portTitleLabel}\nStatus: Kosong — klik untuk hubungkan`
-                            }
-                            style={{
-                              /* Tinggi seragam: semua kotak sama tinggi di semua baris */
-                              height: isConnected ? '90px' : '46px',
-                              borderRadius: '7px',
-                              background: bgColor,
-                              border: `2px solid ${borderColor}`,
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              justifyContent: isConnected ? 'flex-start' : 'center',
-                              paddingTop: isConnected ? '6px' : '0',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s ease',
-                              userSelect: 'none',
-                              padding: isConnected ? '6px 4px 4px' : '5px 4px',
-                              gap: '2px',
-                              overflow: 'hidden'   /* teks panjang terpotong tapi kotak tetap seragam */
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.transform = 'translateY(-2px)'
-                              e.currentTarget.style.zIndex = '5'
-                              e.currentTarget.style.boxShadow = `0 4px 12px ${borderColor}55`
-                              e.currentTarget.style.borderColor = '#38bdf8'
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.transform = 'translateY(0)'
-                              e.currentTarget.style.zIndex = '1'
-                              e.currentTarget.style.boxShadow = 'none'
-                              e.currentTarget.style.borderColor = borderColor
-                            }}
-                          >
-                            {/* ── Nomor port OTB (besar, jelas, nyambung 1 - 144) ── */}
-                            <span style={{
-                              fontSize: '14px', fontWeight: 800, lineHeight: 1,
-                              color: isConnected ? '#f8fafc' : '#475569'
-                            }}>
-                              {displayPortNo}
-                            </span>
-
-                            {isConnected ? (
-                              <>
-                                {/* Divider tipis */}
-                                <div style={{ width: '80%', height: '1px', background: `${borderColor}66`, margin: '1px 0' }} />
-
-                                {/* Nama device target — mis "OLT" / "OTB96C1" */}
-                                <span style={{
-                                  fontSize: '10px', fontWeight: 700, lineHeight: 1.2,
-                                  color: labelColor, textAlign: 'center',
-                                  width: '90%', overflow: 'hidden',
-                                  textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-                                }}>
-                                  {shortDevName}
-                                </span>
-
-                                {/* Port target — mis "3/1" / "B2/5" */}
-                                <span style={{
-                                  fontSize: '12px', fontWeight: 800, lineHeight: 1.2,
-                                  color: '#fbbf24', textAlign: 'center',
-                                  width: '90%', overflow: 'hidden',
-                                  textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-                                }}>
-                                  {shortPort}
-                                </span>
-
-                                {/* Arah/catatan — wrap agar teks penuh terlihat */}
-                                {noteText && (
-                                  <span style={{
-                                    fontSize: '9px', fontWeight: 600, lineHeight: 1.3,
-                                    color: '#38bdf8', textAlign: 'center',
-                                    width: '90%',
-                                    whiteSpace: 'normal',
-                                    wordBreak: 'break-word',
-                                    display: 'block'
-                                  }}>
-                                    📍 {noteText}
-                                  </span>
-                                )}
-                              </>
-                            ) : (
-                              <span style={{ fontSize: '10px', color: 'rgba(148,163,184,0.4)', lineHeight: 1 }}>—</span>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+                Tidak ada port OTB yang cocok dengan pencarian / filter ini.
+              </div>
+            )}
           </div>
         </div>
       ) : null}
