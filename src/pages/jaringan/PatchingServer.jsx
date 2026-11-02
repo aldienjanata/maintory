@@ -1354,7 +1354,6 @@ export default function PatchingServer() {
                           : targetPortLabel.replace('Baris ', 'B').replace(' No ', '/')
 
                         const noteText = conn?.note || ''
-                        const shortNote = noteText.length > 9 ? noteText.slice(0, 8) + '…' : noteText
 
                         const labelColor = isToOlt ? '#93c5fd' : isToOtb ? '#d8b4fe' : '#6ee7b7'
 
@@ -1428,15 +1427,17 @@ export default function PatchingServer() {
                                   {shortPort}
                                 </span>
 
-                                {/* Arah/catatan */}
+                                {/* Arah/catatan — wrap agar teks penuh terlihat */}
                                 {noteText && (
                                   <span style={{
-                                    fontSize: '9px', fontWeight: 600, lineHeight: 1.1,
+                                    fontSize: '9px', fontWeight: 600, lineHeight: 1.3,
                                     color: '#38bdf8', textAlign: 'center',
-                                    width: '90%', overflow: 'hidden',
-                                    textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                                    width: '90%',
+                                    whiteSpace: 'normal',
+                                    wordBreak: 'break-word',
+                                    display: 'block'
                                   }}>
-                                    📍 {shortNote}
+                                    📍 {noteText}
                                   </span>
                                 )}
                               </>
