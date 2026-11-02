@@ -59,6 +59,9 @@ export default function Sidebar({ isOpen, onClose }) {
     { label: 'Jalur FO', path: '/jaringan/jalur-fo', icon: <Cable size={18} />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     { label: 'Konversi Data Jaringan FO', path: '/jaringan/konversi', icon: <RefreshCw />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     
+    // Dedicated section under Jaringan Fiber Optik
+    { label: 'Patching Server (OLT-OTB)', path: '/jaringan/patching', icon: <Server size={18} />, section: 'SERVER & PATCHING', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
+    
     { label: 'Log Aktivitas', path: '/logs', icon: <History />, section: 'SYSTEM', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     { label: 'Pengaturan', path: '/settings', icon: <Settings />, section: 'SYSTEM', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
   ]
@@ -79,6 +82,7 @@ export default function Sidebar({ isOpen, onClose }) {
       'INVENTORY': false,
       'OPERATIONS': false,
       'JARINGAN FIBER OPTIK': false,
+      'SERVER & PATCHING': true,
       'SYSTEM': false
     };
   });
@@ -149,6 +153,7 @@ export default function Sidebar({ isOpen, onClose }) {
         {renderNavSection('INVENTORY')}
         {renderNavSection('OPERATIONS')}
         {renderNavSection('JARINGAN FIBER OPTIK')}
+        {renderNavSection('SERVER & PATCHING')}
         {renderNavSection('SYSTEM')}
       </nav>
 
