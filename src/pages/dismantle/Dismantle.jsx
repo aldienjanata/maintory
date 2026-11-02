@@ -199,9 +199,9 @@ export default function Dismantle() {
     setLoading(true)
     setLoadingPickups(true)
     const [res, techRes, pickupRes] = await Promise.all([
-      supabase.from('dismantles').select('*').order('created_at', { ascending: false }).limit(1000),
+      supabase.from('dismantles').select('*').order('date_input', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(1000),
       supabase.from('users').select('id, full_name').in('role', ['admin', 'teknisi']).eq('is_active', true),
-      supabase.from('dismantle_pickups').select('*').order('created_at', { ascending: false }).limit(1000),
+      supabase.from('dismantle_pickups').select('*').order('pickup_date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(1000),
     ])
     if (!res.error) setItems(res.data || [])
     if (!techRes.error) setTechnicians(techRes.data || [])
@@ -355,7 +355,7 @@ export default function Dismantle() {
         adaptor: toTitleCase(rest.adaptor),
         note: (rest.note || '').trim(),
         address: (rest.address || '').trim(),
-        created_at: new Date(now + (parsedPickups.length - idx) * 100).toISOString(),
+        created_at: new Date(now + idx * 100).toISOString(),
         created_by: profile.id
       }))
 
@@ -475,11 +475,19 @@ export default function Dismantle() {
         fileLabel = `${bln} ${exportYear}`
       }
 
-      // Sort data to export so newest input is on top
+      // Sort data to export so newest date & newest input is on top
       dataToExport = [...dataToExport].sort((a, b) => {
-        const timeA = a.created_at ? new Date(a.created_at).getTime() : (a.pickup_date ? new Date(a.pickup_date).getTime() : 0)
-        const timeB = b.created_at ? new Date(b.created_at).getTime() : (b.pickup_date ? new Date(b.pickup_date).getTime() : 0)
-        return timeB - timeA
+        const dateA = a.pickup_date || ''
+        const dateB = b.pickup_date || ''
+        if (dateA !== dateB) {
+          return dateB.localeCompare(dateA)
+        }
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+        if (timeA !== timeB) {
+          return timeB - timeA
+        }
+        return (b.id || 0) - (a.id || 0)
       })
 
       if (!dataToExport.length) {
@@ -635,9 +643,17 @@ export default function Dismantle() {
       return matchSearch && matchStatus && matchDate && matchKoordinator
     })
     .sort((a, b) => {
-      const timeA = a.created_at ? new Date(a.created_at).getTime() : (a.date_input ? new Date(a.date_input).getTime() : 0)
-      const timeB = b.created_at ? new Date(b.created_at).getTime() : (b.date_input ? new Date(b.date_input).getTime() : 0)
-      return timeB - timeA
+      const dateA = a.date_input || ''
+      const dateB = b.date_input || ''
+      if (dateA !== dateB) {
+        return dateB.localeCompare(dateA) // Tanggal terbaru di atas
+      }
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+      if (timeA !== timeB) {
+        return timeB - timeA
+      }
+      return (b.id || 0) - (a.id || 0)
     })
   const paginated = filtered.slice((page - 1) * perPage, page * perPage)
 
@@ -656,9 +672,17 @@ export default function Dismantle() {
       return matchSearch && matchMonth
     })
     .sort((a, b) => {
-      const timeA = a.created_at ? new Date(a.created_at).getTime() : (a.pickup_date ? new Date(a.pickup_date).getTime() : 0)
-      const timeB = b.created_at ? new Date(b.created_at).getTime() : (b.pickup_date ? new Date(b.pickup_date).getTime() : 0)
-      return timeB - timeA
+      const dateA = a.pickup_date || ''
+      const dateB = b.pickup_date || ''
+      if (dateA !== dateB) {
+        return dateB.localeCompare(dateA) // Tanggal pengambilan terbaru di atas
+      }
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+      if (timeA !== timeB) {
+        return timeB - timeA // Input terbaru / urutan terakhir di atas
+      }
+      return (b.id || 0) - (a.id || 0)
     })
   const paginatedPickups = filteredPickups.slice((pickupPage - 1) * pickupPerPage, pickupPage * pickupPerPage)
 
