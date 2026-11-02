@@ -1366,20 +1366,22 @@ export default function PatchingServer() {
                               : `${port.port_label}\nStatus: Kosong — klik untuk hubungkan`
                             }
                             style={{
-                              minHeight: isConnected ? '80px' : '48px',
+                              /* Tinggi seragam: semua kotak sama tinggi di semua baris */
+                              height: isConnected ? '90px' : '46px',
                               borderRadius: '7px',
                               background: bgColor,
                               border: `2px solid ${borderColor}`,
                               display: 'flex',
                               flexDirection: 'column',
                               alignItems: 'center',
-                              justifyContent: 'center',
+                              justifyContent: isConnected ? 'flex-start' : 'center',
+                              paddingTop: isConnected ? '6px' : '0',
                               cursor: 'pointer',
                               transition: 'all 0.15s ease',
                               userSelect: 'none',
-                              padding: '5px 4px',
+                              padding: isConnected ? '6px 4px 4px' : '5px 4px',
                               gap: '2px',
-                              overflow: 'hidden'
+                              overflow: 'hidden'   /* teks panjang terpotong tapi kotak tetap seragam */
                             }}
                             onMouseEnter={e => {
                               e.currentTarget.style.transform = 'translateY(-2px)'
