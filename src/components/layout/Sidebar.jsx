@@ -53,14 +53,13 @@ export default function Sidebar({ isOpen, onClose }) {
     { label: 'Data ODP & ODC', path: '/jaringan/odp-odc', icon: <img src="/icon_odp.png" alt="odp/odc" style={{ width: '18px', height: '18px', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.8 }} />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     { label: 'Coilan', path: '/jaringan/coilan', icon: <img src="/icon_coilan.png" alt="coilan" style={{ width: '18px', height: '18px', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.8 }} />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     { label: 'Kaset FO', path: '/jaringan/kaset-fo', icon: <img src="/icon_kaset_fo.png" alt="kaset fo" style={{ width: '18px', height: '18px', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.8 }} />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
-    { label: 'Server', path: '/jaringan/server', icon: <Server size={18} />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
-    { label: 'Patching Server (OLT-OTB)', path: '/jaringan/patching', icon: <Cable size={18} />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     { label: 'Closure', path: '/jaringan/closure', icon: <img src="/icon_closure.png" alt="closure" style={{ width: '18px', height: '18px', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.8 }} />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     { label: 'Jalur FO', path: '/jaringan/jalur-fo', icon: <Cable size={18} />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     { label: 'Konversi Data Jaringan FO', path: '/jaringan/konversi', icon: <RefreshCw />, section: 'JARINGAN FIBER OPTIK', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     
-    // Dedicated section under Jaringan Fiber Optik
-    { label: 'Patching Server (OLT-OTB)', path: '/jaringan/patching', icon: <Server size={18} />, section: 'SERVER & PATCHING', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
+    // Dedicated section: SERVER & PATCHING
+    { label: 'Server', path: '/jaringan/server', icon: <Server size={18} />, section: 'SERVER & PATCHING', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
+    { label: 'Patching Server (OLT-OTB)', path: '/jaringan/patching', icon: <Cable size={18} />, section: 'SERVER & PATCHING', allowedRoles: ['superadmin', 'admin', 'teknisi', 'backbone'] },
     
     { label: 'Log Aktivitas', path: '/logs', icon: <History />, section: 'SYSTEM', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
     { label: 'Pengaturan', path: '/settings', icon: <Settings />, section: 'SYSTEM', allowedRoles: ['superadmin', 'admin', 'teknisi'] },
