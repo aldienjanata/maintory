@@ -341,6 +341,10 @@ export default function BonBarang() {
       })
     }
 
+    const matchedSched = dispatch.schedule_id 
+      ? schedules.find(s => s.id === dispatch.schedule_id)
+      : schedules.find(s => s.schedule_date === dispatch.dispatch_date && (s.technicians?.includes(dispatch.technician_id) || dispatch.technicians?.some(t => s.technicians?.includes(t))))
+
     setForm({
       dispatch_date: dispatch.dispatch_date,
       site: dispatch.site,
@@ -349,7 +353,7 @@ export default function BonBarang() {
       note: dispatch.notes || '',
       items: newItems
     })
-    setSelectedScheduleId(dispatch.schedule_id || '')
+    setSelectedScheduleId(matchedSched?.id || dispatch.schedule_id || '')
     setIsModalOpen(true)
   }
 
@@ -1282,6 +1286,30 @@ export default function BonBarang() {
     setIsScheduleModalOpen(true)
   }
 
+  const getScheduleStatus = (s) => {
+    // Cari bon yang tersambung dengan jadwal ini
+    const relDisp = dispatches.find(d => 
+      d.schedule_id === s.id || 
+      (d.dispatch_date === s.schedule_date && 
+       d.site === s.site && 
+       d.work_type === s.work_type &&
+       (d.technicians?.some(t => s.technicians?.includes(t)) || s.technicians?.includes(d.technician_id)))
+    )
+
+    if (relDisp) {
+      if (relDisp.status === 'selesai') {
+        return { label: 'Selesai', badgeClass: 'badge-success', canCreateBon: false }
+      }
+      return { label: 'Sedang Dibawa', badgeClass: 'badge-warning', canCreateBon: false }
+    }
+
+    if (s.status === 'completed') {
+      return { label: 'Selesai', badgeClass: 'badge-success', canCreateBon: false }
+    }
+
+    return { label: 'Belum Dibuat', badgeClass: 'badge-muted', canCreateBon: true }
+  }
+
   return (
     <div>
       {/* Page Header */}
@@ -1402,29 +1430,32 @@ export default function BonBarang() {
                         </tr>
                       </thead>
                       <tbody>
-                        {paginatedSchedules.map(s => (
-                          <tr key={s.id}>
-                            <td>{format(new Date(s.schedule_date), 'dd MMM yyyy', { locale: id })}</td>
-                            <td>{SITES.find(x => x.value === s.site)?.label}</td>
-                            <td>{WORK_TYPES.find(x => x.value === s.work_type)?.label}</td>
-                            <td>{getTechNames(s.technicians) || '-'}</td>
-                            <td>
-                              <span className={`badge ${s.status === 'completed' ? 'badge-success' : 'badge-warning'}`}>
-                                {s.status === 'completed' ? 'Selesai' : 'Belum Dibuat'}
-                              </span>
-                            </td>
-                            <td>
-                              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                                {s.status !== 'completed' && (
-                                  <button className="btn btn-secondary btn-sm" onClick={() => handleOpenAdd(s)} title="Buat Bon"><Plus size={14} /></button>
-                                )}
-                                {role === 'superadmin' && (
-                                  <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDeleteSchedule(s)} title="Hapus"><Trash2 size={14} /></button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                        {paginatedSchedules.map(s => {
+                          const statusInfo = getScheduleStatus(s)
+                          return (
+                            <tr key={s.id}>
+                              <td>{format(new Date(s.schedule_date), 'dd MMM yyyy', { locale: id })}</td>
+                              <td>{SITES.find(x => x.value === s.site)?.label}</td>
+                              <td>{WORK_TYPES.find(x => x.value === s.work_type)?.label}</td>
+                              <td>{getTechNames(s.technicians) || '-'}</td>
+                              <td>
+                                <span className={`badge ${statusInfo.badgeClass}`}>
+                                  {statusInfo.label}
+                                </span>
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                                  {statusInfo.canCreateBon && (
+                                    <button className="btn btn-secondary btn-sm" onClick={() => handleOpenAdd(s)} title="Buat Bon"><Plus size={14} /></button>
+                                  )}
+                                  {role === 'superadmin' && (
+                                    <button className="btn btn-secondary btn-sm text-danger" onClick={() => handleDeleteSchedule(s)} title="Hapus"><Trash2 size={14} /></button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1432,8 +1463,10 @@ export default function BonBarang() {
                     <div className="mobile-card-list" style={{ gap: '10px' }}>
                       {paginatedSchedules.map(s => {
                         const isExp = expandedId === `sched-${s.id}`
+                        const statusInfo = getScheduleStatus(s)
+                        const borderColor = statusInfo.label === 'Selesai' ? 'var(--success)' : statusInfo.label === 'Sedang Dibawa' ? 'var(--warning)' : 'var(--border)'
                         return (
-                          <div key={s.id} className="mobile-card" style={{ borderLeft: `4px solid ${s.status === 'completed' ? 'var(--success)' : 'var(--warning)'}` }}>
+                          <div key={s.id} className="mobile-card" style={{ borderLeft: `4px solid ${borderColor}` }}>
                             <div className="mobile-card-header" onClick={() => setExpandedId(isExp ? null : `sched-${s.id}`)} style={{ cursor: 'pointer' }}>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div className="mobile-card-title">{format(new Date(s.schedule_date), 'dd MMM yyyy', { locale: id })}</div>
@@ -1441,7 +1474,7 @@ export default function BonBarang() {
                                   {SITES.find(x => x.value === s.site)?.label} — {WORK_TYPES.find(x => x.value === s.work_type)?.label}
                                 </div>
                               </div>
-                              <span className={`badge ${s.status === 'completed' ? 'badge-success' : 'badge-warning'}`} style={{ flexShrink: 0 }}>{s.status === 'completed' ? 'Selesai' : 'Belum Dibuat'}</span>
+                              <span className={`badge ${statusInfo.badgeClass}`} style={{ flexShrink: 0 }}>{statusInfo.label}</span>
                             </div>
                             {isExp && (
                               <div className="mobile-card-body">
@@ -1449,7 +1482,7 @@ export default function BonBarang() {
                                 <div className="mobile-info-row"><span className="mobile-info-label">Pekerjaan</span><span className="mobile-info-value">{WORK_TYPES.find(x => x.value === s.work_type)?.label}</span></div>
                                 {s.note && <div className="mobile-info-row"><span className="mobile-info-label">Catatan</span><span className="mobile-info-value">{s.note}</span></div>}
                                 <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                                  {s.status !== 'completed' && (
+                                  {statusInfo.canCreateBon && (
                                     <button className="btn btn-primary btn-sm" onClick={() => handleOpenAdd(s)}>
                                       <Plus size={13} /> Buat Bon
                                     </button>
@@ -1717,7 +1750,26 @@ export default function BonBarang() {
                   <input type="date" className="form-input" style={{ cursor: 'pointer' }} value={form.dispatch_date} onChange={e => setForm({ ...form, dispatch_date: e.target.value })} onClick={e => e.target.showPicker && e.target.showPicker()} />
                 </div>
                 <div className="form-group" style={{ margin: 0, gridColumn: 'span 2' }}>
-                  <label className="form-label">Teknisi (Bisa lebih dari 1) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label className="form-label" style={{ margin: 0 }}>Teknisi (Bisa lebih dari 1) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    {selectedScheduleId && (() => {
+                      const sched = schedules.find(s => s.id === selectedScheduleId)
+                      if (sched?.technicians?.length) {
+                        return (
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{ fontSize: '11px', padding: '2px 8px', height: 'auto', color: 'var(--accent)' }}
+                            onClick={() => setForm(f => ({ ...f, technicians: [...new Set([...(sched.technicians || [])])] }))}
+                            title="Gunakan tim teknisi dari jadwal"
+                          >
+                            Sesuai Jadwal ({getTechNames(sched.technicians)})
+                          </button>
+                        )
+                      }
+                      return null
+                    })()}
+                  </div>
                   <Select 
                     isMulti
                     options={technicians} 
