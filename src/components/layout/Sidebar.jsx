@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { NavLink } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { can } from '../../utils/permissions'
 import { 
@@ -126,6 +126,21 @@ export default function Sidebar({ isOpen, onClose }) {
   }
 
   const [branchName, setBranchName] = useState('Cabang Banyumas')
+  const location = useLocation()
+  const navRef = useRef(null)
+
+  useEffect(() => {
+    if (navRef.current) {
+      if (location.pathname === '/') {
+        navRef.current.scrollTop = 0
+      } else {
+        const activeEl = navRef.current.querySelector('.nav-item.active')
+        if (activeEl) {
+          activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+        }
+      }
+    }
+  }, [location.pathname])
 
   useEffect(() => {
     // Fetch branch name from settings
@@ -147,7 +162,7 @@ export default function Sidebar({ isOpen, onClose }) {
         </div>
       </div>
 
-      <nav className="sidebar-nav">
+      <nav className="sidebar-nav" ref={navRef}>
         {renderNavSection('MAIN MENU')}
         {renderNavSection('INVENTORY')}
         {renderNavSection('OPERATIONS')}
