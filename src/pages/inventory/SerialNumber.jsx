@@ -48,7 +48,7 @@ export default function SerialNumber() {
       supabase.from('serial_numbers').select('*, brand:ont_brands(brand_name), type:ont_types(type_name)').order('date_in', { ascending: false }).limit(2000),
       supabase.from('ont_brands').select('*').order('brand_name')
     ])
-    if (!snRes.error) setItems(snRes.data || [])
+    if (!snRes.error) setItems((snRes.data || []).map(i => ({ ...i, serial_number: (i.serial_number || '').trim() })))
     if (!brandRes.error) setBrands(brandRes.data || [])
     setLoading(false)
   }
@@ -222,7 +222,12 @@ export default function SerialNumber() {
         const { data: existingSnData } = await supabase.from('serial_numbers').select('*').ilike('serial_number', form.serial_number.trim()).maybeSingle()
         if (existingSnData) {
           if (existingSnData.status === 'tersedia') {
-            toast.error('Serial Number sudah ada dan berstatus TERSEDIA di gudang!')
+            toast.error(`Serial Number sudah ada dan berstatus TERSEDIA di gudang! (SN: ${existingSnData.serial_number})`)
+            // Reset filter agar SN terlihat di list
+            setSearchTerm(existingSnData.serial_number.trim())
+            setStatusFilter('all')
+            setBrandFilter('all')
+            setIsModalOpen(false)
             setSaving(false)
             return
           }
@@ -355,7 +360,7 @@ export default function SerialNumber() {
   }
 
   const filtered = items.filter(i => {
-    const matchSearch = i.serial_number?.toLowerCase().includes(searchTerm.toLowerCase()) || i.brand?.brand_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchSearch = i.serial_number?.trim().toLowerCase().includes(searchTerm.trim().toLowerCase()) || i.brand?.brand_name?.toLowerCase().includes(searchTerm.trim().toLowerCase())
     const matchStatus = statusFilter === 'all' || i.status === statusFilter
     const matchBrand = brandFilter === 'all' || i.brand_id === brandFilter
     return matchSearch && matchStatus && matchBrand
