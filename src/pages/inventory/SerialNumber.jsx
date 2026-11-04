@@ -33,6 +33,7 @@ export default function SerialNumber() {
   const [saving, setSaving] = useState(false)
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
+  const [searchingDb, setSearchingDb] = useState(false)
   
   const [historyItem, setHistoryItem] = useState(null)
   const [historyData, setHistoryData] = useState([])
@@ -44,13 +45,43 @@ export default function SerialNumber() {
 
   const fetchAll = async () => {
     setLoading(true)
-    const [snRes, brandRes] = await Promise.all([
-      supabase.from('serial_numbers').select('*, brand:ont_brands(brand_name), type:ont_types(type_name)').order('date_in', { ascending: false }).limit(2000),
-      supabase.from('ont_brands').select('*').order('brand_name')
-    ])
-    if (!snRes.error) setItems((snRes.data || []).map(i => ({ ...i, serial_number: (i.serial_number || '').trim() })))
-    if (!brandRes.error) setBrands(brandRes.data || [])
-    setLoading(false)
+    try {
+      const [brandRes] = await Promise.all([
+        supabase.from('ont_brands').select('*').order('brand_name')
+      ])
+      if (!brandRes.error) setBrands(brandRes.data || [])
+
+      let allSn = []
+      let from = 0
+      const step = 1000
+      while (true) {
+        const { data, error } = await supabase
+          .from('serial_numbers')
+          .select('*, brand:ont_brands(brand_name), type:ont_types(type_name)')
+          .order('date_in', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, from + step - 1)
+
+        if (error) {
+          console.error('Fetch SN error:', error)
+          break
+        }
+        if (data && data.length > 0) {
+          allSn = allSn.concat(data)
+          if (data.length < step) break
+          from += step
+        } else {
+          break
+        }
+      }
+
+      setItems(allSn.map(i => ({ ...i, serial_number: (i.serial_number || '').trim() })))
+    } catch (err) {
+      console.error('Fetch SN error:', err)
+      toast.error('Gagal memuat data serial number')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const fetchTypes = async (brandId) => {
@@ -137,6 +168,34 @@ export default function SerialNumber() {
     setHistoryLoading(false)
   }
 
+  const handleSearchDbDirect = async () => {
+    if (!searchTerm.trim()) return
+    setSearchingDb(true)
+    try {
+      const { data, error } = await supabase
+        .from('serial_numbers')
+        .select('*, brand:ont_brands(brand_name), type:ont_types(type_name)')
+        .ilike('serial_number', `%${searchTerm.trim()}%`)
+      if (error) throw error
+      if (data && data.length > 0) {
+        setItems(prev => {
+          const map = new Map(prev.map(i => [i.id, i]))
+          data.forEach(d => map.set(d.id, { ...d, serial_number: (d.serial_number || '').trim() }))
+          return Array.from(map.values())
+        })
+        setStatusFilter('all')
+        setBrandFilter('all')
+        toast.success(`Ditemukan ${data.length} SN dari database!`)
+      } else {
+        toast.error(`SN "${searchTerm.trim()}" tidak ditemukan di database.`)
+      }
+    } catch (err) {
+      toast.error('Gagal mencari di database: ' + err.message)
+    } finally {
+      setSearchingDb(false)
+    }
+  }
+
   const openEdit = (item) => {
     setEditItem(item)
     setForm({
@@ -219,16 +278,21 @@ export default function SerialNumber() {
         toast.success('Serial Number berhasil diperbarui')
       } else {
         // --- CHECK IF ALREADY EXISTS ---
-        const { data: existingSnData } = await supabase.from('serial_numbers').select('*').ilike('serial_number', form.serial_number.trim()).maybeSingle()
+        const { data: existingSnData } = await supabase.from('serial_numbers').select('*, brand:ont_brands(brand_name), type:ont_types(type_name)').ilike('serial_number', form.serial_number.trim()).maybeSingle()
         if (existingSnData) {
           if (existingSnData.status === 'tersedia') {
             toast.error(`Serial Number sudah ada dan berstatus TERSEDIA di gudang! (SN: ${existingSnData.serial_number})`)
-            // Reset filter agar SN terlihat di list
+            // Reset filter agar SN terlihat langsung di list
             setSearchTerm(existingSnData.serial_number.trim())
             setStatusFilter('all')
             setBrandFilter('all')
             setIsModalOpen(false)
             setSaving(false)
+            setItems(prev => {
+              const formatted = { ...existingSnData, serial_number: (existingSnData.serial_number || '').trim() }
+              if (prev.some(i => i.id === existingSnData.id)) return prev
+              return [formatted, ...prev]
+            })
             return
           }
           // RECYCLE: was terpakai, now bring back to gudang
@@ -712,7 +776,30 @@ export default function SerialNumber() {
               />
             </>
           ) : (
-            <div className="empty-state"><Hash size={48} /><h3>Tidak Ada SN</h3><p>Belum ada serial number tersimpan.</p></div>
+            <div className="empty-state">
+              <Hash size={48} />
+              <h3>Tidak Ada SN</h3>
+              <p>
+                {searchTerm || statusFilter !== 'all' || brandFilter !== 'all'
+                  ? 'Tidak ada serial number yang cocok dengan filter / pencarian.'
+                  : 'Belum ada serial number tersimpan.'}
+              </p>
+              {searchTerm && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  style={{ marginTop: '12px' }}
+                  onClick={handleSearchDbDirect}
+                  disabled={searchingDb}
+                >
+                  {searchingDb ? (
+                    <span className="spinner" style={{ width: '14px', height: '14px' }} />
+                  ) : (
+                    <Search size={14} />
+                  )}
+                  Cari &quot;{searchTerm}&quot; langsung di Database
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
